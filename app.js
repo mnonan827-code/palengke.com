@@ -202,10 +202,10 @@ async function initializeFirebaseData() {
 
 async function seedInitialData() {
     const initialProducts = [
-        { id: 1, name: "Fresh Tilapia", origin: "San Juan Fish Farm", farmer: { name: "Mang Jose", contact: "0917-234-5678" }, price: 150.00, quantity: 50, unit: 'kg', imgUrl: 'https://placehold.co/600x360/4ade80/000?text=Tilapia' },
-        { id: 2, name: "Native Chicken Eggs", origin: "Brgy. San Andres Poultry", farmer: { name: "Aling Nena", contact: "0998-765-4321" }, price: 8.00, quantity: 200, unit: 'pc', imgUrl: 'https://placehold.co/600x360/84cc16/000?text=Eggs' },
-        { id: 3, name: "Organic Lettuce", origin: "Sta. Lucia Hydroponics", farmer: { name: "Mr. Dela Cruz", contact: "0920-111-2222" }, price: 65.00, quantity: 30, unit: 'head', imgUrl: 'https://placehold.co/600x360/4ade80/000?text=Lettuce' },
-        { id: 4, name: "Ripe Bananas (Lakatan)", origin: "Cainta Farm Cooperative", farmer: { name: "Ate Sol", contact: "0905-333-4444" }, price: 50.00, quantity: 80, unit: 'kg', imgUrl: 'https://placehold.co/600x360/84cc16/000?text=Bananas' },
+        { id: 1, name: "Fresh Tilapia", origin: "San Juan Fish Farm", farmer: { name: "Mang Jose", contact: "0917-234-5678" }, price: 150.00, quantity: 50, unit: 'kg', freshness: 95, freshnessIndicator: 'farm-fresh', imgUrl: 'https://placehold.co/600x360/4ade80/000?text=Tilapia' },
+        { id: 2, name: "Native Chicken Eggs", origin: "Brgy. San Andres Poultry", farmer: { name: "Aling Nena", contact: "0998-765-4321" }, price: 8.00, quantity: 200, unit: 'pc', freshness: 92, freshnessIndicator: 'farm-fresh', imgUrl: 'https://placehold.co/600x360/84cc16/000?text=Eggs' },
+        { id: 3, name: "Organic Lettuce", origin: "Sta. Lucia Hydroponics", farmer: { name: "Mr. Dela Cruz", contact: "0920-111-2222" }, price: 65.00, quantity: 30, unit: 'head', freshness: 88, freshnessIndicator: 'very-fresh', imgUrl: 'https://placehold.co/600x360/4ade80/000?text=Lettuce' },
+        { id: 4, name: "Ripe Bananas (Lakatan)", origin: "Cainta Farm Cooperative", farmer: { name: "Ate Sol", contact: "0905-333-4444" }, price: 50.00, quantity: 80, unit: 'kg', freshness: 85, freshnessIndicator: 'very-fresh', imgUrl: 'https://placehold.co/600x360/84cc16/000?text=Bananas' },
     ];
 
     for (const product of initialProducts) {
@@ -542,6 +542,17 @@ window.adminAddProduct = function() {
         <button type="button" onclick="uploadImagePreview('p-img-file','p-img-preview')" class="px-3 py-2 bg-white border rounded">Upload</button>
         <img id="p-img-preview" src="" alt="preview" class="w-20 h-14 object-cover rounded border" />
     </div>
+    <div class="grid grid-cols-2 gap-2">
+        <input id="p-freshness" type="number" min="0" max="100" placeholder="Freshness (%)" class="p-2 border rounded" />
+        <select id="p-freshness-indicator" class="p-2 border rounded">
+          <option value="">Freshness Level</option>
+          <option value="farm-fresh">🌱 Farm Fresh (90-100%)</option>
+          <option value="very-fresh">✨ Very Fresh (80-89%)</option>
+          <option value="fresh">🍃 Fresh (70-79%)</option>
+          <option value="good">👍 Good (60-69%)</option>
+          <option value="fair">⚠️ Fair (Below 60%)</option>
+        </select>
+    </div>
     <div class="flex items-center gap-3">
         <label class="flex items-center gap-2"><input id="p-preorder" type="checkbox"/> <span class="text-sm">Pre-Order</span></label>
         <input id="p-preorder-duration" type="number" min="7" max="14" placeholder="Duration (7-14 days)" class="p-2 border rounded w-48" />
@@ -563,11 +574,28 @@ window.adminSaveProduct = async function(editId = null) {
     const origin = document.getElementById('p-origin')?.value?.trim();
     const farmer = document.getElementById('p-farmer')?.value?.trim();
     const contact = document.getElementById('p-contact')?.value?.trim();
+    const freshness = parseInt(document.getElementById('p-freshness')?.value) || null;
+    const freshnessIndicator = document.getElementById('p-freshness-indicator')?.value || null;
     const fileInput = document.getElementById('p-img-file');
     const preview = document.getElementById('p-img-preview');
 
     if(!name || isNaN(price) || isNaN(qty) || !unit || !origin || !farmer || !contact){
         return showModal('Missing fields', 'Please fill all product fields correctly.', `<button onclick="hideModal()" class="btn btn-secondary">OK</button>`);
+    }
+
+    // Validate freshness percentage
+    if(freshness !== null && (freshness < 0 || freshness > 100)) {
+        return showModal('Invalid Freshness', 'Freshness percentage must be between 0 and 100.', `<button onclick="hideModal()" class="btn btn-secondary">OK</button>`);
+    }
+
+    // Auto-suggest freshness indicator based on percentage if not manually selected
+    let finalFreshnessIndicator = freshnessIndicator;
+    if(freshness !== null && !freshnessIndicator) {
+        if(freshness >= 90) finalFreshnessIndicator = 'farm-fresh';
+        else if(freshness >= 80) finalFreshnessIndicator = 'very-fresh';
+        else if(freshness >= 70) finalFreshnessIndicator = 'fresh';
+        else if(freshness >= 60) finalFreshnessIndicator = 'good';
+        else finalFreshnessIndicator = 'fair';
     }
 
     let imgUrl = '';
@@ -593,7 +621,17 @@ window.adminSaveProduct = async function(editId = null) {
     const dur = parseInt(document.getElementById('p-preorder-duration')?.value) || null;
     
     if(editId){
-        const productUpdate = { name, price, quantity: qty, unit, origin, farmer: { name: farmer, contact }, imgUrl: imgUrl };
+        const productUpdate = { 
+            name, 
+            price, 
+            quantity: qty, 
+            unit, 
+            origin, 
+            farmer: { name: farmer, contact }, 
+            imgUrl: imgUrl,
+            freshness: freshness,
+            freshnessIndicator: finalFreshnessIndicator
+        };
         if(isPre){
             productUpdate.preorder = true;
             productUpdate.preorderDuration = Math.min(14, Math.max(7, (dur || 7)));
@@ -606,7 +644,18 @@ window.adminSaveProduct = async function(editId = null) {
         await updateFirebase(`products/${editId}`, productUpdate);
     } else {
         const newId = Date.now();
-        const newProd = { id: newId, name, price, quantity: qty, unit, origin, farmer: { name: farmer, contact }, imgUrl: imgUrl };
+        const newProd = { 
+            id: newId, 
+            name, 
+            price, 
+            quantity: qty, 
+            unit, 
+            origin, 
+            farmer: { name: farmer, contact }, 
+            imgUrl: imgUrl,
+            freshness: freshness,
+            freshnessIndicator: finalFreshnessIndicator
+        };
         if(isPre){
             newProd.preorder = true;
             newProd.preorderDuration = Math.min(14, Math.max(7, (dur || 7)));
@@ -643,6 +692,17 @@ window.adminEditProduct = function(id) {
         <input id="p-img-file" type="file" accept="image/*" class="p-2" />
         <button type="button" onclick="uploadImagePreview('p-img-file','p-img-preview')" class="px-3 py-2 bg-white border rounded">Upload</button>
         <img id="p-img-preview" src="${p.imgUrl || ''}" alt="preview" class="w-28 h-16 object-cover rounded border" />
+    </div>
+    <div class="grid grid-cols-2 gap-2">
+        <input id="p-freshness" type="number" min="0" max="100" value="${p.freshness || ''}" placeholder="Freshness (%)" class="p-2 border rounded" />
+        <select id="p-freshness-indicator" class="p-2 border rounded">
+          <option value="">Freshness Level</option>
+          <option value="farm-fresh" ${p.freshnessIndicator === 'farm-fresh' ? 'selected' : ''}>🌱 Farm Fresh (90-100%)</option>
+          <option value="very-fresh" ${p.freshnessIndicator === 'very-fresh' ? 'selected' : ''}>✨ Very Fresh (80-89%)</option>
+          <option value="fresh" ${p.freshnessIndicator === 'fresh' ? 'selected' : ''}>🍃 Fresh (70-79%)</option>
+          <option value="good" ${p.freshnessIndicator === 'good' ? 'selected' : ''}>👍 Good (60-69%)</option>
+          <option value="fair" ${p.freshnessIndicator === 'fair' ? 'selected' : ''}>⚠️ Fair (Below 60%)</option>
+        </select>
     </div>
     <div class="flex items-center gap-3">
         <label class="flex items-center gap-2"><input id="p-preorder" type="checkbox" ${p.preorder ? 'checked' : ''}/> <span class="text-sm">Pre-Order</span></label>
@@ -1028,6 +1088,17 @@ window.computeRemainingDays = function(p) {
     return rem;
 };
 
+window.getFreshnessEmoji = function(indicator) {
+    const emojis = {
+        'farm-fresh': '🌱',
+        'very-fresh': '✨',
+        'fresh': '🍃',
+        'good': '👍',
+        'fair': '⚠️'
+    };
+    return emojis[indicator] || '📦';
+};
+
 window.updatePreorderStatuses = function() {
     let changed = false;
     for(const p of window.APP_STATE.products) {
@@ -1087,7 +1158,16 @@ window.renderShop = function() {
         const lowStock = p.quantity <= 5;
         const isPre = !!p.preorder;
         const rem = isPre ? computeRemainingDays(p) : null;
-        const badgeHtml = isPre ? `<div class="badge bg-yellow-100 text-yellow-700">🟡 Pre-Order • ${rem>0? rem + ' days left' : 'Ending'}</div>` : '';
+        const preorderBadge = isPre ? `<div class="badge bg-yellow-100 text-yellow-700">🟡 Pre-Order • ${rem>0? rem + ' days left' : 'Ending'}</div>` : '';
+        
+        // Freshness badge and meter
+        const freshnessBadge = p.freshness && p.freshnessIndicator ? 
+            `<div class="freshness-badge freshness-${p.freshnessIndicator}">${getFreshnessEmoji(p.freshnessIndicator)} ${p.freshness}% Fresh</div>` : '';
+        
+        const freshnessMeter = p.freshness ? 
+            `<div class="freshness-meter mt-2">
+                <div class="freshness-meter-fill level-${p.freshnessIndicator || 'fresh'}" style="width: ${p.freshness}%"></div>
+            </div>` : '';
 
         const isAdminViewing = window.APP_STATE.currentUser && window.APP_STATE.currentUser.role === 'admin';
         const addButton = (isAdminViewing && !isPre)
@@ -1100,7 +1180,7 @@ window.renderShop = function() {
             <div class="card bg-white rounded-xl border p-3 flex flex-col">
                 <div class="h-40 w-full rounded-md overflow-hidden bg-gray-50 relative">
                   <img src="${p.imgUrl}" alt="${p.name}" class="w-full h-full object-cover">
-                  <div class="absolute top-3 left-3">${badgeHtml}</div>
+                  <div class="absolute top-3 left-3 flex flex-col gap-1">${preorderBadge}${freshnessBadge}</div>
                   </div>
                 <div class="mt-3 flex-1">
                   <div class="flex items-start justify-between gap-3">
@@ -1113,6 +1193,7 @@ window.renderShop = function() {
                         <div class="text-xs text-gray-500 text-right">${p.unit}</div>
                       </div>
                     </div>
+                   ${freshnessMeter}
                    <div class="mt-3 flex items-center justify-between">
                         <div class="text-sm ${lowStock ? 'text-red-500' : 'text-gray-500'}">${p.quantity} ${p.unit}${p.quantity>1?'s':''} available</div>
                         <div class="flex items-center gap-2">
@@ -1145,7 +1226,19 @@ window.showProduct = function(id) {
     const lowStock = p.quantity <= 5;
     const isPre = !!p.preorder;
     const rem = isPre ? computeRemainingDays(p) : null;
-    const badgeHtml = isPre ? `<div class="badge bg-yellow-100 text-yellow-700 mb-2">🟡 Pre-Order • ${rem>0 ? rem + ' days left' : 'Ending'}</div>` : '';
+    const preorderBadge = isPre ? `<div class="badge bg-yellow-100 text-yellow-700 mb-2">🟡 Pre-Order • ${rem>0 ? rem + ' days left' : 'Ending'}</div>` : '';
+    
+    // Freshness display
+    const freshnessBadge = p.freshness && p.freshnessIndicator ? 
+        `<div class="freshness-badge freshness-${p.freshnessIndicator} mb-2">${getFreshnessEmoji(p.freshnessIndicator)} ${p.freshness}% Fresh</div>` : '';
+    
+    const freshnessMeter = p.freshness ? 
+        `<div class="mb-3">
+            <div class="text-sm text-gray-600 mb-1">Freshness Level</div>
+            <div class="freshness-meter">
+                <div class="freshness-meter-fill level-${p.freshnessIndicator || 'fresh'}" style="width: ${p.freshness}%"></div>
+            </div>
+        </div>` : '';
     
     const isAdminViewing = window.APP_STATE.currentUser && window.APP_STATE.currentUser.role === 'admin';
 
@@ -1166,7 +1259,9 @@ window.showProduct = function(id) {
                 <img src="${p.imgUrl}" alt="${p.name}" class="w-full h-48 object-cover rounded">
             </div>
             <div>
-                ${badgeHtml}
+                ${preorderBadge}
+                ${freshnessBadge}
+                ${freshnessMeter}
                 <div class="text-gray-700 text-sm mb-1">${p.origin}</div>
                 <div class="text-gray-500 text-sm mb-1">Farmer: <b>${p.farmer.name}</b> (${p.farmer.contact})</div>
                 <div class="text-gray-700 text-sm mb-1">Price: <b>${formatPeso(p.price)}</b> / ${p.unit}</div>
@@ -1294,40 +1389,46 @@ window.renderAdminDashboard = function() {
     const preorderList = window.APP_STATE.products.filter(p => p.preorder);
 
     const regularRows = regular.map(p => `
-        <tr class="hover:bg-gray-50 border-b">
-            <td class="px-3 py-2 text-sm">${p.name}</td>
-            <td class="px-3 py-2 text-sm hidden sm:table-cell">${p.origin}</td>
-            <td class="px-3 py-2 text-sm hidden md:table-cell">${p.farmer.name}</td>
-            <td class="px-3 py-2 text-sm font-semibold">${formatPeso(p.price)}</td>
-            <td class="px-3 py-2 text-sm">${p.quantity} ${p.unit}</td>
-            <td class="px-3 py-2 text-sm text-right">
-                <div class="flex flex-col sm:flex-row gap-1 justify-end">
-                    <button onclick="adminEditProduct(${p.id})" class="px-2 py-1 text-xs bg-white border rounded hover:bg-gray-50">Edit</button>
-                    <button onclick="adminDeleteProduct(${p.id})" class="px-2 py-1 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100">Delete</button>
-                </div>
-            </td>
-        </tr>
-    `).join('');
+    <tr class="hover:bg-gray-50 border-b">
+        <td class="px-3 py-2 text-sm">${p.name}</td>
+        <td class="px-3 py-2 text-sm hidden sm:table-cell">${p.origin}</td>
+        <td class="px-3 py-2 text-sm hidden md:table-cell">${p.farmer.name}</td>
+        <td class="px-3 py-2 text-sm font-semibold">${formatPeso(p.price)}</td>
+        <td class="px-3 py-2 text-sm">${p.quantity} ${p.unit}</td>
+        <td class="px-3 py-2 text-sm hidden lg:table-cell">
+            ${p.freshness ? `<span class="freshness-badge freshness-${p.freshnessIndicator || 'fresh'}">${getFreshnessEmoji(p.freshnessIndicator)} ${p.freshness}%</span>` : '<span class="text-gray-400">N/A</span>'}
+        </td>
+        <td class="px-3 py-2 text-sm text-right">
+            <div class="flex flex-col sm:flex-row gap-1 justify-end">
+                <button onclick="adminEditProduct(${p.id})" class="px-2 py-1 text-xs bg-white border rounded hover:bg-gray-50">Edit</button>
+                <button onclick="adminDeleteProduct(${p.id})" class="px-2 py-1 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100">Delete</button>
+            </div>
+        </td>
+    </tr>
+`).join('');
 
     const preorderRows = preorderList.map(p => {
-        const rem = computeRemainingDays(p);
-        return `
-        <tr class="hover:bg-gray-50 border-b">
-            <td class="px-3 py-2 text-sm">${p.name}</td>
-            <td class="px-3 py-2 text-sm hidden sm:table-cell">${p.origin}</td>
-            <td class="px-3 py-2 text-sm hidden md:table-cell">${p.farmer.name}</td>
-            <td class="px-3 py-2 text-sm font-semibold">${formatPeso(p.price)}</td>
-            <td class="px-3 py-2 text-sm">${p.quantity} ${p.unit}</td>
-            <td class="px-3 py-2 text-sm ${rem <= 3 ? 'text-red-600 font-semibold' : 'text-yellow-600'}">${rem>0? rem + ' days' : 'Ending'}</td>
-            <td class="px-3 py-2 text-sm text-right">
-                <div class="flex flex-col sm:flex-row gap-1 justify-end">
-                    <button onclick="adminEditProduct(${p.id})" class="px-2 py-1 text-xs bg-white border rounded hover:bg-gray-50">Edit</button>
-                    <button onclick="adminDeleteProduct(${p.id})" class="px-2 py-1 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100">Delete</button>
-                </div>
-            </td>
-        </tr>
-    `;
-    }).join('');
+    const rem = computeRemainingDays(p);
+    return `
+    <tr class="hover:bg-gray-50 border-b">
+        <td class="px-3 py-2 text-sm">${p.name}</td>
+        <td class="px-3 py-2 text-sm hidden sm:table-cell">${p.origin}</td>
+        <td class="px-3 py-2 text-sm hidden md:table-cell">${p.farmer.name}</td>
+        <td class="px-3 py-2 text-sm font-semibold">${formatPeso(p.price)}</td>
+        <td class="px-3 py-2 text-sm">${p.quantity} ${p.unit}</td>
+        <td class="px-3 py-2 text-sm hidden lg:table-cell">
+            ${p.freshness ? `<span class="freshness-badge freshness-${p.freshnessIndicator || 'fresh'}">${getFreshnessEmoji(p.freshnessIndicator)} ${p.freshness}%</span>` : '<span class="text-gray-400">N/A</span>'}
+        </td>
+        <td class="px-3 py-2 text-sm ${rem <= 3 ? 'text-red-600 font-semibold' : 'text-yellow-600'}">${rem>0? rem + ' days' : 'Ending'}</td>
+        <td class="px-3 py-2 text-sm text-right">
+            <div class="flex flex-col sm:flex-row gap-1 justify-end">
+                <button onclick="adminEditProduct(${p.id})" class="px-2 py-1 text-xs bg-white border rounded hover:bg-gray-50">Edit</button>
+                <button onclick="adminDeleteProduct(${p.id})" class="px-2 py-1 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100">Delete</button>
+            </div>
+        </td>
+    </tr>
+`;
+}).join('');
 
     const regularOrders = window.APP_STATE.orders.filter(o => !o.type || o.type !== 'pre-order');
     const preorderOrders = window.APP_STATE.orders.filter(o => o.type === 'pre-order');
@@ -1414,16 +1515,18 @@ window.renderAdminDashboard = function() {
             <table class="w-full text-sm">
               <thead class="bg-gray-50 text-gray-700">
                 <tr>
-                  <th class="px-3 py-3 text-left font-medium">Name</th>
-                  <th class="px-3 py-3 text-left font-medium hidden sm:table-cell">Origin</th>
-                  <th class="px-3 py-3 text-left font-medium hidden md:table-cell">Farmer</th>
-                  <th class="px-3 py-3 text-left font-medium">Price</th>
-                  <th class="px-3 py-3 text-left font-medium">Stock</th>
-                  <th class="px-3 py-3 text-right font-medium">Actions</th>
+                    <th class="px-3 py-3 text-left font-medium">Name</th>
+                    <th class="px-3 py-3 text-left font-medium hidden sm:table-cell">Origin</th>
+                    <th class="px-3 py-3 text-left font-medium hidden md:table-cell">Farmer</th>
+                    <th class="px-3 py-3 text-left font-medium">Price</th>
+                    <th class="px-3 py-3 text-left font-medium">Stock</th>
+                    <th class="px-3 py-3 text-left font-medium hidden lg:table-cell">Freshness</th>
+                    <th class="px-3 py-3 text-left font-medium">Remaining</th>
+                    <th class="px-3 py-3 text-right font-medium">Actions</th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-gray-200">
-                ${regularRows || '<tr><td class="px-3 py-8 text-center text-gray-500 text-sm" colspan="6">No regular products available</td></tr>'}
+                ${regularRows || '<tr><td class="px-3 py-8 text-center text-gray-500 text-sm" colspan="7">No regular products available</td></tr>'}
               </tbody>
             </table>
           </div>
@@ -1447,8 +1550,7 @@ window.renderAdminDashboard = function() {
                 </tr>
               </thead>
               <tbody class="divide-y divide-gray-200">
-                ${preorderRows || '<tr><td class="px-3 py-8 text-center text-gray-500 text-sm" colspan="7">No pre-order products available</td></tr>'}
-              </tbody>
+                ${preorderRows || '<tr><td class="px-3 py-8 text-center text-gray-500 text-sm" colspan="8">No pre-order products available</td></tr>'}              </tbody>
             </table>
           </div>
         </div>
