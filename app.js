@@ -542,17 +542,18 @@ window.adminAddProduct = function() {
         <button type="button" onclick="uploadImagePreview('p-img-file','p-img-preview')" class="px-3 py-2 bg-white border rounded">Upload</button>
         <img id="p-img-preview" src="" alt="preview" class="w-20 h-14 object-cover rounded border" />
     </div>
-    <div class="grid grid-cols-2 gap-2">
-        <input id="p-freshness" type="number" min="0" max="100" placeholder="Freshness (%)" class="p-2 border rounded" />
-        <select id="p-freshness-indicator" class="p-2 border rounded">
-          <option value="">Freshness Level</option>
-          <option value="farm-fresh">🌱 Farm Fresh (90-100%)</option>
-          <option value="very-fresh">✨ Very Fresh (80-89%)</option>
-          <option value="fresh">🍃 Fresh (70-79%)</option>
-          <option value="good">👍 Good (60-69%)</option>
-          <option value="fair">⚠️ Fair (Below 60%)</option>
-        </select>
+    <div class="freshness-input-container">
+    <label class="block text-sm font-medium text-gray-700 mb-1">Freshness Level</label>
+    <div class="flex items-center gap-3">
+        <input id="p-freshness" type="range" min="0" max="100" value="100" class="flex-1 freshness-slider" oninput="updateFreshnessDisplay(this.value)" />
+        <div class="freshness-display">
+            <span id="freshness-value" class="text-lg font-bold">100</span>%
+        </div>
     </div>
+    <div class="freshness-indicator mt-2">
+        <div id="freshness-bar" class="freshness-bar" style="width: 100%; background: #22c55e;"></div>
+    </div>
+</div>
     <div class="flex items-center gap-3">
         <label class="flex items-center gap-2"><input id="p-preorder" type="checkbox"/> <span class="text-sm">Pre-Order</span></label>
         <input id="p-preorder-duration" type="number" min="7" max="14" placeholder="Duration (7-14 days)" class="p-2 border rounded w-48" />
@@ -574,8 +575,7 @@ window.adminSaveProduct = async function(editId = null) {
     const origin = document.getElementById('p-origin')?.value?.trim();
     const farmer = document.getElementById('p-farmer')?.value?.trim();
     const contact = document.getElementById('p-contact')?.value?.trim();
-    const freshness = parseInt(document.getElementById('p-freshness')?.value) || null;
-    const freshnessIndicator = document.getElementById('p-freshness-indicator')?.value || null;
+    const freshness = parseInt(document.getElementById('p-freshness')?.value) || 100;
     const fileInput = document.getElementById('p-img-file');
     const preview = document.getElementById('p-img-preview');
 
@@ -583,20 +583,6 @@ window.adminSaveProduct = async function(editId = null) {
         return showModal('Missing fields', 'Please fill all product fields correctly.', `<button onclick="hideModal()" class="btn btn-secondary">OK</button>`);
     }
 
-    // Validate freshness percentage
-    if(freshness !== null && (freshness < 0 || freshness > 100)) {
-        return showModal('Invalid Freshness', 'Freshness percentage must be between 0 and 100.', `<button onclick="hideModal()" class="btn btn-secondary">OK</button>`);
-    }
-
-    // Auto-suggest freshness indicator based on percentage if not manually selected
-    let finalFreshnessIndicator = freshnessIndicator;
-    if(freshness !== null && !freshnessIndicator) {
-        if(freshness >= 90) finalFreshnessIndicator = 'farm-fresh';
-        else if(freshness >= 80) finalFreshnessIndicator = 'very-fresh';
-        else if(freshness >= 70) finalFreshnessIndicator = 'fresh';
-        else if(freshness >= 60) finalFreshnessIndicator = 'good';
-        else finalFreshnessIndicator = 'fair';
-    }
 
     let imgUrl = '';
     
@@ -630,7 +616,7 @@ window.adminSaveProduct = async function(editId = null) {
             farmer: { name: farmer, contact }, 
             imgUrl: imgUrl,
             freshness: freshness,
-            freshnessIndicator: finalFreshnessIndicator
+
         };
         if(isPre){
             productUpdate.preorder = true;
@@ -654,7 +640,6 @@ window.adminSaveProduct = async function(editId = null) {
             farmer: { name: farmer, contact }, 
             imgUrl: imgUrl,
             freshness: freshness,
-            freshnessIndicator: finalFreshnessIndicator
         };
         if(isPre){
             newProd.preorder = true;
@@ -693,17 +678,18 @@ window.adminEditProduct = function(id) {
         <button type="button" onclick="uploadImagePreview('p-img-file','p-img-preview')" class="px-3 py-2 bg-white border rounded">Upload</button>
         <img id="p-img-preview" src="${p.imgUrl || ''}" alt="preview" class="w-28 h-16 object-cover rounded border" />
     </div>
-    <div class="grid grid-cols-2 gap-2">
-        <input id="p-freshness" type="number" min="0" max="100" value="${p.freshness || ''}" placeholder="Freshness (%)" class="p-2 border rounded" />
-        <select id="p-freshness-indicator" class="p-2 border rounded">
-          <option value="">Freshness Level</option>
-          <option value="farm-fresh" ${p.freshnessIndicator === 'farm-fresh' ? 'selected' : ''}>🌱 Farm Fresh (90-100%)</option>
-          <option value="very-fresh" ${p.freshnessIndicator === 'very-fresh' ? 'selected' : ''}>✨ Very Fresh (80-89%)</option>
-          <option value="fresh" ${p.freshnessIndicator === 'fresh' ? 'selected' : ''}>🍃 Fresh (70-79%)</option>
-          <option value="good" ${p.freshnessIndicator === 'good' ? 'selected' : ''}>👍 Good (60-69%)</option>
-          <option value="fair" ${p.freshnessIndicator === 'fair' ? 'selected' : ''}>⚠️ Fair (Below 60%)</option>
-        </select>
+    <div class="freshness-input-container">
+    <label class="block text-sm font-medium text-gray-700 mb-1">Freshness Level</label>
+    <div class="flex items-center gap-3">
+        <input id="p-freshness" type="range" min="0" max="100" value="${p.freshness || 100}" class="flex-1 freshness-slider" oninput="updateFreshnessDisplay(this.value)" />
+        <div class="freshness-display">
+            <span id="freshness-value" class="text-lg font-bold">${p.freshness || 100}</span>%
+        </div>
     </div>
+    <div class="freshness-indicator mt-2">
+        <div id="freshness-bar" class="freshness-bar" style="width: ${p.freshness || 100}%; background: ${(p.freshness || 100) >= 90 ? '#22c55e' : (p.freshness || 100) >= 70 ? '#84cc16' : (p.freshness || 100) >= 50 ? '#eab308' : '#f97316'};"></div>
+    </div>
+</div>
     <div class="flex items-center gap-3">
         <label class="flex items-center gap-2"><input id="p-preorder" type="checkbox" ${p.preorder ? 'checked' : ''}/> <span class="text-sm">Pre-Order</span></label>
         <input id="p-preorder-duration" type="number" min="7" max="14" value="${p.preorderDuration || ''}" placeholder="Duration (7-14 days)" class="p-2 border rounded w-48" />
@@ -863,6 +849,27 @@ window.uploadImagePreview = function(fileInputId, previewImgId) {
 };
 
 window.icons = function(){ if(window.lucide) lucide.createIcons(); };
+
+window.updateFreshnessDisplay = function(value) {
+    const freshnessValue = document.getElementById('freshness-value');
+    const freshnessBar = document.getElementById('freshness-bar');
+    
+    if (freshnessValue) freshnessValue.textContent = value;
+    if (freshnessBar) {
+        freshnessBar.style.width = value + '%';
+        
+        // Change color based on freshness level
+        if (value >= 90) {
+            freshnessBar.style.background = '#22c55e'; // green
+        } else if (value >= 70) {
+            freshnessBar.style.background = '#84cc16'; // lime
+        } else if (value >= 50) {
+            freshnessBar.style.background = '#eab308'; // yellow
+        } else {
+            freshnessBar.style.background = '#f97316'; // orange
+        }
+    }
+};
 
 window.showModal = function(titleHtml, contentHtml, actionsHtml = '') {
     const overlay = document.getElementById('modal-overlay');
