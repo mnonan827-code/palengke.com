@@ -532,18 +532,6 @@ window.adminAddProduct = function() {
           <option value="bundle">Bundle</option>
         </select>
     </div>
-    <div class="freshness-input-container">
-        <label class="block text-sm font-medium text-gray-700 mb-1">Freshness Level</label>
-        <div class="flex items-center gap-3">
-            <input id="p-freshness" type="range" min="0" max="100" value="100" class="flex-1 freshness-slider" oninput="updateFreshnessDisplay(this.value)" />
-            <div class="freshness-display">
-                <span id="freshness-value" class="text-lg font-bold">100</span>%
-            </div>
-        </div>
-        <div class="freshness-indicator mt-2">
-            <div id="freshness-bar" class="freshness-bar" style="width: 100%"></div>
-        </div>
-    </div>
     <input id="p-origin" placeholder="Origin (Farm name)" class="p-2 border rounded" />
     <div class="grid grid-cols-2 gap-2">
         <input id="p-farmer" placeholder="Farmer name" class="p-2 border rounded" />
@@ -561,8 +549,6 @@ window.adminAddProduct = function() {
     </form>
     `, `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">Cancel</button>
         <button onclick="adminSaveProduct()" class="px-4 py-2 bg-lime-600 text-white rounded">Create</button>`);
-
-    setTimeout(() => updateFreshnessDisplay(100), 100);
 };
 
 window.adminSaveProduct = async function(editId = null) {
@@ -1604,3 +1590,4 @@ window.addEventListener('keydown', (e) => {
     }
 
 });
+
