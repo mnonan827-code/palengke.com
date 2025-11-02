@@ -572,30 +572,38 @@ window.checkout = async function() {
             </div>
           </div>
           
-          <input id="customer-name" placeholder="Full Name" value="${window.APP_STATE.currentUser.name || ''}" class="p-2 border rounded" required />
-          <input id="customer-contact" placeholder="Contact Number (09XXXXXXXXX)" type="tel" class="p-2 border rounded" required />
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Full Name <span class="text-red-600">*</span></label>
+            <input id="customer-name" placeholder="Full Name" value="${profile.fullName || window.APP_STATE.currentUser.name || ''}" class="p-2 border rounded w-full" required />
+          </div>
+
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Contact Number <span class="text-red-600">*</span></label>
+            <input id="customer-contact" placeholder="Contact Number (09XXXXXXXXX)" type="tel" pattern="09[0-9]{9}" value="${userData.contact || ''}" class="p-2 border rounded w-full" required />
+            <div class="text-xs text-gray-500 mt-1">Format: 09XXXXXXXXX (11 digits)</div>
+          </div>
           
           <div>
-    <label class="block text-sm font-medium text-gray-700 mb-1">Delivery Address</label>
-    
-    <input id="customer-unit" placeholder="Unit/House Number (e.g., Unit 101, House 25)" value="${profile.unit || ''}" class="p-2 border rounded w-full mb-2" required />
-    
-    <input id="customer-building" placeholder="Building Name (optional)" value="${profile.building || ''}" class="p-2 border rounded w-full mb-2" />
-    
-    <input id="customer-street" placeholder="Street Name (e.g., Ortigas Avenue Extension)" value="${profile.street || ''}" class="p-2 border rounded w-full mb-2" required />
-    
-    <select id="customer-barangay" class="p-2 border rounded w-full mb-2" required>
-      <option value="">Select Barangay</option>
-      ${barangayOptions}
-    </select>
-    
-    <div class="text-xs bg-lime-50 text-lime-800 p-2 rounded border border-lime-200">
-      <i data-lucide="map-pin" class="w-3 h-3 inline"></i> 
-      <strong>Delivery to:</strong><br>
-      <span id="checkout-address-preview">[Unit], [Building], [Street], Brgy. [Barangay], Cainta, Rizal</span>
-    </div>
-    <div id="address-error" class="text-xs text-red-600 mt-1 hidden font-semibold"></div>
-</div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Delivery Address</label>
+            
+            <input id="customer-unit" placeholder="Unit/House Number (e.g., Unit 101, House 25)" value="${profile.unit || ''}" class="p-2 border rounded w-full mb-2" required />
+            
+            <input id="customer-building" placeholder="Building Name (optional)" value="${profile.building || ''}" class="p-2 border rounded w-full mb-2" />
+            
+            <input id="customer-street" placeholder="Street Name (e.g., Ortigas Avenue Extension)" value="${profile.street || ''}" class="p-2 border rounded w-full mb-2" required />
+            
+            <select id="customer-barangay" class="p-2 border rounded w-full mb-2" required>
+              <option value="">Select Barangay</option>
+              ${barangayOptions}
+            </select>
+            
+            <div class="text-xs bg-lime-50 text-lime-800 p-2 rounded border border-lime-200">
+              <i data-lucide="map-pin" class="w-3 h-3 inline"></i> 
+              <strong>Delivery to:</strong><br>
+              <span id="checkout-address-preview">[Unit], [Building], [Street], Brgy. [Barangay], Cainta, Rizal</span>
+            </div>
+            <div id="address-error" class="text-xs text-red-600 mt-1 hidden font-semibold"></div>
+          </div>
 
           <div class="bg-gray-50 p-3 rounded-lg space-y-1">
             <div class="flex justify-between text-sm">
@@ -616,19 +624,19 @@ window.checkout = async function() {
     `, `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">Cancel</button>
         <button type="button" onclick="validateAndPlaceOrder()" class="px-4 py-2 bg-lime-600 text-white rounded hover:bg-lime-700">Place Order</button>`);
     
-    setTimeout(() => icons(), 100);
+    setTimeout(() => {
+        icons();
+        
+        // Add event listeners for checkout address preview
+        const checkoutAddressFields = ['customer-unit', 'customer-building', 'customer-street', 'customer-barangay'];
+        checkoutAddressFields.forEach(fieldId => {
+            document.getElementById(fieldId)?.addEventListener('input', updateCheckoutAddressPreview);
+            document.getElementById(fieldId)?.addEventListener('change', updateCheckoutAddressPreview);
+        });
 
-    // After icons(), add:
-
-// Add event listeners for checkout address preview
-const checkoutAddressFields = ['customer-unit', 'customer-building', 'customer-street', 'customer-barangay'];
-checkoutAddressFields.forEach(fieldId => {
-    document.getElementById(fieldId)?.addEventListener('input', updateCheckoutAddressPreview);
-    document.getElementById(fieldId)?.addEventListener('change', updateCheckoutAddressPreview);
-});
-
-// Initial preview update
-updateCheckoutAddressPreview();
+        // Initial preview update
+        updateCheckoutAddressPreview();
+    }, 100);
 };
 
 // Show user profile modal
