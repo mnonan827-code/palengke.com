@@ -960,11 +960,10 @@ window.updateAddressPreview = function() {
 window.validateAndPlaceOrder = async function() {
     const name = document.getElementById('customer-name')?.value?.trim();
     const contact = document.getElementById('customer-contact')?.value?.trim();
-    const fullName = document.getElementById('customer-name')?.value?.trim();
+    const unit = document.getElementById('customer-unit')?.value?.trim();
+    const building = document.getElementById('customer-building')?.value?.trim();
     const street = document.getElementById('customer-street')?.value?.trim();
     const barangay = document.getElementById('customer-barangay')?.value?.trim();
-    const validation = validateCaintaAddress(street, barangay);
-
     
     console.log('Validating order:', { name, contact, unit, building, street, barangay });
     
@@ -977,7 +976,14 @@ window.validateAndPlaceOrder = async function() {
     
     // Check all required fields are filled
     if(!name || !contact || !unit || !street || !barangay) {
-        showModal('Missing info', 'Please fill all required checkout fields', `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
+        showModal('Missing info', 'Please fill all required checkout fields', `<button onclick="hideModal(); checkout();" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
+        return;
+    }
+
+    // Validate contact number format
+    const phoneRegex = /^09[0-9]{9}$/;
+    if(!phoneRegex.test(contact)) {
+        showModal('Invalid Contact Number', 'Please enter a valid Philippine mobile number (format: 09XXXXXXXXX)', `<button onclick="hideModal(); checkout();" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
         return;
     }
     
@@ -997,15 +1003,14 @@ window.validateAndPlaceOrder = async function() {
     addressParts.push(`Brgy. ${barangay}`);
     addressParts.push('Cainta, Rizal');
     
-    // Format the complete address (without unit)
-const address = `${fullName}, ${street}, Brgy. ${barangay}, Cainta, Rizal`;
+    const address = addressParts.join(', ');
     console.log('Formatted address:', address);
     
     // Proceed with placing order
     const newId = 'O-' + uid();
     const itemsCopy = window.APP_STATE.cart.map(i=> ({ ...i }));
     const subtotal = itemsCopy.reduce((s,i)=> s + i.price * i.quantity, 0);
-    const deliveryFee = window.APP_STATE.deliveryFee || 0;
+    const deliveryFee = window.APP_STATE.deliveryFee || 25.00;
     const total = subtotal + deliveryFee;
     const isPreorderOrder = itemsCopy.some(it => it.preordered === true);
     
@@ -1034,15 +1039,18 @@ const address = `${fullName}, ${street}, Brgy. ${barangay}, Cainta, Rizal`;
     };
 
     try {
+        console.log('Saving order to Firebase...', newOrder);
         await saveToFirebase(`orders/${newId}`, newOrder);
+        console.log('Order saved successfully');
         
         window.APP_STATE.cart = [];
         await saveToFirebase(`carts/${window.APP_STATE.currentUser.uid}`, window.APP_STATE.cart);
+        console.log('Cart cleared');
 
         toggleCartDrawer(false);
         hideModal();
         
-        showModal('Order Placed!', `
+        showModal('Order Placed! 🎉', `
             <div class="text-center space-y-3">
                 <div class="text-5xl text-green-600">✓</div>
                 <p class="text-gray-700">Thank you <b>${name}</b>!</p>
@@ -1051,13 +1059,17 @@ const address = `${fullName}, ${street}, Brgy. ${barangay}, Cainta, Rizal`;
                     <div class="text-xs text-gray-600 mb-1">Delivery to:</div>
                     <div class="text-sm font-semibold text-gray-800">${address}</div>
                 </div>
+                <div class="mt-3 p-3 bg-blue-50 rounded text-left border-l-4 border-blue-500">
+                    <div class="text-xs text-blue-800 font-semibold mb-1">📞 Contact Number</div>
+                    <div class="text-sm text-blue-900">${contact}</div>
+                </div>
             </div>
         `, `<button onclick="hideModal(); switchTo('orders'); renderMain();" class="px-4 py-2 bg-lime-600 text-white rounded">View My Orders</button>`);
         
         renderMain();
     } catch (error) {
         console.error('Error placing order:', error);
-        showModal('Error', 'Failed to place order. Please try again.', `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
+        showModal('Error', 'Failed to place order. Please try again.', `<button onclick="hideModal(); checkout();" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
     }
 };
 
@@ -2575,4 +2587,7 @@ window.addEventListener('keydown', (e) => {
     }
 
 });
+
+console.log('validateAndPlaceOrder exists:', typeof window.validateAndPlaceOrder);
+console.log('CAINTA_BARANGAYS:', CAINTA_BARANGAYS);
 
