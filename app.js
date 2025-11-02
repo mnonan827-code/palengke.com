@@ -526,7 +526,7 @@ window.checkout = function() {
     const total = subtotal + deliveryFee;
 
     showModal('Checkout', `
-        <form id="checkout-form" class="grid gap-3">
+        <form id="checkout-form" class="grid gap-3" onsubmit="event.preventDefault(); validateAndPlaceOrder();">
           <div class="bg-lime-50 p-3 rounded-lg border border-lime-200 mb-2">
             <div class="flex items-center gap-2 text-sm text-lime-800">
               <i data-lucide="map-pin" class="w-4 h-4"></i>
@@ -535,11 +535,11 @@ window.checkout = function() {
           </div>
           
           <input id="customer-name" placeholder="Full Name" value="${window.APP_STATE.currentUser.name || ''}" class="p-2 border rounded" required />
-          <input id="customer-contact" placeholder="Contact Number" class="p-2 border rounded" required />
+          <input id="customer-contact" placeholder="Contact Number (09XXXXXXXXX)" type="tel" class="p-2 border rounded" required />
           
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">Delivery Address</label>
-            <textarea id="customer-address" placeholder="Example: 123 Main St, Brgy. San Andres, Cainta, Rizal" rows="3" class="p-2 border rounded w-full resize-none" required></textarea>
+            <textarea id="customer-address" placeholder="Example: 123 Main St, Brgy. San Isidro, Cainta, Rizal" rows="3" class="p-2 border rounded w-full resize-none" required></textarea>
             <div class="text-xs text-gray-500 mt-1">
               <i data-lucide="info" class="w-3 h-3 inline"></i> Must include: Street, Barangay, Cainta, Rizal
             </div>
@@ -563,9 +563,8 @@ window.checkout = function() {
           </div>
         </form>
     `, `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">Cancel</button>
-        <button onclick="validateAndPlaceOrder()" class="px-4 py-2 bg-lime-600 text-white rounded">Place Order</button>`);
+        <button type="button" onclick="validateAndPlaceOrder()" class="px-4 py-2 bg-lime-600 text-white rounded hover:bg-lime-700">Place Order</button>`);
     
-    // Reinitialize icons after modal content is added
     setTimeout(() => icons(), 100);
 };
 
@@ -593,10 +592,10 @@ window.validateCaintaAddress = function(address) {
         };
     }
     
-    // List of valid Cainta barangays
+    // List of valid Cainta barangays - updated with more variations
     const caintaBarangays = [
         'san andres', 'san juan', 'santa rosa',
-        'santo domingo', 'santo niño', 'san isidro',
+        'santo domingo', 'santo niño', 'santo nino', 'san isidro',
         'dela paz', 'san roque', 'santisima trinidad'
     ];
     
@@ -606,18 +605,70 @@ window.validateCaintaAddress = function(address) {
     if(!hasValidBarangay) {
         return { 
             valid: false, 
-            message: 'Please include your Barangay in Cainta (e.g., San Andres, San Juan, Santa Rosa, etc.)' 
+            message: 'Please include your Barangay in Cainta (e.g., San Andres, San Juan, Santa Rosa, San Isidro, etc.)' 
         };
     }
     
     return { valid: true, message: 'Address validated' };
 };
+window.placeOrder = async function() {
+    const name = document.getElementById('customer-name')?.value?.trim();
+    const contact = document.getElementById('customer-contact')?.value?.trim();
+    const address = document.getElementById('customer-address')?.value?.trim();
+    
+    console.log('Placing order with:', { name, contact, address }); // Debug log
+    
+    if(!name || !contact || !address) {
+        return showModal('Missing info', 'Please fill all checkout fields', `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
+    }
+    
+    const newId = 'O-' + uid();
+    const itemsCopy = window.APP_STATE.cart.map(i=> ({ ...i }));
+    const subtotal = itemsCopy.reduce((s,i)=> s + i.price * i.quantity, 0);
+    const deliveryFee = window.APP_STATE.deliveryFee || 0;
+    const total = subtotal + deliveryFee;
+    const isPreorderOrder = itemsCopy.some(it => it.preordered === true);
+    
+    const newOrder = { 
+        id: newId, 
+        items: itemsCopy, 
+        subtotal: subtotal, 
+        deliveryFee: deliveryFee, 
+        total, 
+        status: isPreorderOrder ? 'Pre-Order Received' : 'Preparing Order', 
+        type: isPreorderOrder ? 'pre-order' : 'regular', 
+        customer: name, 
+        email: window.APP_STATE.currentUser.email, 
+        contact, 
+        address, 
+        date: new Date().toLocaleString(), 
+        userId: window.APP_STATE.currentUser.uid 
+    };
 
+    try {
+        await saveToFirebase(`orders/${newId}`, newOrder);
+        
+        window.APP_STATE.cart = [];
+        await saveToFirebase(`carts/${window.APP_STATE.currentUser.uid}`, window.APP_STATE.cart);
+
+        toggleCartDrawer(false);
+        hideModal();
+        
+        showModal('Order Placed!', `<div class="text-gray-700">Thank you <b>${name}</b>! Your order <b>${newId}</b> for <b>${formatPeso(total)}</b> has been received.</div>`, `<button onclick="hideModal(); switchTo('orders'); renderMain();" class="px-4 py-2 bg-lime-600 text-white rounded">OK</button>`);
+        
+        renderMain();
+    } catch (error) {
+        console.error('Error placing order:', error);
+        showModal('Error', 'Failed to place order. Please try again.', `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
+    }
+};
 // Validate address before placing order
 window.validateAndPlaceOrder = function() {
     const name = document.getElementById('customer-name')?.value?.trim();
     const contact = document.getElementById('customer-contact')?.value?.trim();
     const address = document.getElementById('customer-address')?.value?.trim();
+    
+    console.log('Validating order:', { name, contact, address }); // Debug log
     
     // Clear previous error
     const errorDiv = document.getElementById('address-error');
@@ -628,11 +679,14 @@ window.validateAndPlaceOrder = function() {
     
     // Check all fields are filled
     if(!name || !contact || !address) {
-        return showModal('Missing info', 'Please fill all checkout fields', `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
+        showModal('Missing info', 'Please fill all checkout fields', `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
+        return;
     }
     
     // Validate address is within Cainta
     const validation = validateCaintaAddress(address);
+    console.log('Validation result:', validation); // Debug log
+    
     if(!validation.valid) {
         if(errorDiv) {
             errorDiv.textContent = '⚠️ ' + validation.message;
@@ -653,6 +707,7 @@ window.validateAndPlaceOrder = function() {
     }
     
     // If validation passes, proceed with order
+    console.log('Validation passed, placing order...'); // Debug log
     placeOrder();
 };
 
