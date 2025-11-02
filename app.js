@@ -363,7 +363,27 @@ window.loginUser = async function() {
     }
 
     try {
-        const userCredential = await signInWithEmailAndPassword(auth, email, password);
+        const userCredential = await signInWithEmailAndPassword(auth, email, password)
+  .then(async (userCredential) => {
+    const user = userCredential.user;
+
+   
+    await user.reload();
+
+
+    if (!user.emailVerified) {
+      showModal('Email not verified', 'Please verify your email before logging in.');
+      return;
+    }
+
+
+    showModal('Login Successful', 'Welcome back!');
+
+  })
+  .catch((error) => {
+    showModal('Login Error', error.message);
+  });
+
         const user = userCredential.user;
 
         if (!user.emailVerified) {
