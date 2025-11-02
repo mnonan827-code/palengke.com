@@ -290,9 +290,9 @@ window.signupUser = async function() {
     const user = userCredential.user;
 
     // ✅ Send verification email
-    // ✅ Send verification email
+ 
     const actionCodeSettings = {
-     url: "https://palengke-a4bc2.firebaseapp.com", 
+     url: "https://palengke-a4bc2.web.app", 
     handleCodeInApp: false,
 };
 
