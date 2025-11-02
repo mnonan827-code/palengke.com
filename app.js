@@ -46,6 +46,19 @@ window.APP_STATE = {
 
 const APP_KEY = 'palengke_cainta_v4';
 
+const CAINTA_BARANGAYS = [
+    'San Andres',
+    'San Juan',
+    'Santa Rosa',
+    'Santo Domingo',
+    'Santo Niño',
+    'San Isidro',
+    'Dela Paz',
+    'San Roque',
+    'Santisima Trinidad'
+];
+
+
 const dbRefs = {
     products: ref(database, 'products'),
     orders: ref(database, 'orders'),
@@ -525,6 +538,11 @@ window.checkout = function() {
     const deliveryFee = window.APP_STATE.deliveryFee || 25.00;
     const total = subtotal + deliveryFee;
 
+    // Generate barangay options
+    const barangayOptions = CAINTA_BARANGAYS.map(brgy => 
+        `<option value="${brgy}">${brgy}</option>`
+    ).join('');
+
     showModal('Checkout', `
         <form id="checkout-form" class="grid gap-3" onsubmit="event.preventDefault(); validateAndPlaceOrder();">
           <div class="bg-lime-50 p-3 rounded-lg border border-lime-200 mb-2">
@@ -539,9 +557,18 @@ window.checkout = function() {
           
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">Delivery Address</label>
-            <textarea id="customer-address" placeholder="Example: 123 Main St, Brgy. San Isidro, Cainta, Rizal" rows="3" class="p-2 border rounded w-full resize-none" required></textarea>
-            <div class="text-xs text-gray-500 mt-1">
-              <i data-lucide="info" class="w-3 h-3 inline"></i> Must include: Street, Barangay, Cainta, Rizal
+            
+            <input id="customer-unit" placeholder="Unit/House Number (e.g., Unit 101, House 25)" class="p-2 border rounded w-full mb-2" required />
+            
+            <input id="customer-street" placeholder="Street Name (e.g., Main Street, Ortigas Ave Extension)" class="p-2 border rounded w-full mb-2" required />
+            
+            <select id="customer-barangay" class="p-2 border rounded w-full mb-2" required>
+              <option value="">Select Barangay</option>
+              ${barangayOptions}
+            </select>
+            
+            <div class="text-xs text-gray-500 mt-1 bg-gray-50 p-2 rounded">
+              <i data-lucide="info" class="w-3 h-3 inline"></i> Address will be: [Unit], [Street], Brgy. [Barangay], Cainta, Rizal
             </div>
             <div id="address-error" class="text-xs text-red-600 mt-1 hidden font-semibold"></div>
           </div>
@@ -569,59 +596,69 @@ window.checkout = function() {
 };
 
 // Address validation function for Cainta, Rizal only
-window.validateCaintaAddress = function(address) {
-    if(!address || address.trim().length === 0) {
-        return { valid: false, message: 'Address is required' };
+window.validateCaintaAddress = function(unit, street, barangay) {
+    if(!unit || unit.trim().length === 0) {
+        return { valid: false, message: 'Unit/House number is required' };
     }
 
-    const addressLower = address.toLowerCase().trim();
-    
-    // Must contain "cainta"
-    if(!addressLower.includes('cainta')) {
-        return { 
-            valid: false, 
-            message: 'Address must be within Cainta. Please include "Cainta" in your address.' 
-        };
+    if(!street || street.trim().length === 0) {
+        return { valid: false, message: 'Street name is required' };
     }
     
-    // Must contain "rizal" for verification
-    if(!addressLower.includes('rizal')) {
-        return { 
-            valid: false, 
-            message: 'Please specify "Rizal" in your address for verification.' 
-        };
+    if(!barangay || barangay.trim().length === 0) {
+        return { valid: false, message: 'Please select a barangay' };
     }
     
-    // List of valid Cainta barangays - updated with more variations
-    const caintaBarangays = [
-        'san andres', 'san juan', 'santa rosa',
-        'santo domingo', 'santo niño', 'santo nino', 'san isidro',
-        'dela paz', 'san roque', 'santisima trinidad'
-    ];
-    
-    // Check if at least one valid barangay is mentioned
-    const hasValidBarangay = caintaBarangays.some(brgy => addressLower.includes(brgy));
-    
-    if(!hasValidBarangay) {
+    // Check if selected barangay is in the valid list
+    if(!CAINTA_BARANGAYS.includes(barangay)) {
         return { 
             valid: false, 
-            message: 'Please include your Barangay in Cainta (e.g., San Andres, San Juan, Santa Rosa, San Isidro, etc.)' 
+            message: 'Please select a valid barangay in Cainta' 
         };
     }
     
     return { valid: true, message: 'Address validated' };
 };
-window.placeOrder = async function() {
+// Validate address before placing order
+window.validateAndPlaceOrder = async function() {
     const name = document.getElementById('customer-name')?.value?.trim();
     const contact = document.getElementById('customer-contact')?.value?.trim();
-    const address = document.getElementById('customer-address')?.value?.trim();
+    const unit = document.getElementById('customer-unit')?.value?.trim();
+    const street = document.getElementById('customer-street')?.value?.trim();
+    const barangay = document.getElementById('customer-barangay')?.value?.trim();
     
-    console.log('Placing order with:', { name, contact, address }); // Debug log
+    console.log('Validating order:', { name, contact, unit, street, barangay });
     
-    if(!name || !contact || !address) {
-        return showModal('Missing info', 'Please fill all checkout fields', `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
+    // Clear previous error
+    const errorDiv = document.getElementById('address-error');
+    if(errorDiv) {
+        errorDiv.classList.add('hidden');
+        errorDiv.textContent = '';
     }
     
+    // Check all fields are filled
+    if(!name || !contact || !unit || !street || !barangay) {
+        showModal('Missing info', 'Please fill all checkout fields', `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
+        return;
+    }
+    
+    // Validate address components
+    const validation = validateCaintaAddress(unit, street, barangay);
+    console.log('Validation result:', validation);
+    
+    if(!validation.valid) {
+        if(errorDiv) {
+            errorDiv.textContent = '⚠️ ' + validation.message;
+            errorDiv.classList.remove('hidden');
+        }
+        return;
+    }
+    
+    // Format the complete address
+    const address = `${unit}, ${street}, Brgy. ${barangay}, Cainta, Rizal`;
+    console.log('Formatted address:', address);
+    
+    // Proceed with placing order
     const newId = 'O-' + uid();
     const itemsCopy = window.APP_STATE.cart.map(i=> ({ ...i }));
     const subtotal = itemsCopy.reduce((s,i)=> s + i.price * i.quantity, 0);
@@ -654,61 +691,13 @@ window.placeOrder = async function() {
         toggleCartDrawer(false);
         hideModal();
         
-        showModal('Order Placed!', `<div class="text-gray-700">Thank you <b>${name}</b>! Your order <b>${newId}</b> for <b>${formatPeso(total)}</b> has been received.</div>`, `<button onclick="hideModal(); switchTo('orders'); renderMain();" class="px-4 py-2 bg-lime-600 text-white rounded">OK</button>`);
+        showModal('Order Placed!', `<div class="text-gray-700">Thank you <b>${name}</b>! Your order <b>${newId}</b> for <b>${formatPeso(total)}</b> has been received.<br><br><strong>Delivery to:</strong><br>${address}</div>`, `<button onclick="hideModal(); switchTo('orders'); renderMain();" class="px-4 py-2 bg-lime-600 text-white rounded">OK</button>`);
         
         renderMain();
     } catch (error) {
         console.error('Error placing order:', error);
         showModal('Error', 'Failed to place order. Please try again.', `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
     }
-};
-// Validate address before placing order
-window.validateAndPlaceOrder = function() {
-    const name = document.getElementById('customer-name')?.value?.trim();
-    const contact = document.getElementById('customer-contact')?.value?.trim();
-    const address = document.getElementById('customer-address')?.value?.trim();
-    
-    console.log('Validating order:', { name, contact, address }); // Debug log
-    
-    // Clear previous error
-    const errorDiv = document.getElementById('address-error');
-    if(errorDiv) {
-        errorDiv.classList.add('hidden');
-        errorDiv.textContent = '';
-    }
-    
-    // Check all fields are filled
-    if(!name || !contact || !address) {
-        showModal('Missing info', 'Please fill all checkout fields', `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
-        return;
-    }
-    
-    // Validate address is within Cainta
-    const validation = validateCaintaAddress(address);
-    console.log('Validation result:', validation); // Debug log
-    
-    if(!validation.valid) {
-        if(errorDiv) {
-            errorDiv.textContent = '⚠️ ' + validation.message;
-            errorDiv.classList.remove('hidden');
-        }
-        
-        // Scroll to error
-        const addressField = document.getElementById('customer-address');
-        if(addressField) {
-            addressField.focus();
-            addressField.style.borderColor = '#ef4444';
-            setTimeout(() => {
-                addressField.style.borderColor = '';
-            }, 2000);
-        }
-        
-        return;
-    }
-    
-    // If validation passes, proceed with order
-    console.log('Validation passed, placing order...'); // Debug log
-    placeOrder();
 };
 
 window.adminAddProduct = function() {
