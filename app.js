@@ -520,54 +520,140 @@ window.checkout = function() {
     if(!window.APP_STATE.currentUser){
         return showModal('Login required', 'Please log in or create an account to place your order.', `<button onclick="hideModal(); openAuth('login')" class="px-4 py-2 bg-lime-600 text-white rounded">Log in</button><button onclick="hideModal(); openAuth('signup')" class="px-4 py-2 bg-white border rounded">Sign up</button>`);
     }
+    
     const subtotal = window.APP_STATE.cart.reduce((s,i)=> s + i.price * i.quantity, 0);
-    const deliveryFee = 25.00;
+    const deliveryFee = window.APP_STATE.deliveryFee || 25.00;
     const total = subtotal + deliveryFee;
 
-showModal('Checkout', `
+    showModal('Checkout', `
+        <form id="checkout-form" class="grid gap-3">
+          <div class="bg-lime-50 p-3 rounded-lg border border-lime-200 mb-2">
+            <div class="flex items-center gap-2 text-sm text-lime-800">
+              <i data-lucide="map-pin" class="w-4 h-4"></i>
+              <span class="font-semibold">Delivery within Cainta, Rizal only</span>
+            </div>
+          </div>
+          
+          <input id="customer-name" placeholder="Full Name" value="${window.APP_STATE.currentUser.name || ''}" class="p-2 border rounded" required />
+          <input id="customer-contact" placeholder="Contact Number" class="p-2 border rounded" required />
+          
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Delivery Address</label>
+            <textarea id="customer-address" placeholder="Example: 123 Main St, Brgy. San Andres, Cainta, Rizal" rows="3" class="p-2 border rounded w-full resize-none" required></textarea>
+            <div class="text-xs text-gray-500 mt-1">
+              <i data-lucide="info" class="w-3 h-3 inline"></i> Must include: Street, Barangay, Cainta, Rizal
+            </div>
+            <div id="address-error" class="text-xs text-red-600 mt-1 hidden font-semibold"></div>
+          </div>
 
-    <div>
-      <div class="bg-gray-50 p-3 rounded-lg mb-3 space-y-1">
-        <div class="flex justify-between text-sm">
-          <span class="text-gray-600">Subtotal:</span>
-          <span class="font-semibold">${formatPeso(subtotal)}</span>
-        </div>
-        <div class="flex justify-between text-sm">
-          <span class="text-gray-600">Delivery Fee:</span>
-          <span class="font-semibold">${formatPeso(deliveryFee)}</span>
-        </div>
-        <div class="border-t pt-1 mt-1"></div>
-        <div class="flex justify-between">
-          <span class="text-gray-700 font-semibold">Total:</span>
-          <span class="font-bold text-lime-700">${formatPeso(total)}</span>
-        </div>
-      </div>
-`, `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">Cancel</button>
-    <button onclick="placeOrder()" class="px-4 py-2 bg-lime-600 text-white rounded">Place Order</button>`);
+          <div class="bg-gray-50 p-3 rounded-lg space-y-1">
+            <div class="flex justify-between text-sm">
+              <span class="text-gray-600">Subtotal:</span>
+              <span class="font-semibold">${formatPeso(subtotal)}</span>
+            </div>
+            <div class="flex justify-between text-sm">
+              <span class="text-gray-600">Delivery Fee:</span>
+              <span class="font-semibold">${formatPeso(deliveryFee)}</span>
+            </div>
+            <div class="border-t pt-1 mt-1"></div>
+            <div class="flex justify-between">
+              <span class="text-gray-700 font-semibold">Total:</span>
+              <span class="font-bold text-lime-700">${formatPeso(total)}</span>
+            </div>
+          </div>
+        </form>
+    `, `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">Cancel</button>
+        <button onclick="validateAndPlaceOrder()" class="px-4 py-2 bg-lime-600 text-white rounded">Place Order</button>`);
+    
+    // Reinitialize icons after modal content is added
+    setTimeout(() => icons(), 100);
 };
 
-window.placeOrder = async function() {
+// Address validation function for Cainta, Rizal only
+window.validateCaintaAddress = function(address) {
+    if(!address || address.trim().length === 0) {
+        return { valid: false, message: 'Address is required' };
+    }
+
+    const addressLower = address.toLowerCase().trim();
+    
+    // Must contain "cainta"
+    if(!addressLower.includes('cainta')) {
+        return { 
+            valid: false, 
+            message: 'Address must be within Cainta. Please include "Cainta" in your address.' 
+        };
+    }
+    
+    // Must contain "rizal" for verification
+    if(!addressLower.includes('rizal')) {
+        return { 
+            valid: false, 
+            message: 'Please specify "Rizal" in your address for verification.' 
+        };
+    }
+    
+    // List of valid Cainta barangays
+    const caintaBarangays = [
+        'san andres', 'san juan', 'santa rosa',
+        'santo domingo', 'santo niño', 'san isidro',
+        'dela paz', 'san roque', 'santisima trinidad'
+    ];
+    
+    // Check if at least one valid barangay is mentioned
+    const hasValidBarangay = caintaBarangays.some(brgy => addressLower.includes(brgy));
+    
+    if(!hasValidBarangay) {
+        return { 
+            valid: false, 
+            message: 'Please include your Barangay in Cainta (e.g., San Andres, San Juan, Santa Rosa, etc.)' 
+        };
+    }
+    
+    return { valid: true, message: 'Address validated' };
+};
+
+// Validate address before placing order
+window.validateAndPlaceOrder = function() {
     const name = document.getElementById('customer-name')?.value?.trim();
     const contact = document.getElementById('customer-contact')?.value?.trim();
     const address = document.getElementById('customer-address')?.value?.trim();
-    if(!name || !contact || !address) return showModal('Missing info', 'Please fill all checkout fields', `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
-    const newId = 'O-' + uid();
-    const itemsCopy = window.APP_STATE.cart.map(i=> ({ ...i }));
-    const subtotal = itemsCopy.reduce((s,i)=> s + i.price * i.quantity, 0);
-    const deliveryFee = window.APP_STATE.deliveryFee || 0;
-    const total = subtotal + deliveryFee;
-    const isPreorderOrder = itemsCopy.some(it => it.preordered === true);
-    const newOrder = { id: newId, items: itemsCopy, subtotal: subtotal, deliveryFee: deliveryFee, total, status: isPreorderOrder ? 'Pre-Order Received' : 'Preparing Order', type: isPreorderOrder ? 'pre-order' : 'regular', customer: name, email: window.APP_STATE.currentUser.email, contact, address, date: new Date().toLocaleString(), userId: window.APP_STATE.currentUser.uid };
-
-    await saveToFirebase(`orders/${newId}`, newOrder);
-
-    window.APP_STATE.cart = [];
-    await saveToFirebase(`carts/${window.APP_STATE.currentUser.uid}`, window.APP_STATE.cart);
-
-    toggleCartDrawer(false);
-    hideModal();
-    showModal('Order Placed!', `<div class="text-gray-700">Thank you <b>${name}</b>! Your order <b>${newId}</b> for <b>${formatPeso(total)}</b> has been received.</div>`, `<button onclick="hideModal(); switchTo('orders'); renderMain();" class="px-4 py-2 bg-lime-600 text-white rounded">OK</button>`);
-    renderMain();
+    
+    // Clear previous error
+    const errorDiv = document.getElementById('address-error');
+    if(errorDiv) {
+        errorDiv.classList.add('hidden');
+        errorDiv.textContent = '';
+    }
+    
+    // Check all fields are filled
+    if(!name || !contact || !address) {
+        return showModal('Missing info', 'Please fill all checkout fields', `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
+    }
+    
+    // Validate address is within Cainta
+    const validation = validateCaintaAddress(address);
+    if(!validation.valid) {
+        if(errorDiv) {
+            errorDiv.textContent = '⚠️ ' + validation.message;
+            errorDiv.classList.remove('hidden');
+        }
+        
+        // Scroll to error
+        const addressField = document.getElementById('customer-address');
+        if(addressField) {
+            addressField.focus();
+            addressField.style.borderColor = '#ef4444';
+            setTimeout(() => {
+                addressField.style.borderColor = '';
+            }, 2000);
+        }
+        
+        return;
+    }
+    
+    // If validation passes, proceed with order
+    placeOrder();
 };
 
 window.adminAddProduct = function() {
