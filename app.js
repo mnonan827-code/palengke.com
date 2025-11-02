@@ -356,11 +356,12 @@ window.loginUser = async function() {
         const userCredential = await signInWithEmailAndPassword(auth, email, password);
         const user = userCredential.user;
 
-        // Reload user to get latest email verification status
-        await user.reload();
+            await user.reload();
 
-        // Check if email is verified
-        if (!user.emailVerified) {
+            const currentUser = auth.currentUser;
+
+
+            if (!currentUser.emailVerified) {
             // Sign out unverified user
             await signOut(auth);
             
@@ -380,23 +381,21 @@ window.loginUser = async function() {
         }
 
         // Fetch user data from database
-        const userData = await getFromFirebase(`users/${user.uid}`);
+        const userData = await getFromFirebase(`users/${currentUser.uid}`);
 
-        if (userData) {
-            // Update email verified status in database
-            if (!userData.emailVerified) {
-                await updateFirebase(`users/${user.uid}`, { emailVerified: true });
-            }
+if (userData) {
+    // Update email verified status in database to match Firebase Auth
+    await updateFirebase(`users/${currentUser.uid}`, { emailVerified: true });
 
-            window.APP_STATE.currentUser = {
-                uid: user.uid,
-                email: user.email,
+    window.APP_STATE.currentUser = {
+        uid: currentUser.uid,
+        email: currentUser.email,
                 name: userData.name,
                 role: userData.role,
             };
 
             // Load user cart
-            const userCart = await getFromFirebase(`carts/${user.uid}`);
+            const userCart = await getFromFirebase(`carts/${currentUser.uid}`);
             if (userCart) {
                 window.APP_STATE.cart = Object.values(userCart);
             }
