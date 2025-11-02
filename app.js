@@ -527,9 +527,12 @@ window.adminAddProduct = function() {
         <input id="p-price" type="number" step="0.01" placeholder="Price (₱)" class="p-2 border rounded col-span-1" />
         <input id="p-qty" type="number" placeholder="Quantity" class="p-2 border rounded" />
         <select id="p-unit" class="p-2 border rounded">
-          <option value="kg">kg</option>
-          <option value="pc">pc</option>
-          <option value="bundle">Bundle</option>
+            <option value="kg">kg</option>
+            <option value="1/2 kg">1/2 kg</option>
+            <option value="1/4 kg">1/4 kg</option>
+            <option value="pc">pc</option>
+            <option value="pack">pack</option>
+            <option value="bundle">bundle</option>
         </select>
     </div>
     <input id="p-origin" placeholder="Origin (Farm name)" class="p-2 border rounded" />
@@ -663,9 +666,12 @@ window.adminEditProduct = function(id) {
         <input id="p-price" type="number" step="0.01" value="${p.price}" placeholder="Price (₱)" class="p-2 border rounded col-span-1" />
         <input id="p-qty" type="number" value="${p.quantity}" placeholder="Quantity" class="p-2 border rounded" />
         <select id="p-unit" class="p-2 border rounded">
-          <option value="kg" ${p.unit === 'kg' ? 'selected' : ''}>kg</option>
-          <option value="pc" ${p.unit === 'pc' ? 'selected' : ''}>pc</option>
-          <option value="bundle" ${p.unit === 'bundle' ? 'selected' : ''}>Bundle</option>
+            <option value="kg" ${p.unit === 'kg' ? 'selected' : ''}>kg</option>
+            <option value="1/2 kg" ${p.unit === '1/2 kg' ? 'selected' : ''}>1/2 kg</option>
+            <option value="1/4 kg" ${p.unit === '1/4 kg' ? 'selected' : ''}>1/4 kg</option>
+            <option value="pc" ${p.unit === 'pc' ? 'selected' : ''}>pc</option>
+            <option value="pack" ${p.unit === 'pack' ? 'selected' : ''}>pack</option>
+            <option value="bundle" ${p.unit === 'bundle' ? 'selected' : ''}>bundle</option>
         </select>
     </div>
     <input id="p-origin" value="${p.origin}" placeholder="Origin (Farm name)" class="p-2 border rounded" />
