@@ -14,7 +14,8 @@ import {
     remove, 
     onValue, 
     push,
-    cloudinaryConfig 
+    cloudinaryConfig,
+    sendEmailVerification 
 } from './firebase-config.js';
 
 // Initialize Lucide Icons
