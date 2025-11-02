@@ -289,7 +289,12 @@ window.signupUser = async function() {
     const user = userCredential.user;
 
     // ✅ Send verification email
-    await sendEmailVerification(user);
+    const actionCodeSettings = {
+  url: window.location.origin, // redirect to your app after verifying
+  handleCodeInApp: false,
+};
+await sendEmailVerification(user, actionCodeSettings);
+
     showModal('Verification Sent', `
       A verification link has been sent to <b>${email}</b>. 
       Please check your Gmail inbox or spam folder before logging in.
@@ -362,7 +367,7 @@ window.loginUser = async function() {
         Please verify your email before logging in.<br>
         Check your Gmail inbox for the verification link.
     `, `<button onclick="hideModal()" class="px-4 py-2 bg-lime-600 text-white rounded">OK</button>`);
-}   
+}
 
         const userData = await getFromFirebase(`users/${user.uid}`);
         
