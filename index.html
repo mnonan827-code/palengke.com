@@ -9,6 +9,17 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
 
+  <head>
+  <!-- ... existing code ... -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  
+  <!-- ADD THIS LINE ↓ -->
+  <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
+
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="styles.css">
+</head>
+
   <!-- Fonts -->
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
 
@@ -157,6 +168,7 @@
     </div>
   </div>
 
+  <script type="module" src="email-service.js"></script>
   <script type="module" src="app.js"></script>
 </body>
 </html>
