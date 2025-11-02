@@ -890,12 +890,14 @@ window.showModal = function(titleHtml, contentHtml, actionsHtml = '') {
     `;
     overlay.classList.remove('hidden');
     overlay.style.display = 'flex';
+    document.body.classList.add('modal-open');
     icons();
 };
 
 window.hideModal = function(){ 
     document.getElementById('modal-overlay').classList.add('hidden'); 
-    document.getElementById('modal-overlay').style.display = 'none'; 
+    document.getElementById('modal-overlay').style.display = 'none';
+    document.body.classList.remove('modal-open');
 };
 
 window.updateAuthArea = function() {

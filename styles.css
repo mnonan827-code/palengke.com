@@ -961,21 +961,48 @@ textarea:focus {
   outline-offset: 2px;
 }
 
-/* Enhanced Dialog/Modal improvements for mobile */
+
+#modal-overlay {
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 1rem;
+  align-items: flex-start;
+  padding-top: 2rem;
+}
+
+#modal {
+  margin: auto;
+  max-height: calc(100vh - 4rem);
+  display: flex;
+  flex-direction: column;
+}
+
+#modal > div:last-child {
+  overflow-y: auto;
+  max-height: calc(100vh - 12rem);
+}
+
 @media (max-width: 768px) {
   #modal-overlay {
     padding: 0.5rem;
-    align-items: flex-end;
+    padding-top: 1rem;
   }
   
   #modal {
     max-width: none;
-    width: 100%;
-    border-radius: 1rem 1rem 0 0;
-    margin-bottom: 0;
+    width: calc(100% - 1rem);
+    max-height: calc(100vh - 2rem);
   }
   
-  /* Stack modal buttons vertically on mobile */
+  #modal > div:first-child {
+    flex-shrink: 0;
+  }
+  
+  #modal > div:last-child {
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+ 
   #modal .bg-gray-50 .flex.justify-end.gap-3 {
     flex-direction: column;
   }
@@ -990,17 +1017,19 @@ textarea:focus {
   }
 }
 
-/* Prevent body scroll when mobile menu or modal is open */
-/* Prevent body scroll when mobile menu or modal is open */
-body.mobile-menu-open,
-body.modal-open {
-  overflow: hidden;
-  position: fixed;
-  width: 100%;
-  height: 100%;
+body.modal-open header {
+  position: relative;
+  z-index: 35;
 }
 
-/* Freshness Input Styles */
+#modal-overlay {
+  z-index: 60 !important;
+}
+
+#modal {
+  z-index: 61 !important;
+}
+
 .freshness-input-container {
   padding: 1rem;
   background: #f9fafb;
