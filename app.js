@@ -697,7 +697,6 @@ window.showUserProfile = async function() {
                 </select>
             </div>
 
-            // Inside showUserProfile function, replace the address div with:
 
 <div>
     <label class="block text-sm font-medium text-gray-700 mb-1">Home Address in Cainta, Rizal</label>
