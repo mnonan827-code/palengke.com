@@ -290,16 +290,20 @@ window.signupUser = async function() {
     const user = userCredential.user;
 
     // ✅ Send verification email
+    // ✅ Send verification email
     const actionCodeSettings = {
-  url: window.location.origin, // redirect to your app after verifying
-  handleCodeInApp: false,
+     url: "https://palengke-a4bc2.firebaseapp.com", 
+    handleCodeInApp: false,
 };
+
 await sendEmailVerification(user, actionCodeSettings);
+
 
     showModal('Verification Sent', `
       A verification link has been sent to <b>${email}</b>. 
       Please check your Gmail inbox or spam folder before logging in.
     `, `<button onclick="hideModal()" class="px-4 py-2 bg-lime-600 text-white rounded">OK</button>`);
+    
 
     // ✅ Save user data in Firebase (even if not yet verified)
     const userData = {
