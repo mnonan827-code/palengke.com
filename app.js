@@ -286,11 +286,12 @@ window.signupUser = async function() {
     }
 
     try {
-        // Create user account
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
         const user = userCredential.user;
 
-        // Save user data to Firebase
+        const verificationCode = generateVerificationCode();
+        const codeExpiry = Date.now() + (15 * 60 * 1000);
+
         const userData = {
             uid: user.uid,
             email: email,
@@ -298,30 +299,17 @@ window.signupUser = async function() {
             contact: contact,
             role: 'customer',
             createdAt: new Date().toISOString(),
-            emailVerified: false
+            emailVerified: false,
+            verificationCode: verificationCode,
+            verificationCodeExpiry: codeExpiry
         };
         await saveToFirebase(`users/${user.uid}`, userData);
 
-        // Send verification email
-        await sendEmailVerification(user);
-
-        // Sign out the user (they must verify first)
+        await sendVerificationCodeEmail(email, name, verificationCode);
         await signOut(auth);
 
-        // Show success message
         hideModal();
-        showModal('Verify Your Email', `
-            <div class="space-y-3">
-                <p class="text-gray-700">Account created successfully!</p>
-                <p class="text-gray-700">We've sent a verification link to:</p>
-                <p class="font-semibold text-lime-700">${email}</p>
-                <div class="bg-yellow-50 border-l-4 border-yellow-400 p-3 mt-3">
-                    <p class="text-sm text-yellow-700">
-                        <strong>Important:</strong> Please check your email inbox (and spam folder) and click the verification link before logging in.
-                    </p>
-                </div>
-            </div>
-        `, `<button onclick="hideModal()" class="px-4 py-2 bg-lime-600 text-white rounded">OK, I'll check my email</button>`);
+        showVerificationModal(email, password);
 
     } catch (error) {
         console.error('Signup error:', error);
@@ -333,6 +321,8 @@ window.signupUser = async function() {
             errorMessage = 'Password should be at least 6 characters.';
         } else if (error.code === 'auth/invalid-email') {
             errorMessage = 'Invalid email address.';
+        } else if (error.message.includes('email')) {
+            errorMessage = 'Failed to send verification email. Please check the email address and try again.';
         }
 
         showModal('Signup Error', errorMessage, `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
@@ -352,88 +342,52 @@ window.loginUser = async function() {
     }
 
     try {
-        // Sign in with Firebase
         const userCredential = await signInWithEmailAndPassword(auth, email, password);
         const user = userCredential.user;
+        const userData = await getFromFirebase(`users/${user.uid}`);
 
-            await user.reload();
-
-            const currentUser = auth.currentUser;
-
-
-            if (!currentUser.emailVerified) {
-            // Sign out unverified user
+        if (!userData) {
             await signOut(auth);
-            
+            return showModal('Error', 'User data not found.', `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
+        }
+
+        if (!userData.emailVerified) {
+            await signOut(auth);
             return showModal(
                 'Email Not Verified',
                 `
                 <div class="space-y-3">
                     <p class="text-gray-700">Please verify your email before logging in.</p>
-                    <p class="text-sm text-gray-600">Check your inbox (and spam folder) for the verification link we sent to:</p>
-                    <p class="font-semibold text-lime-700">${email}</p>
-                    <p class="text-sm text-gray-600 mt-3">Didn't receive the email?</p>
+                    <p class="text-sm text-gray-600">Check your inbox for the verification code.</p>
                 </div>
                 `,
-                `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">Cancel</button>
-                 <button onclick="resendVerificationEmail('${email}', '${password}')" class="px-4 py-2 bg-lime-600 text-white rounded">Resend Email</button>`
+                `<button onclick="hideModal(); showVerificationModal('${email}', '${password}')" class="px-4 py-2 bg-lime-600 text-white rounded">Enter Verification Code</button>
+                 <button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">Cancel</button>`
             );
         }
 
-        // Fetch user data from database
-        const userData = await getFromFirebase(`users/${currentUser.uid}`);
+        window.APP_STATE.currentUser = {
+            uid: user.uid,
+            email: user.email,
+            name: userData.name,
+            role: userData.role,
+        };
 
-if (userData) {
-    // Update email verified status in database to match Firebase Auth
-    await updateFirebase(`users/${currentUser.uid}`, { emailVerified: true });
-
-    window.APP_STATE.currentUser = {
-        uid: currentUser.uid,
-        email: currentUser.email,
-                name: userData.name,
-                role: userData.role,
-            };
-
-            // Load user cart
-            const userCart = await getFromFirebase(`carts/${currentUser.uid}`);
-            if (userCart) {
-                window.APP_STATE.cart = Object.values(userCart);
-            }
-
-            hideModal();
-            updateAuthArea();
-            renderMain();
-
-            // Check for notifications
-            const notifications = await getFromFirebase('notifications');
-            if (notifications) {
-                const userNotifications = Object.values(notifications).filter(
-                    (n) => n.to === window.APP_STATE.currentUser.email
-                );
-
-                if (userNotifications.length > 0) {
-                    const msgs = userNotifications
-                        .map((n) => `<div class="py-2"><b>${n.date}</b><div>${n.message}</div></div>`)
-                        .join('');
-                    showModal(
-                        'Notifications',
-                        `<div class="max-h-64 overflow-auto">${msgs}</div>`,
-                        `<button onclick="hideModal();" class="px-4 py-2 bg-lime-600 text-white rounded">OK</button>`
-                    );
-
-                    // Delete notifications
-                    for (const notification of userNotifications) {
-                        await remove(ref(database, `notifications/${notification.id}`));
-                    }
-                } else {
-                    showModal(
-                        'Logged in',
-                        `Welcome back, <b>${window.APP_STATE.currentUser.name}</b>!`,
-                        `<button onclick="hideModal(); renderMain()" class="px-4 py-2 bg-lime-600 text-white rounded">OK</button>`
-                    );
-                }
-            }
+        const userCart = await getFromFirebase(`carts/${user.uid}`);
+        if (userCart) {
+            window.APP_STATE.cart = Object.values(userCart);
         }
+
+        hideModal();
+        updateAuthArea();
+        renderMain();
+
+        showModal(
+            'Logged in',
+            `Welcome back, <b>${window.APP_STATE.currentUser.name}</b>!`,
+            `<button onclick="hideModal(); renderMain()" class="px-4 py-2 bg-lime-600 text-white rounded">OK</button>`
+        );
+
     } catch (error) {
         console.error('Login error:', error);
         let errorMessage = 'Invalid email or password.';
@@ -458,37 +412,10 @@ if (userData) {
     }
 };
 
-window.resendVerificationEmail = async function(email, password) {
-    try {
-        // Sign in temporarily to resend verification
-        const userCredential = await signInWithEmailAndPassword(auth, email, password);
-        const user = userCredential.user;
-
-        // Send verification email
-        await sendEmailVerification(user);
-
-        // Sign out again
-        await signOut(auth);
-
-        showModal(
-            'Verification Email Sent',
-            `
-            <div class="space-y-3">
-                <p class="text-gray-700">A new verification email has been sent to:</p>
-                <p class="font-semibold text-lime-700">${email}</p>
-                <p class="text-sm text-gray-600">Please check your inbox and spam folder.</p>
-            </div>
-            `,
-            `<button onclick="hideModal()" class="px-4 py-2 bg-lime-600 text-white rounded">OK</button>`
-        );
-    } catch (error) {
-        console.error('Resend verification error:', error);
-        showModal(
-            'Error',
-            'Failed to resend verification email. Please try again.',
-            `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`
-        );
-    }
+window.resendVerificationCode = async function(email, password) {
+    // ...
+    await sendVerificationCodeEmail(email, userData.name, newVerificationCode);  // ← Uses EmailJS
+    // ...
 };
 
 window.logoutUser = async function() {
@@ -1007,6 +934,192 @@ window.$ = function(sel){ return document.querySelector(sel); };
 window.$all = function(sel){ return Array.from(document.querySelectorAll(sel)); };
 window.formatPeso = function(n){ return '₱' + Number(n).toLocaleString('en-PH', {minimumFractionDigits:2, maximumFractionDigits:2}); };
 window.uid = function(){ return Date.now().toString().slice(-8); };
+
+// ADD THESE NEW FUNCTIONS:
+
+// Generate 6-digit verification code
+window.generateVerificationCode = function() {
+    return Math.floor(100000 + Math.random() * 900000).toString();
+};
+
+// Show verification code input modal
+window.showVerificationModal = function(email, password) {
+    showModal('Verify Your Email', `
+        <div class="space-y-4">
+            <p class="text-gray-700">We've sent a 6-digit verification code to:</p>
+            <p class="font-semibold text-lime-700">${email}</p>
+            <p class="text-sm text-gray-600">Please enter the code below (expires in 15 minutes):</p>
+            
+            <div class="flex justify-center gap-2">
+                <input id="code-1" type="text" maxlength="1" class="w-12 h-12 text-center text-2xl font-bold border-2 rounded-lg focus:border-lime-600" />
+                <input id="code-2" type="text" maxlength="1" class="w-12 h-12 text-center text-2xl font-bold border-2 rounded-lg focus:border-lime-600" />
+                <input id="code-3" type="text" maxlength="1" class="w-12 h-12 text-center text-2xl font-bold border-2 rounded-lg focus:border-lime-600" />
+                <input id="code-4" type="text" maxlength="1" class="w-12 h-12 text-center text-2xl font-bold border-2 rounded-lg focus:border-lime-600" />
+                <input id="code-5" type="text" maxlength="1" class="w-12 h-12 text-center text-2xl font-bold border-2 rounded-lg focus:border-lime-600" />
+                <input id="code-6" type="text" maxlength="1" class="w-12 h-12 text-center text-2xl font-bold border-2 rounded-lg focus:border-lime-600" />
+            </div>
+            
+            <div id="code-error" class="text-red-600 text-sm text-center hidden"></div>
+            
+            <div class="text-center">
+                <button onclick="resendVerificationCode('${email}', '${password}')" class="text-sm text-lime-600 underline">Didn't receive code? Resend</button>
+            </div>
+        </div>
+    `, `
+        <button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">Cancel</button>
+        <button onclick="verifyEmailCode('${email}', '${password}')" class="px-4 py-2 bg-lime-600 text-white rounded">Verify</button>
+    `);
+
+    setupCodeInputs();
+};
+
+// Setup code input auto-advance
+window.setupCodeInputs = function() {
+    const inputs = ['code-1', 'code-2', 'code-3', 'code-4', 'code-5', 'code-6'];
+    
+    inputs.forEach((id, index) => {
+        const input = document.getElementById(id);
+        if (!input) return;
+
+        input.addEventListener('input', function(e) {
+            const value = e.target.value;
+            
+            if (!/^\d*$/.test(value)) {
+                e.target.value = '';
+                return;
+            }
+
+            if (value && index < inputs.length - 1) {
+                document.getElementById(inputs[index + 1]).focus();
+            }
+        });
+
+        input.addEventListener('keydown', function(e) {
+            if (e.key === 'Backspace' && !e.target.value && index > 0) {
+                document.getElementById(inputs[index - 1]).focus();
+            }
+        });
+
+        if (index === 0) {
+            setTimeout(() => input.focus(), 100);
+        }
+    });
+};
+
+// Verify email code
+window.verifyEmailCode = async function(email, password) {
+    const code1 = document.getElementById('code-1')?.value || '';
+    const code2 = document.getElementById('code-2')?.value || '';
+    const code3 = document.getElementById('code-3')?.value || '';
+    const code4 = document.getElementById('code-4')?.value || '';
+    const code5 = document.getElementById('code-5')?.value || '';
+    const code6 = document.getElementById('code-6')?.value || '';
+    
+    const enteredCode = code1 + code2 + code3 + code4 + code5 + code6;
+
+    if (enteredCode.length !== 6) {
+        document.getElementById('code-error').textContent = 'Please enter all 6 digits';
+        document.getElementById('code-error').classList.remove('hidden');
+        return;
+    }
+
+    try {
+        const userCredential = await signInWithEmailAndPassword(auth, email, password);
+        const user = userCredential.user;
+        const userData = await getFromFirebase(`users/${user.uid}`);
+
+        if (!userData) {
+            throw new Error('User data not found');
+        }
+
+        if (userData.verificationCode !== enteredCode) {
+            document.getElementById('code-error').textContent = 'Invalid verification code';
+            document.getElementById('code-error').classList.remove('hidden');
+            await signOut(auth);
+            return;
+        }
+
+        if (Date.now() > userData.verificationCodeExpiry) {
+            document.getElementById('code-error').textContent = 'Verification code has expired';
+            document.getElementById('code-error').classList.remove('hidden');
+            await signOut(auth);
+            return;
+        }
+
+        await updateFirebase(`users/${user.uid}`, {
+            emailVerified: true,
+            verificationCode: null,
+            verificationCodeExpiry: null
+        });
+
+        window.APP_STATE.currentUser = {
+            uid: user.uid,
+            email: user.email,
+            name: userData.name,
+            role: userData.role
+        };
+
+        const userCart = await getFromFirebase(`carts/${user.uid}`);
+        if (userCart) {
+            window.APP_STATE.cart = Object.values(userCart);
+        }
+
+        hideModal();
+        updateAuthArea();
+        renderMain();
+
+        showModal(
+            'Email Verified! 🎉',
+            `
+            <div class="text-center space-y-3">
+                <div class="text-6xl">✓</div>
+                <p class="text-gray-700">Welcome to Palengke.com, <b>${userData.name}</b>!</p>
+                <p class="text-sm text-gray-600">Your account is now active and ready to use.</p>
+            </div>
+            `,
+            `<button onclick="hideModal(); renderMain();" class="px-4 py-2 bg-lime-600 text-white rounded">Start Shopping</button>`
+        );
+
+    } catch (error) {
+        console.error('Verification error:', error);
+        document.getElementById('code-error').textContent = 'Verification failed. Please try again.';
+        document.getElementById('code-error').classList.remove('hidden');
+    }
+};
+
+// Resend verification code
+window.resendVerificationCode = async function(email, password) {
+    try {
+        const userCredential = await signInWithEmailAndPassword(auth, email, password);
+        const user = userCredential.user;
+
+        const newVerificationCode = generateVerificationCode();
+        const newCodeExpiry = Date.now() + (15 * 60 * 1000);
+
+        await updateFirebase(`users/${user.uid}`, {
+            verificationCode: newVerificationCode,
+            verificationCodeExpiry: newCodeExpiry
+        });
+
+        const userData = await getFromFirebase(`users/${user.uid}`);
+        await sendVerificationCodeEmail(email, userData.name, newVerificationCode);
+        await signOut(auth);
+
+        showModal(
+            'Code Resent',
+            `<p class="text-gray-700">A new verification code has been sent to <b>${email}</b></p>`,
+            `<button onclick="hideModal(); showVerificationModal('${email}', '${password}')" class="px-4 py-2 bg-lime-600 text-white rounded">OK</button>`
+        );
+
+    } catch (error) {
+        console.error('Resend error:', error);
+        showModal(
+            'Error',
+            'Failed to resend verification code. Please try again.',
+            `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`
+        );
+    }
+};
 
 window.uploadImagePreview = function(fileInputId, previewImgId) {
     const fi = document.getElementById(fileInputId);
