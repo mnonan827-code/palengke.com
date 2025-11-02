@@ -53,7 +53,6 @@ const CAINTA_BARANGAYS = [
     'Santo Domingo',
     'Santo Niño',
     'San Isidro',
-    'Dela Paz',
     'San Roque',
     'Santisima Trinidad'
 ];
