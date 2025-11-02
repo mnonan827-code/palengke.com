@@ -962,24 +962,40 @@ textarea:focus {
 }
 
 
+/* Enhanced Dialog/Modal improvements for mobile */
 #modal-overlay {
   overflow-y: auto;
   overflow-x: hidden;
   padding: 1rem;
-  align-items: flex-start;
-  padding-top: 2rem;
+  align-items: center;
+  justify-content: center;
 }
 
 #modal {
-  margin: auto;
-  max-height: calc(100vh - 4rem);
+  margin: 2rem auto;
+  max-height: calc(100vh - 8rem);
   display: flex;
   flex-direction: column;
+  overflow: hidden;
+}
+
+#modal .p-5 {
+  flex-shrink: 0;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+#modal > div:nth-child(2) {
+  overflow-y: auto;
+  flex: 1;
+  padding: 1.25rem;
 }
 
 #modal > div:last-child {
-  overflow-y: auto;
-  max-height: calc(100vh - 12rem);
+  flex-shrink: 0;
+  border-top: 1px solid #e5e7eb;
+  position: sticky;
+  bottom: 0;
+  background: #f9fafb;
 }
 
 @media (max-width: 768px) {
@@ -1017,17 +1033,35 @@ textarea:focus {
   }
 }
 
+/* Make header less obtrusive when modal is open */
 body.modal-open header {
   position: relative;
   z-index: 35;
 }
 
+/* Ensure modal is above header */
 #modal-overlay {
   z-index: 60 !important;
 }
 
 #modal {
   z-index: 61 !important;
+}
+
+/* Compact form styling inside modals */
+#modal form.grid {
+  gap: 0.75rem;
+}
+
+#modal input,
+#modal select,
+#modal textarea {
+  padding: 0.625rem;
+}
+
+#modal .freshness-input-container {
+  padding: 0.75rem;
+  margin-top: 0.5rem;
 }
 
 .freshness-input-container {
