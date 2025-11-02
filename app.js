@@ -523,6 +523,7 @@ window.adminAddProduct = function() {
     showModal('Add New Product', `
     <form id="product-form" class="grid gap-3">
     <input id="p-name" placeholder="Product name" class="p-2 border rounded" />
+    <textarea id="p-description" placeholder="Product description (optional)" rows="3" class="p-2 border rounded resize-none"></textarea>
     <div class="grid grid-cols-3 gap-2">
         <input id="p-price" type="number" step="0.01" placeholder="Price (₱)" class="p-2 border rounded col-span-1" />
         <input id="p-qty" type="number" placeholder="Quantity" class="p-2 border rounded" />
@@ -572,6 +573,7 @@ window.adminSaveProduct = async function(editId = null) {
     }
     
     const name = document.getElementById('p-name')?.value?.trim();
+    const description = document.getElementById('p-description')?.value?.trim() || '';
     const price = parseFloat(document.getElementById('p-price')?.value);
     const qty = parseInt(document.getElementById('p-qty')?.value);
     const unit = document.getElementById('p-unit')?.value?.trim();
@@ -612,6 +614,7 @@ window.adminSaveProduct = async function(editId = null) {
     if(editId){
         const productUpdate = { 
             name, 
+            description,
             price, 
             quantity: qty, 
             unit, 
@@ -636,6 +639,7 @@ window.adminSaveProduct = async function(editId = null) {
         const newProd = { 
             id: newId, 
             name, 
+            description,
             price, 
             quantity: qty, 
             unit, 
@@ -662,6 +666,7 @@ window.adminEditProduct = function(id) {
     showModal('Edit Product', `
     <form id="product-form" class="grid gap-3">
     <input id="p-name" value="${p.name}" placeholder="Product name" class="p-2 border rounded" />
+    <textarea id="p-description" placeholder="Product description (optional)" rows="3" class="p-2 border rounded resize-none">${p.description || ''}</textarea>
     <div class="grid grid-cols-3 gap-2">
         <input id="p-price" type="number" step="0.01" value="${p.price}" placeholder="Price (₱)" class="p-2 border rounded col-span-1" />
         <input id="p-qty" type="number" value="${p.quantity}" placeholder="Quantity" class="p-2 border rounded" />
@@ -1277,6 +1282,7 @@ window.showProduct = function(id) {
                 ${preorderBadge}
                 ${freshnessBadge}
                 ${freshnessMeter}
+                ${p.description ? `<div class="text-gray-700 text-sm mb-3 p-3 bg-gray-50 rounded border-l-4 border-lime-500">${p.description}</div>` : ''}
                 <div class="text-gray-700 text-sm mb-1">${p.origin}</div>
                 <div class="text-gray-500 text-sm mb-1">Farmer: <b>${p.farmer.name}</b> (${p.farmer.contact})</div>
                 <div class="text-gray-700 text-sm mb-1">Price: <b>${formatPeso(p.price)}</b> / ${p.unit}</div>
