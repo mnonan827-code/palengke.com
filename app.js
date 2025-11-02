@@ -687,16 +687,6 @@ window.showUserProfile = async function() {
                 </div>
             </div>
 
-            <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Home Address in Cainta</label>
-                <input id="profile-unit" type="text" value="${profile.unit || ''}" placeholder="Unit/House Number" class="p-2 border rounded w-full mb-2" required ${profile.verified ? 'disabled' : ''} />
-                <input id="profile-street" type="text" value="${profile.street || ''}" placeholder="Street Name" class="p-2 border rounded w-full mb-2" required ${profile.verified ? 'disabled' : ''} />
-                <select id="profile-barangay" class="p-2 border rounded w-full" required ${profile.verified ? 'disabled' : ''}>
-                    <option value="">Select Barangay</option>
-                    ${barangayOptions}
-                </select>
-            </div>
-
 
 <div>
     <label class="block text-sm font-medium text-gray-700 mb-1">Home Address in Cainta, Rizal</label>
