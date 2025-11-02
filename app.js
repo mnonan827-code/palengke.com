@@ -285,45 +285,63 @@ window.signupUser = async function() {
     }
 
     try {
-        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-        const user = userCredential.user;
+    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+    const user = userCredential.user;
 
-        const userData = {
-            uid: user.uid,
-            email: email,
-            name: name,
-            contact: contact,
-            role: 'customer',
-            createdAt: new Date().toISOString()
-        };
+    // ✅ Send verification email
+    await sendEmailVerification(user);
+    showModal('Verification Sent', `
+      A verification link has been sent to <b>${email}</b>. 
+      Please check your Gmail inbox or spam folder before logging in.
+    `, `<button onclick="hideModal()" class="px-4 py-2 bg-lime-600 text-white rounded">OK</button>`);
 
-        await saveToFirebase(`users/${user.uid}`, userData);
+    // ✅ Save user data in Firebase (even if not yet verified)
+    const userData = {
+        uid: user.uid,
+        email: email,
+        name: name,
+        contact: contact,
+        role: 'customer',
+        createdAt: new Date().toISOString(),
+        emailVerified: false
+    };
+    await saveToFirebase(`users/${user.uid}`, userData);
 
+    // ✅ Only allow access if the email is verified
+    if (user.emailVerified) {
         window.APP_STATE.currentUser = {
             uid: user.uid,
             email: email,
             name: name,
             role: 'customer'
         };
-
         hideModal();
         updateAuthArea();
         renderMain();
         showModal('Welcome!', `Account created and logged in as <b>${name}</b>.`, `<button onclick="hideModal(); renderMain()" class="px-4 py-2 bg-lime-600 text-white rounded">OK</button>`);
-    } catch (error) {
-        console.error('Signup error:', error);
-        let errorMessage = 'An error occurred during signup.';
-        
-        if (error.code === 'auth/email-already-in-use') {
-            errorMessage = 'This email is already registered. Please try logging in.';
-        } else if (error.code === 'auth/weak-password') {
-            errorMessage = 'Password should be at least 6 characters.';
-        } else if (error.code === 'auth/invalid-email') {
-            errorMessage = 'Invalid email address.';
-        }
-
-        showModal('Signup Error', errorMessage, `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
+    } else {
+        // 🚫 Sign out if not verified
+        await signOut(auth);
+        showModal('Verify your email', `
+          Please verify your email before logging in.<br>
+          Check your Gmail inbox for the verification link.
+        `, `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
     }
+} catch (error) {
+    console.error('Signup error:', error);
+    let errorMessage = 'An error occurred during signup.';
+    
+    if (error.code === 'auth/email-already-in-use') {
+        errorMessage = 'This email is already registered. Please try logging in.';
+    } else if (error.code === 'auth/weak-password') {
+        errorMessage = 'Password should be at least 6 characters.';
+    } else if (error.code === 'auth/invalid-email') {
+        errorMessage = 'Invalid email address.';
+    }
+
+    showModal('Signup Error', errorMessage, `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
+    }
+
 };
 
 window.loginUser = async function() {
@@ -337,6 +355,14 @@ window.loginUser = async function() {
     try {
         const userCredential = await signInWithEmailAndPassword(auth, email, password);
         const user = userCredential.user;
+
+        if (!user.emailVerified) {
+    await signOut(auth);
+    return showModal('Email not verified', `
+        Please verify your email before logging in.<br>
+        Check your Gmail inbox for the verification link.
+    `, `<button onclick="hideModal()" class="px-4 py-2 bg-lime-600 text-white rounded">OK</button>`);
+}   
 
         const userData = await getFromFirebase(`users/${user.uid}`);
         
