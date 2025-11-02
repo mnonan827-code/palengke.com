@@ -57,6 +57,14 @@ const CAINTA_BARANGAYS = [
     'Santisima Trinidad'
 ];
 
+const VALID_ID_TYPES = [
+    'UMID ID',
+    'Driver\'s License',
+    'Philippine Passport',
+    'National ID',
+    'Postal ID',
+    'Voter\'s ID'
+];
 
 const dbRefs = {
     products: ref(database, 'products'),
@@ -524,7 +532,7 @@ window.removeCartItem = async function(pid) {
     renderMain();
 };
 
-window.checkout = function() {
+window.checkout = async function() {
     if(window.APP_STATE.cart.length === 0) {
         return showModal('Cart is empty', 'Please add items to your cart first.', `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
     }
@@ -532,14 +540,27 @@ window.checkout = function() {
     if(!window.APP_STATE.currentUser){
         return showModal('Login required', 'Please log in or create an account to place your order.', `<button onclick="hideModal(); openAuth('login')" class="px-4 py-2 bg-lime-600 text-white rounded">Log in</button><button onclick="hideModal(); openAuth('signup')" class="px-4 py-2 bg-white border rounded">Sign up</button>`);
     }
+
+    // Check if user has completed profile
+    const userData = await getFromFirebase(`users/${window.APP_STATE.currentUser.uid}`);
+    const profile = userData.profile || {};
+    
+    if(!profile.fullName || !profile.idUrl) {
+        return showModal('Complete Your Profile', `
+            <div class="space-y-3">
+                <p class="text-gray-700">Please complete your profile with valid ID before placing an order.</p>
+                <p class="text-sm text-gray-600">This is required for verification and delivery purposes.</p>
+            </div>
+        `, `<button onclick="hideModal(); showUserProfile();" class="px-4 py-2 bg-lime-600 text-white rounded">Complete Profile</button>
+            <button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">Cancel</button>`);
+    }
     
     const subtotal = window.APP_STATE.cart.reduce((s,i)=> s + i.price * i.quantity, 0);
     const deliveryFee = window.APP_STATE.deliveryFee || 25.00;
     const total = subtotal + deliveryFee;
 
-    // Generate barangay options
     const barangayOptions = CAINTA_BARANGAYS.map(brgy => 
-        `<option value="${brgy}">${brgy}</option>`
+        `<option value="${brgy}" ${profile.barangay === brgy ? 'selected' : ''}>${brgy}</option>`
     ).join('');
 
     showModal('Checkout', `
@@ -555,22 +576,26 @@ window.checkout = function() {
           <input id="customer-contact" placeholder="Contact Number (09XXXXXXXXX)" type="tel" class="p-2 border rounded" required />
           
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Delivery Address</label>
-            
-            <input id="customer-unit" placeholder="Unit/House Number (e.g., Unit 101, House 25)" class="p-2 border rounded w-full mb-2" required />
-            
-            <input id="customer-street" placeholder="Street Name (e.g., Main Street, Ortigas Ave Extension)" class="p-2 border rounded w-full mb-2" required />
-            
-            <select id="customer-barangay" class="p-2 border rounded w-full mb-2" required>
-              <option value="">Select Barangay</option>
-              ${barangayOptions}
-            </select>
-            
-            <div class="text-xs text-gray-500 mt-1 bg-gray-50 p-2 rounded">
-              <i data-lucide="info" class="w-3 h-3 inline"></i> Address will be: [Unit], [Street], Brgy. [Barangay], Cainta, Rizal
-            </div>
-            <div id="address-error" class="text-xs text-red-600 mt-1 hidden font-semibold"></div>
-          </div>
+    <label class="block text-sm font-medium text-gray-700 mb-1">Delivery Address</label>
+    
+    <input id="customer-unit" placeholder="Unit/House Number (e.g., Unit 101, House 25)" value="${profile.unit || ''}" class="p-2 border rounded w-full mb-2" required />
+    
+    <input id="customer-building" placeholder="Building Name (optional)" value="${profile.building || ''}" class="p-2 border rounded w-full mb-2" />
+    
+    <input id="customer-street" placeholder="Street Name (e.g., Ortigas Avenue Extension)" value="${profile.street || ''}" class="p-2 border rounded w-full mb-2" required />
+    
+    <select id="customer-barangay" class="p-2 border rounded w-full mb-2" required>
+      <option value="">Select Barangay</option>
+      ${barangayOptions}
+    </select>
+    
+    <div class="text-xs bg-lime-50 text-lime-800 p-2 rounded border border-lime-200">
+      <i data-lucide="map-pin" class="w-3 h-3 inline"></i> 
+      <strong>Delivery to:</strong><br>
+      <span id="checkout-address-preview">[Unit], [Building], [Street], Brgy. [Barangay], Cainta, Rizal</span>
+    </div>
+    <div id="address-error" class="text-xs text-red-600 mt-1 hidden font-semibold"></div>
+</div>
 
           <div class="bg-gray-50 p-3 rounded-lg space-y-1">
             <div class="flex justify-between text-sm">
@@ -592,41 +617,331 @@ window.checkout = function() {
         <button type="button" onclick="validateAndPlaceOrder()" class="px-4 py-2 bg-lime-600 text-white rounded hover:bg-lime-700">Place Order</button>`);
     
     setTimeout(() => icons(), 100);
+
+    // After icons(), add:
+
+// Add event listeners for checkout address preview
+const checkoutAddressFields = ['customer-unit', 'customer-building', 'customer-street', 'customer-barangay'];
+checkoutAddressFields.forEach(fieldId => {
+    document.getElementById(fieldId)?.addEventListener('input', updateCheckoutAddressPreview);
+    document.getElementById(fieldId)?.addEventListener('change', updateCheckoutAddressPreview);
+});
+
+// Initial preview update
+updateCheckoutAddressPreview();
+};
+
+// Show user profile modal
+window.showUserProfile = async function() {
+    if(!window.APP_STATE.currentUser) {
+        return showModal('Login Required', 'Please log in to view your profile.', `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
+    }
+
+    const userData = await getFromFirebase(`users/${window.APP_STATE.currentUser.uid}`);
+    if(!userData) {
+        return showModal('Error', 'User data not found.', `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
+    }
+
+    const profile = userData.profile || {};
+    const hasProfile = profile.fullName && profile.birthday && profile.idType;
+    
+    const barangayOptions = CAINTA_BARANGAYS.map(brgy => 
+        `<option value="${brgy}" ${profile.barangay === brgy ? 'selected' : ''}>${brgy}</option>`
+    ).join('');
+
+    const idTypeOptions = VALID_ID_TYPES.map(idType => 
+        `<option value="${idType}" ${profile.idType === idType ? 'selected' : ''}>${idType}</option>`
+    ).join('');
+
+    showModal('My Profile', `
+        <form id="profile-form" class="grid gap-3">
+            ${hasProfile ? `
+                <div class="bg-green-50 p-3 rounded-lg border border-green-200 mb-2">
+                    <div class="flex items-center gap-2 text-sm text-green-800">
+                        <i data-lucide="check-circle" class="w-4 h-4"></i>
+                        <span class="font-semibold">Profile ${profile.verified ? 'Verified' : 'Submitted - Pending Verification'}</span>
+                    </div>
+                </div>
+            ` : `
+                <div class="bg-yellow-50 p-3 rounded-lg border border-yellow-200 mb-2">
+                    <div class="flex items-center gap-2 text-sm text-yellow-800">
+                        <i data-lucide="alert-circle" class="w-4 h-4"></i>
+                        <span class="font-semibold">Complete your profile to enable checkout</span>
+                    </div>
+                </div>
+            `}
+
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Full Name (as shown on ID)</label>
+                <input id="profile-fullname" type="text" value="${profile.fullName || ''}" placeholder="Juan Dela Cruz" class="p-2 border rounded w-full" required ${profile.verified ? 'disabled' : ''} />
+            </div>
+
+            <div class="grid grid-cols-2 gap-2">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Birthday</label>
+                    <input id="profile-birthday" type="date" value="${profile.birthday || ''}" class="p-2 border rounded w-full" required ${profile.verified ? 'disabled' : ''} />
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Age</label>
+                    <input id="profile-age" type="number" value="${profile.age || ''}" placeholder="18" min="18" max="120" class="p-2 border rounded w-full" required ${profile.verified ? 'disabled' : ''} />
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Home Address in Cainta</label>
+                <input id="profile-unit" type="text" value="${profile.unit || ''}" placeholder="Unit/House Number" class="p-2 border rounded w-full mb-2" required ${profile.verified ? 'disabled' : ''} />
+                <input id="profile-street" type="text" value="${profile.street || ''}" placeholder="Street Name" class="p-2 border rounded w-full mb-2" required ${profile.verified ? 'disabled' : ''} />
+                <select id="profile-barangay" class="p-2 border rounded w-full" required ${profile.verified ? 'disabled' : ''}>
+                    <option value="">Select Barangay</option>
+                    ${barangayOptions}
+                </select>
+            </div>
+
+            // Inside showUserProfile function, replace the address div with:
+
+<div>
+    <label class="block text-sm font-medium text-gray-700 mb-1">Home Address in Cainta, Rizal</label>
+    
+    <input id="profile-unit" type="text" value="${profile.unit || ''}" placeholder="Unit/House Number (e.g., Unit 101, House 25)" class="p-2 border rounded w-full mb-2" required ${profile.verified ? 'disabled' : ''} />
+    
+    <input id="profile-building" type="text" value="${profile.building || ''}" placeholder="Building Name (optional)" class="p-2 border rounded w-full mb-2" ${profile.verified ? 'disabled' : ''} />
+    
+    <input id="profile-street" type="text" value="${profile.street || ''}" placeholder="Street Name (e.g., Ortigas Avenue Extension)" class="p-2 border rounded w-full mb-2" required ${profile.verified ? 'disabled' : ''} />
+    
+    <select id="profile-barangay" class="p-2 border rounded w-full mb-2" required ${profile.verified ? 'disabled' : ''}>
+        <option value="">Select Barangay</option>
+        ${barangayOptions}
+    </select>
+    
+    <div class="text-xs bg-lime-50 text-lime-800 p-2 rounded border border-lime-200">
+        <i data-lucide="map-pin" class="w-3 h-3 inline"></i> 
+        <strong>Your address will be:</strong><br>
+        <span id="address-preview">[Unit], [Building], [Street], Brgy. [Barangay], Cainta, Rizal</span>
+    </div>
+</div>
+
+            ${!profile.verified ? `
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Upload Valid ID</label>
+                    <input id="profile-id-file" type="file" accept="image/*,.pdf" class="p-2 border rounded w-full" ${profile.idUrl ? '' : 'required'} />
+                    <div class="text-xs text-gray-500 mt-1">
+                        <i data-lucide="info" class="w-3 h-3 inline"></i> Accepted: JPG, PNG, PDF (Max 5MB)
+                    </div>
+                    ${profile.idUrl ? `
+                        <div class="mt-2 p-2 bg-gray-50 rounded border">
+                            <span class="text-xs text-gray-600">Current ID on file</span>
+                            <button type="button" onclick="viewUploadedID('${profile.idUrl}')" class="ml-2 text-xs text-blue-600 underline">View</button>
+                        </div>
+                    ` : ''}
+                </div>
+            ` : `
+                <div class="p-3 bg-gray-50 rounded border">
+                    <div class="text-sm font-medium text-gray-700 mb-2">Uploaded ID</div>
+                    <button type="button" onclick="viewUploadedID('${profile.idUrl}')" class="text-sm text-blue-600 underline">View ID</button>
+                </div>
+            `}
+
+            <div id="profile-error" class="text-xs text-red-600 mt-1 hidden font-semibold"></div>
+        </form>
+    `, `
+        <button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">Close</button>
+        ${!profile.verified ? `<button onclick="saveUserProfile()" class="px-4 py-2 bg-lime-600 text-white rounded">Save Profile</button>` : ''}
+    `);
+
+    setTimeout(() => icons(), 100);
+
+    // After icons(), add:
+
+// Add event listeners for real-time address preview
+if(!profile.verified) {
+    const addressFields = ['profile-unit', 'profile-building', 'profile-street', 'profile-barangay'];
+    addressFields.forEach(fieldId => {
+        document.getElementById(fieldId)?.addEventListener('input', updateAddressPreview);
+        document.getElementById(fieldId)?.addEventListener('change', updateAddressPreview);
+    });
+    
+    // Initial preview update
+    updateAddressPreview();
+}
+
+    // Calculate age when birthday changes
+    if(!profile.verified) {
+        document.getElementById('profile-birthday')?.addEventListener('change', function() {
+            const birthday = new Date(this.value);
+            const today = new Date();
+            let age = today.getFullYear() - birthday.getFullYear();
+            const monthDiff = today.getMonth() - birthday.getMonth();
+            if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthday.getDate())) {
+                age--;
+            }
+            document.getElementById('profile-age').value = age;
+        });
+    }
+};
+
+// View uploaded ID
+window.viewUploadedID = function(idUrl) {
+    showModal('Valid ID', `
+        <div class="flex justify-center">
+            ${idUrl.endsWith('.pdf') ? 
+                `<embed src="${idUrl}" type="application/pdf" width="100%" height="500px" />` :
+                `<img src="${idUrl}" alt="Valid ID" class="max-w-full h-auto rounded border" />`
+            }
+        </div>
+    `, `<button onclick="hideModal()" class="px-4 py-2 bg-lime-600 text-white rounded">Close</button>`);
+    setTimeout(() => icons(), 100);
+};
+
+// Save user profile
+// Save user profile
+window.saveUserProfile = async function() {
+    const fullName = document.getElementById('profile-fullname')?.value?.trim();
+    const birthday = document.getElementById('profile-birthday')?.value;
+    const age = parseInt(document.getElementById('profile-age')?.value);
+    const unit = document.getElementById('profile-unit')?.value?.trim();
+    const building = document.getElementById('profile-building')?.value?.trim();
+    const street = document.getElementById('profile-street')?.value?.trim();
+    const barangay = document.getElementById('profile-barangay')?.value;
+    const idType = document.getElementById('profile-idtype')?.value;
+    const idFile = document.getElementById('profile-id-file')?.files[0];
+
+    const errorDiv = document.getElementById('profile-error');
+    if(errorDiv) {
+        errorDiv.classList.add('hidden');
+        errorDiv.textContent = '';
+    }
+
+    // Validation
+    if(!fullName || !birthday || !age || !unit || !street || !barangay || !idType) {
+        if(errorDiv) {
+            errorDiv.textContent = '⚠️ Please fill all required fields';
+            errorDiv.classList.remove('hidden');
+        }
+        return;
+    }
+
+    if(age < 18) {
+        if(errorDiv) {
+            errorDiv.textContent = '⚠️ You must be at least 18 years old';
+            errorDiv.classList.remove('hidden');
+        }
+        return;
+    }
+
+    // Validate barangay is in Cainta
+    if(!CAINTA_BARANGAYS.includes(barangay)) {
+        if(errorDiv) {
+            errorDiv.textContent = '⚠️ Please select a valid barangay in Cainta';
+            errorDiv.classList.remove('hidden');
+        }
+        return;
+    }
+
+    // Check if ID file is provided (for new profiles or updates)
+    const userData = await getFromFirebase(`users/${window.APP_STATE.currentUser.uid}`);
+    const existingProfile = userData.profile || {};
+    
+    if(!idFile && !existingProfile.idUrl) {
+        if(errorDiv) {
+            errorDiv.textContent = '⚠️ Please upload your valid ID';
+            errorDiv.classList.remove('hidden');
+        }
+        return;
+    }
+
+    try {
+        let idUrl = existingProfile.idUrl || '';
+
+        // Upload ID if new file is provided
+        if(idFile) {
+            console.log('Uploading ID to Cloudinary...');
+            const uploadResult = await cloudinary.uploadImage(idFile);
+            idUrl = uploadResult.url;
+            console.log('ID uploaded successfully:', idUrl);
+        }
+
+        // Format complete address
+        const addressParts = [unit];
+        if(building) addressParts.push(building);
+        addressParts.push(street);
+        addressParts.push(`Brgy. ${barangay}`);
+        addressParts.push('Cainta, Rizal');
+        
+        const homeAddress = addressParts.join(', ');
+
+        const profileData = {
+            fullName,
+            birthday,
+            age,
+            unit,
+            building: building || '',
+            street,
+            barangay,
+            homeAddress,
+            idType,
+            idUrl,
+            verified: false,
+            submittedAt: new Date().toISOString()
+        };
+
+        await updateFirebase(`users/${window.APP_STATE.currentUser.uid}`, {
+            profile: profileData
+        });
+
+        hideModal();
+        showModal('Profile Saved', `
+            <div class="text-center space-y-3">
+                <div class="text-5xl">✓</div>
+                <p class="text-gray-700">Your profile has been submitted for verification.</p>
+                <p class="text-sm text-gray-600">An admin will review your information shortly.</p>
+                <div class="mt-3 p-3 bg-gray-50 rounded text-left">
+                    <div class="text-xs text-gray-600 mb-1">Your registered address:</div>
+                    <div class="text-sm font-semibold text-gray-800">${homeAddress}</div>
+                </div>
+            </div>
+        `, `<button onclick="hideModal()" class="px-4 py-2 bg-lime-600 text-white rounded">OK</button>`);
+
+    } catch (error) {
+        console.error('Error saving profile:', error);
+        if(errorDiv) {
+            errorDiv.textContent = '⚠️ Failed to save profile. Please try again.';
+            errorDiv.classList.remove('hidden');
+        }
+    }
+};
+
+// Update address preview in real-time
+window.updateAddressPreview = function() {
+    const unit = document.getElementById('profile-unit')?.value?.trim() || '[Unit]';
+    const building = document.getElementById('profile-building')?.value?.trim();
+    const street = document.getElementById('profile-street')?.value?.trim() || '[Street]';
+    const barangay = document.getElementById('profile-barangay')?.value || '[Barangay]';
+    
+    const preview = document.getElementById('address-preview');
+    if(preview) {
+        const parts = [unit];
+        if(building) parts.push(building);
+        parts.push(street);
+        parts.push(`Brgy. ${barangay}`);
+        parts.push('Cainta, Rizal');
+        
+        preview.textContent = parts.join(', ');
+    }
 };
 
 // Address validation function for Cainta, Rizal only
-window.validateCaintaAddress = function(unit, street, barangay) {
-    if(!unit || unit.trim().length === 0) {
-        return { valid: false, message: 'Unit/House number is required' };
-    }
 
-    if(!street || street.trim().length === 0) {
-        return { valid: false, message: 'Street name is required' };
-    }
-    
-    if(!barangay || barangay.trim().length === 0) {
-        return { valid: false, message: 'Please select a barangay' };
-    }
-    
-    // Check if selected barangay is in the valid list
-    if(!CAINTA_BARANGAYS.includes(barangay)) {
-        return { 
-            valid: false, 
-            message: 'Please select a valid barangay in Cainta' 
-        };
-    }
-    
-    return { valid: true, message: 'Address validated' };
-};
 // Validate address before placing order
+
 window.validateAndPlaceOrder = async function() {
     const name = document.getElementById('customer-name')?.value?.trim();
     const contact = document.getElementById('customer-contact')?.value?.trim();
     const unit = document.getElementById('customer-unit')?.value?.trim();
+    const building = document.getElementById('customer-building')?.value?.trim();
     const street = document.getElementById('customer-street')?.value?.trim();
     const barangay = document.getElementById('customer-barangay')?.value?.trim();
     
-    console.log('Validating order:', { name, contact, unit, street, barangay });
+    console.log('Validating order:', { name, contact, unit, building, street, barangay });
     
     // Clear previous error
     const errorDiv = document.getElementById('address-error');
@@ -635,26 +950,29 @@ window.validateAndPlaceOrder = async function() {
         errorDiv.textContent = '';
     }
     
-    // Check all fields are filled
+    // Check all required fields are filled
     if(!name || !contact || !unit || !street || !barangay) {
-        showModal('Missing info', 'Please fill all checkout fields', `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
+        showModal('Missing info', 'Please fill all required checkout fields', `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
         return;
     }
     
-    // Validate address components
-    const validation = validateCaintaAddress(unit, street, barangay);
-    console.log('Validation result:', validation);
-    
-    if(!validation.valid) {
+    // Validate barangay is in Cainta
+    if(!CAINTA_BARANGAYS.includes(barangay)) {
         if(errorDiv) {
-            errorDiv.textContent = '⚠️ ' + validation.message;
+            errorDiv.textContent = '⚠️ Please select a valid barangay in Cainta';
             errorDiv.classList.remove('hidden');
         }
         return;
     }
     
     // Format the complete address
-    const address = `${unit}, ${street}, Brgy. ${barangay}, Cainta, Rizal`;
+    const addressParts = [unit];
+    if(building) addressParts.push(building);
+    addressParts.push(street);
+    addressParts.push(`Brgy. ${barangay}`);
+    addressParts.push('Cainta, Rizal');
+    
+    const address = addressParts.join(', ');
     console.log('Formatted address:', address);
     
     // Proceed with placing order
@@ -677,6 +995,14 @@ window.validateAndPlaceOrder = async function() {
         email: window.APP_STATE.currentUser.email, 
         contact, 
         address, 
+        addressDetails: {
+            unit,
+            building: building || '',
+            street,
+            barangay,
+            city: 'Cainta',
+            province: 'Rizal'
+        },
         date: new Date().toLocaleString(), 
         userId: window.APP_STATE.currentUser.uid 
     };
@@ -690,12 +1016,41 @@ window.validateAndPlaceOrder = async function() {
         toggleCartDrawer(false);
         hideModal();
         
-        showModal('Order Placed!', `<div class="text-gray-700">Thank you <b>${name}</b>! Your order <b>${newId}</b> for <b>${formatPeso(total)}</b> has been received.<br><br><strong>Delivery to:</strong><br>${address}</div>`, `<button onclick="hideModal(); switchTo('orders'); renderMain();" class="px-4 py-2 bg-lime-600 text-white rounded">OK</button>`);
+        showModal('Order Placed!', `
+            <div class="text-center space-y-3">
+                <div class="text-5xl text-green-600">✓</div>
+                <p class="text-gray-700">Thank you <b>${name}</b>!</p>
+                <p class="text-gray-700">Your order <b>${newId}</b> for <b>${formatPeso(total)}</b> has been received.</p>
+                <div class="mt-3 p-3 bg-gray-50 rounded text-left">
+                    <div class="text-xs text-gray-600 mb-1">Delivery to:</div>
+                    <div class="text-sm font-semibold text-gray-800">${address}</div>
+                </div>
+            </div>
+        `, `<button onclick="hideModal(); switchTo('orders'); renderMain();" class="px-4 py-2 bg-lime-600 text-white rounded">View My Orders</button>`);
         
         renderMain();
     } catch (error) {
         console.error('Error placing order:', error);
         showModal('Error', 'Failed to place order. Please try again.', `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
+    }
+};
+
+// Update checkout address preview in real-time
+window.updateCheckoutAddressPreview = function() {
+    const unit = document.getElementById('customer-unit')?.value?.trim() || '[Unit]';
+    const building = document.getElementById('customer-building')?.value?.trim();
+    const street = document.getElementById('customer-street')?.value?.trim() || '[Street]';
+    const barangay = document.getElementById('customer-barangay')?.value || '[Barangay]';
+    
+    const preview = document.getElementById('checkout-address-preview');
+    if(preview) {
+        const parts = [unit];
+        if(building) parts.push(building);
+        parts.push(street);
+        parts.push(`Brgy. ${barangay}`);
+        parts.push('Cainta, Rizal');
+        
+        preview.textContent = parts.join(', ');
     }
 };
 
@@ -917,27 +1272,87 @@ window.adminConfirmDelete = async function(id) {
     hideModal();
 };
 
-window.adminViewOrder = function(id) {
+window.adminViewOrder = async function(id) {
     if(!window.APP_STATE.currentUser || window.APP_STATE.currentUser.role !== 'admin') return showModal('Forbidden', 'Admin access required.', `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
     const o = window.APP_STATE.orders.find(x=> x.id === id);
     if(!o) return;
+
+    // Get customer profile
+    const customerData = await getFromFirebase(`users/${o.userId}`);
+    const profile = customerData?.profile || {};
+
     const items = o.items.map(it => `<li class="flex justify-between"><span>${it.quantity} × ${it.name} (${it.unit})</span><span>${formatPeso(it.price * it.quantity)}</span></li>`).join('');
+    
     showModal(`Order ${o.id}`, `
-    <div class="grid gap-2">
-      <div><b>Customer:</b> ${o.customer}</div>
-      <div><b>Email:</b> ${o.email || ''}</div>
-      <div><b>Contact:</b> ${o.contact}</div>
-      <div><b>Address:</b> ${o.address}</div>
-      <div><b>Date:</b> ${o.date}</div>
-    <div class="pt-2"><b>Items</b><ul class="mt-2">${items}</ul></div>
-    <div class="pt-2">
-  <div><b>Subtotal:</b> ${formatPeso(o.subtotal || o.total)}</div>
-  ${o.deliveryFee ? `<div><b>Delivery Fee:</b> ${formatPeso(o.deliveryFee)}</div>` : ''}
-  <div class="text-lg"><b>Total:</b> ${formatPeso(o.total)}</div>
-</div>
-    <div class="pt-2"><b>Status:</b> <span class="badge bg-gray-100 text-gray-800 px-2 py-1 rounded">${o.status}</span></div>
+    <div class="grid gap-3">
+      <div class="bg-gray-50 p-3 rounded border-l-4 border-lime-600">
+        <h4 class="font-semibold text-gray-800 mb-2">Order Details</h4>
+        <div class="space-y-1 text-sm">
+          <div><b>Customer:</b> ${o.customer}</div>
+          <div><b>Email:</b> ${o.email || ''}</div>
+          <div><b>Contact:</b> ${o.contact}</div>
+          <div><b>Address:</b> ${o.address}</div>
+          <div><b>Date:</b> ${o.date}</div>
+          <div><b>Status:</b> <span class="badge bg-gray-100 text-gray-800 px-2 py-1 rounded">${o.status}</span></div>
+        </div>
+      </div>
+
+      ${profile.fullName ? `
+        <div class="bg-blue-50 p-3 rounded border-l-4 border-blue-600">
+          <h4 class="font-semibold text-gray-800 mb-2 flex items-center gap-2">
+            <i data-lucide="user-check" class="w-4 h-4"></i>
+            Customer Profile
+            ${profile.verified ? '<span class="text-xs bg-green-500 text-white px-2 py-0.5 rounded">Verified</span>' : '<span class="text-xs bg-yellow-500 text-white px-2 py-0.5 rounded">Pending</span>'}
+          </h4>
+          <div class="space-y-1 text-sm">
+            <div><b>Full Name:</b> ${profile.fullName}</div>
+            <div><b>Birthday:</b> ${profile.birthday}</div>
+            <div><b>Age:</b> ${profile.age}</div>
+            <div><b>Home Address:</b> ${profile.homeAddress}</div>
+            <div><b>ID Type:</b> ${profile.idType}</div>
+            <div class="pt-2">
+              <button onclick="viewUploadedID('${profile.idUrl}')" class="text-sm text-blue-600 underline flex items-center gap-1">
+                <i data-lucide="file-text" class="w-3 h-3"></i>
+                View Valid ID
+              </button>
+            </div>
+            ${!profile.verified ? `
+              <div class="pt-2">
+                <button onclick="verifyCustomerProfile('${o.userId}')" class="px-3 py-1 bg-green-600 text-white rounded text-sm">
+                  Verify Profile
+                </button>
+              </div>
+            ` : ''}
+          </div>
+        </div>
+      ` : ''}
+
+      <div class="bg-gray-50 p-3 rounded">
+        <h4 class="font-semibold text-gray-800 mb-2">Items</h4>
+        <ul class="space-y-1">${items}</ul>
+      </div>
+
+      <div class="bg-gray-50 p-3 rounded">
+        <div><b>Subtotal:</b> ${formatPeso(o.subtotal || o.total)}</div>
+        ${o.deliveryFee ? `<div><b>Delivery Fee:</b> ${formatPeso(o.deliveryFee)}</div>` : ''}
+        <div class="text-lg mt-2"><b>Total:</b> ${formatPeso(o.total)}</div>
+      </div>
     </div>
 `, `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">Close</button><button onclick="adminEditOrder('${o.id}')" class="px-4 py-2 bg-lime-600 text-white rounded">Update Status</button>`);
+    
+    setTimeout(() => icons(), 100);
+};
+
+// Verify customer profile
+window.verifyCustomerProfile = async function(userId) {
+    try {
+        await updateFirebase(`users/${userId}/profile`, { verified: true });
+        hideModal();
+        showModal('Profile Verified', 'Customer profile has been verified successfully.', `<button onclick="hideModal()" class="px-4 py-2 bg-lime-600 text-white rounded">OK</button>`);
+    } catch (error) {
+        console.error('Error verifying profile:', error);
+        showModal('Error', 'Failed to verify profile. Please try again.', `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
+    }
 };
 
 window.adminEditOrder = function(id) {
@@ -1327,54 +1742,63 @@ window.updateAuthArea = function() {
 
     if(window.APP_STATE.currentUser) {
         container.innerHTML = `
-            <div class="relative">
-                <button id="user-menu-btn" class="user-dropdown-trigger">
-                  <i data-lucide="user" class="w-4 h-4 text-gray-700"></i>
-                  <span class="text-sm font-medium hidden-mobile">${window.APP_STATE.currentUser.name}</span>
-                  <i data-lucide="chevron-down" class="w-4 h-4 text-gray-500"></i>
-                </button>
-                <div id="user-menu" class="user-menu">
-                  ${window.APP_STATE.currentUser.role === 'admin' ? 
-                    `<button onclick="goAdmin()" class="user-menu-item">
-                      <i data-lucide="settings" class="w-4 h-4"></i>
-                      Admin Dashboard
-                    </button>` : 
-                    `<button onclick="switchTo('orders'); hideUserMenu();" class="user-menu-item">
-                      <i data-lucide="package" class="w-4 h-4"></i>
-                      My Orders
-                    </button>`
-                  }
-                  <button onclick="logoutUser()" class="user-menu-item logout">
-                    <i data-lucide="log-out" class="w-4 h-4"></i>
-                    Logout
-                  </button>
-                </div>
-            </div>
-        `;
+    <div class="relative">
+        <button id="user-menu-btn" class="user-dropdown-trigger">
+          <i data-lucide="user" class="w-4 h-4 text-gray-700"></i>
+          <span class="text-sm font-medium hidden-mobile">${window.APP_STATE.currentUser.name}</span>
+          <i data-lucide="chevron-down" class="w-4 h-4 text-gray-500"></i>
+        </button>
+        <div id="user-menu" class="user-menu">
+          ${window.APP_STATE.currentUser.role === 'admin' ? 
+            `<button onclick="goAdmin()" class="user-menu-item">
+              <i data-lucide="settings" class="w-4 h-4"></i>
+              Admin Dashboard
+            </button>` : 
+            `<button onclick="showUserProfile(); hideUserMenu();" class="user-menu-item">
+              <i data-lucide="user-circle" class="w-4 h-4"></i>
+              My Profile
+            </button>
+            <button onclick="switchTo('orders'); hideUserMenu();" class="user-menu-item">
+              <i data-lucide="package" class="w-4 h-4"></i>
+              My Orders
+            </button>`
+          }
+          <button onclick="logoutUser()" class="user-menu-item logout">
+            <i data-lucide="log-out" class="w-4 h-4"></i>
+            Logout
+          </button>
+        </div>
+    </div>
+`;
 
         // Mobile auth area
-        if(mobileAuthArea) {
-            mobileAuthArea.innerHTML = `
-                <div class="user-menu-info">
-                  <div class="font-semibold">${window.APP_STATE.currentUser.name}</div>
-                  <div class="text-sm">${window.APP_STATE.currentUser.email}</div>
-                </div>
-                ${window.APP_STATE.currentUser.role === 'admin' ? 
-                  `<button onclick="goAdmin(); closeMobileMenu();" class="mobile-nav-item">
-                    <i data-lucide="settings" class="w-5 h-5"></i>
-                    Admin Dashboard
-                  </button>` : 
-                  `<button onclick="switchTo('orders'); closeMobileMenu();" class="mobile-nav-item">
-                    <i data-lucide="package" class="w-5 h-5"></i>
-                    My Orders
-                  </button>`
-                }
-                <button onclick="logoutUser(); closeMobileMenu();" class="mobile-nav-item" style="color: #dc2626;">
-                  <i data-lucide="log-out" class="w-5 h-5"></i>
-                  Logout
-                </button>
-            `;
+        // Mobile auth area
+if(mobileAuthArea) {
+    mobileAuthArea.innerHTML = `
+        <div class="user-menu-info">
+          <div class="font-semibold">${window.APP_STATE.currentUser.name}</div>
+          <div class="text-sm">${window.APP_STATE.currentUser.email}</div>
+        </div>
+        ${window.APP_STATE.currentUser.role === 'admin' ? 
+          `<button onclick="goAdmin(); closeMobileMenu();" class="mobile-nav-item">
+            <i data-lucide="settings" class="w-5 h-5"></i>
+            Admin Dashboard
+          </button>` : 
+          `<button onclick="showUserProfile(); closeMobileMenu();" class="mobile-nav-item">
+            <i data-lucide="user-circle" class="w-5 h-5"></i>
+            My Profile
+          </button>
+          <button onclick="switchTo('orders'); closeMobileMenu();" class="mobile-nav-item">
+            <i data-lucide="package" class="w-5 h-5"></i>
+            My Orders
+          </button>`
         }
+        <button onclick="logoutUser(); closeMobileMenu();" class="mobile-nav-item" style="color: #dc2626;">
+          <i data-lucide="log-out" class="w-5 h-5"></i>
+          Logout
+        </button>
+    `;
+}
 
         headerActions.innerHTML = `
             <button id="header-logout" onclick="logoutUser()" class="btn-ghost hidden-mobile">Logout</button>
