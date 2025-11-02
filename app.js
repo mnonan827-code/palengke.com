@@ -286,173 +286,210 @@ window.signupUser = async function() {
     }
 
     try {
-    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-    const user = userCredential.user;
+        // Create user account
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        const user = userCredential.user;
 
-    // ✅ Send verification email
- 
-    const actionCodeSettings = {
-     url: "https://palengke-a4bc2.web.app", 
-    handleCodeInApp: false,
-};
-
-await sendEmailVerification(user, actionCodeSettings);
-
-
-    showModal('Verification Sent', `
-      A verification link has been sent to <b>${email}</b>. 
-      Please check your Gmail inbox or spam folder before logging in.
-    `, `<button onclick="hideModal()" class="px-4 py-2 bg-lime-600 text-white rounded">OK</button>`);
-    
-
-    // ✅ Save user data in Firebase (even if not yet verified)
-    const userData = {
-        uid: user.uid,
-        email: email,
-        name: name,
-        contact: contact,
-        role: 'customer',
-        createdAt: new Date().toISOString(),
-        emailVerified: false
-    };
-    await saveToFirebase(`users/${user.uid}`, userData);
-
-    // ✅ Only allow access if the email is verified
-    if (user.emailVerified) {
-        window.APP_STATE.currentUser = {
+        // Save user data to Firebase
+        const userData = {
             uid: user.uid,
             email: email,
             name: name,
-            role: 'customer'
+            contact: contact,
+            role: 'customer',
+            createdAt: new Date().toISOString(),
+            emailVerified: false
         };
-        hideModal();
-        updateAuthArea();
-        renderMain();
-        showModal('Welcome!', `Account created and logged in as <b>${name}</b>.`, `<button onclick="hideModal(); renderMain()" class="px-4 py-2 bg-lime-600 text-white rounded">OK</button>`);
-    } else {
-        // 🚫 Sign out if not verified
+        await saveToFirebase(`users/${user.uid}`, userData);
+
+        // Send verification email
+        await sendEmailVerification(user);
+
+        // Sign out the user (they must verify first)
         await signOut(auth);
-        showModal('Verify your email', `
-          Please verify your email before logging in.<br>
-          Check your Gmail inbox for the verification link.
-        `, `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
-    }
-} catch (error) {
-    console.error('Signup error:', error);
-    let errorMessage = 'An error occurred during signup.';
-    
-    if (error.code === 'auth/email-already-in-use') {
-        errorMessage = 'This email is already registered. Please try logging in.';
-    } else if (error.code === 'auth/weak-password') {
-        errorMessage = 'Password should be at least 6 characters.';
-    } else if (error.code === 'auth/invalid-email') {
-        errorMessage = 'Invalid email address.';
-    }
 
-    showModal('Signup Error', errorMessage, `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
-    }
+        // Show success message
+        hideModal();
+        showModal('Verify Your Email', `
+            <div class="space-y-3">
+                <p class="text-gray-700">Account created successfully!</p>
+                <p class="text-gray-700">We've sent a verification link to:</p>
+                <p class="font-semibold text-lime-700">${email}</p>
+                <div class="bg-yellow-50 border-l-4 border-yellow-400 p-3 mt-3">
+                    <p class="text-sm text-yellow-700">
+                        <strong>Important:</strong> Please check your email inbox (and spam folder) and click the verification link before logging in.
+                    </p>
+                </div>
+            </div>
+        `, `<button onclick="hideModal()" class="px-4 py-2 bg-lime-600 text-white rounded">OK, I'll check my email</button>`);
 
+    } catch (error) {
+        console.error('Signup error:', error);
+        let errorMessage = 'An error occurred during signup.';
+        
+        if (error.code === 'auth/email-already-in-use') {
+            errorMessage = 'This email is already registered. Please try logging in.';
+        } else if (error.code === 'auth/weak-password') {
+            errorMessage = 'Password should be at least 6 characters.';
+        } else if (error.code === 'auth/invalid-email') {
+            errorMessage = 'Invalid email address.';
+        }
+
+        showModal('Signup Error', errorMessage, `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
+    }
 };
 
 window.loginUser = async function() {
-  const email = document.getElementById('login-email')?.value?.trim()?.toLowerCase();
-  const password = document.getElementById('login-password')?.value;
+    const email = document.getElementById('login-email')?.value?.trim()?.toLowerCase();
+    const password = document.getElementById('login-password')?.value;
 
-  if (!email || !password) {
-    return showModal(
-      'Missing fields',
-      'Please fill both email and password.',
-      `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`
-    );
-  }
-
-  try {
-    // ✅ Log in with Firebase (pure async/await)
-    const userCredential = await signInWithEmailAndPassword(auth, email, password);
-    const user = userCredential.user;
-
-    // ✅ Refresh user info (important after email verification)
-    await user.reload();
-
-    // ✅ Check email verification
-    if (!user.emailVerified) {
-      await signOut(auth);
-      return showModal(
-        'Email not verified',
-        `Please verify your email before logging in.<br>
-        Check your Gmail inbox for the verification link.`,
-        `<button onclick="hideModal()" class="px-4 py-2 bg-lime-600 text-white rounded">OK</button>`
-      );
-    }
-
-    // ✅ Fetch user data
-    const userData = await getFromFirebase(`users/${user.uid}`);
-
-    if (userData) {
-      window.APP_STATE.currentUser = {
-        uid: user.uid,
-        email: user.email,
-        name: userData.name,
-        role: userData.role,
-      };
-
-      const userCart = await getFromFirebase(`carts/${user.uid}`);
-      if (userCart) {
-        window.APP_STATE.cart = Object.values(userCart);
-      }
-
-      hideModal();
-      updateAuthArea();
-      renderMain();
-
-      const notifications = await getFromFirebase('notifications');
-      if (notifications) {
-        const userNotifications = Object.values(notifications).filter(
-          (n) => n.to === window.APP_STATE.currentUser.email
+    if (!email || !password) {
+        return showModal(
+            'Missing fields',
+            'Please fill both email and password.',
+            `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`
         );
+    }
 
-        if (userNotifications.length > 0) {
-          const msgs = userNotifications
-            .map((n) => `<div class="py-2"><b>${n.date}</b><div>${n.message}</div></div>`)
-            .join('');
-          showModal(
-            'Notifications',
-            `<div class="max-h-64 overflow-auto">${msgs}</div>`,
-            `<button onclick="hideModal();" class="px-4 py-2 bg-lime-600 text-white rounded">OK</button>`
-          );
+    try {
+        // Sign in with Firebase
+        const userCredential = await signInWithEmailAndPassword(auth, email, password);
+        const user = userCredential.user;
 
-          for (const notification of userNotifications) {
-            await remove(ref(database, `notifications/${notification.id}`));
-          }
-        } else {
-          showModal(
-            'Logged in',
-            `Welcome back, <b>${window.APP_STATE.currentUser.name}</b>!`,
-            `<button onclick="hideModal(); renderMain()" class="px-4 py-2 bg-lime-600 text-white rounded">OK</button>`
-          );
+        // Reload user to get latest email verification status
+        await user.reload();
+
+        // Check if email is verified
+        if (!user.emailVerified) {
+            // Sign out unverified user
+            await signOut(auth);
+            
+            return showModal(
+                'Email Not Verified',
+                `
+                <div class="space-y-3">
+                    <p class="text-gray-700">Please verify your email before logging in.</p>
+                    <p class="text-sm text-gray-600">Check your inbox (and spam folder) for the verification link we sent to:</p>
+                    <p class="font-semibold text-lime-700">${email}</p>
+                    <p class="text-sm text-gray-600 mt-3">Didn't receive the email?</p>
+                </div>
+                `,
+                `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">Cancel</button>
+                 <button onclick="resendVerificationEmail('${email}', '${password}')" class="px-4 py-2 bg-lime-600 text-white rounded">Resend Email</button>`
+            );
         }
-      }
-    }
-  } catch (error) {
-    console.error('Login error:', error);
-    let errorMessage = 'Invalid email or password.';
 
-    if (error.code === 'auth/user-not-found') {
-      errorMessage = 'No account found with this email.';
-    } else if (error.code === 'auth/wrong-password') {
-      errorMessage = 'Incorrect password. Please try again.';
-    } else if (error.code === 'auth/invalid-email') {
-      errorMessage = 'Invalid email address.';
-    } else if (error.code === 'auth/too-many-requests') {
-      errorMessage = 'Too many failed attempts. Please try again later.';
-    }
+        // Fetch user data from database
+        const userData = await getFromFirebase(`users/${user.uid}`);
 
-    showModal(
-      'Login Error',
-      errorMessage,
-      `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`
-    );
-  }
+        if (userData) {
+            // Update email verified status in database
+            if (!userData.emailVerified) {
+                await updateFirebase(`users/${user.uid}`, { emailVerified: true });
+            }
+
+            window.APP_STATE.currentUser = {
+                uid: user.uid,
+                email: user.email,
+                name: userData.name,
+                role: userData.role,
+            };
+
+            // Load user cart
+            const userCart = await getFromFirebase(`carts/${user.uid}`);
+            if (userCart) {
+                window.APP_STATE.cart = Object.values(userCart);
+            }
+
+            hideModal();
+            updateAuthArea();
+            renderMain();
+
+            // Check for notifications
+            const notifications = await getFromFirebase('notifications');
+            if (notifications) {
+                const userNotifications = Object.values(notifications).filter(
+                    (n) => n.to === window.APP_STATE.currentUser.email
+                );
+
+                if (userNotifications.length > 0) {
+                    const msgs = userNotifications
+                        .map((n) => `<div class="py-2"><b>${n.date}</b><div>${n.message}</div></div>`)
+                        .join('');
+                    showModal(
+                        'Notifications',
+                        `<div class="max-h-64 overflow-auto">${msgs}</div>`,
+                        `<button onclick="hideModal();" class="px-4 py-2 bg-lime-600 text-white rounded">OK</button>`
+                    );
+
+                    // Delete notifications
+                    for (const notification of userNotifications) {
+                        await remove(ref(database, `notifications/${notification.id}`));
+                    }
+                } else {
+                    showModal(
+                        'Logged in',
+                        `Welcome back, <b>${window.APP_STATE.currentUser.name}</b>!`,
+                        `<button onclick="hideModal(); renderMain()" class="px-4 py-2 bg-lime-600 text-white rounded">OK</button>`
+                    );
+                }
+            }
+        }
+    } catch (error) {
+        console.error('Login error:', error);
+        let errorMessage = 'Invalid email or password.';
+
+        if (error.code === 'auth/user-not-found') {
+            errorMessage = 'No account found with this email.';
+        } else if (error.code === 'auth/wrong-password') {
+            errorMessage = 'Incorrect password. Please try again.';
+        } else if (error.code === 'auth/invalid-email') {
+            errorMessage = 'Invalid email address.';
+        } else if (error.code === 'auth/too-many-requests') {
+            errorMessage = 'Too many failed attempts. Please try again later.';
+        } else if (error.code === 'auth/invalid-credential') {
+            errorMessage = 'Invalid email or password. Please check your credentials.';
+        }
+
+        showModal(
+            'Login Error',
+            errorMessage,
+            `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`
+        );
+    }
+};
+
+window.resendVerificationEmail = async function(email, password) {
+    try {
+        // Sign in temporarily to resend verification
+        const userCredential = await signInWithEmailAndPassword(auth, email, password);
+        const user = userCredential.user;
+
+        // Send verification email
+        await sendEmailVerification(user);
+
+        // Sign out again
+        await signOut(auth);
+
+        showModal(
+            'Verification Email Sent',
+            `
+            <div class="space-y-3">
+                <p class="text-gray-700">A new verification email has been sent to:</p>
+                <p class="font-semibold text-lime-700">${email}</p>
+                <p class="text-sm text-gray-600">Please check your inbox and spam folder.</p>
+            </div>
+            `,
+            `<button onclick="hideModal()" class="px-4 py-2 bg-lime-600 text-white rounded">OK</button>`
+        );
+    } catch (error) {
+        console.error('Resend verification error:', error);
+        showModal(
+            'Error',
+            'Failed to resend verification email. Please try again.',
+            `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`
+        );
+    }
 };
 
 window.logoutUser = async function() {
