@@ -899,6 +899,25 @@ window.saveUserProfile = async function() {
     }
 };
 
+window.validateCaintaAddress = function(street, barangay) {
+    if(!street || street.trim().length === 0) {
+        return { valid: false, message: 'Street name is required' };
+    }
+    
+    if(!barangay || barangay.trim().length === 0) {
+        return { valid: false, message: 'Please select a barangay' };
+    }
+    
+    // Check if selected barangay is in the valid list
+    if(!CAINTA_BARANGAYS.includes(barangay)) {
+        return { 
+            valid: false, 
+            message: 'Please select a valid barangay in Cainta' 
+        };
+    }
+    
+    return { valid: true, message: 'Address validated' };
+};
 // Update address preview in real-time
 window.updateAddressPreview = function() {
     const unit = document.getElementById('profile-unit')?.value?.trim() || '[Unit]';
@@ -925,10 +944,11 @@ window.updateAddressPreview = function() {
 window.validateAndPlaceOrder = async function() {
     const name = document.getElementById('customer-name')?.value?.trim();
     const contact = document.getElementById('customer-contact')?.value?.trim();
-    const unit = document.getElementById('customer-unit')?.value?.trim();
-    const building = document.getElementById('customer-building')?.value?.trim();
+    const fullName = document.getElementById('customer-name')?.value?.trim();
     const street = document.getElementById('customer-street')?.value?.trim();
     const barangay = document.getElementById('customer-barangay')?.value?.trim();
+    const validation = validateCaintaAddress(street, barangay);
+
     
     console.log('Validating order:', { name, contact, unit, building, street, barangay });
     
@@ -961,7 +981,8 @@ window.validateAndPlaceOrder = async function() {
     addressParts.push(`Brgy. ${barangay}`);
     addressParts.push('Cainta, Rizal');
     
-    const address = addressParts.join(', ');
+    // Format the complete address (without unit)
+const address = `${fullName}, ${street}, Brgy. ${barangay}, Cainta, Rizal`;
     console.log('Formatted address:', address);
     
     // Proceed with placing order
