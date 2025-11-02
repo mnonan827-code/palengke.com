@@ -132,12 +132,23 @@
       </div>
       <div id="cart-drawer-body" class="p-4 scrollbar-hide max-h-[60vh] overflow-y-auto"></div>
       <div class="p-4 border-t">
-        <div class="flex items-center justify-between mb-3">
-          <div class="text-sm text-gray-600">Subtotal</div>
-          <div id="cart-subtotal" class="font-bold text-lg text-lime-700">₱0.00</div>
-        </div>
-        <button id="checkout-btn" class="w-full py-3 bg-lime-600 text-white rounded-xl font-semibold hover:bg-lime-700">Proceed to Checkout</button>
-      </div>
+  <div class="space-y-2 mb-3">
+    <div class="flex items-center justify-between text-sm">
+      <div class="text-gray-600">Subtotal</div>
+      <div id="cart-subtotal" class="font-semibold text-gray-800">₱0.00</div>
+    </div>
+    <div class="flex items-center justify-between text-sm">
+      <div class="text-gray-600">Delivery Fee</div>
+      <div id="cart-delivery-fee" class="font-semibold text-gray-800">₱0.00</div>
+    </div>
+    <div class="border-t pt-2"></div>
+    <div class="flex items-center justify-between">
+      <div class="text-sm font-semibold text-gray-700">Total</div>
+      <div id="cart-total" class="font-bold text-lg text-lime-700">₱0.00</div>
+    </div>
+  </div>
+  <button id="checkout-btn" class="w-full py-3 bg-lime-600 text-white rounded-xl font-semibold hover:bg-lime-700">Proceed to Checkout</button>
+</div>
     </aside>
 
     <!-- Modal -->
