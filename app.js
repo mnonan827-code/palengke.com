@@ -39,7 +39,8 @@ window.APP_STATE = {
     orders: [],
     cart: [],
     currentUser: null,
-    view: 'shop'
+    view: 'shop',
+    deliveryFee: 25.00
 };
 
 const APP_KEY = 'palengke_cainta_v4';
@@ -191,6 +192,12 @@ async function initializeFirebaseData() {
             window.APP_STATE.orders = Object.values(ordersData);
         }
 
+        // Load delivery fee
+        const deliveryFee = await getFromFirebase('settings/deliveryFee');
+        if (deliveryFee !== null) {
+            window.APP_STATE.deliveryFee = deliveryFee;
+        }
+
         setupRealtimeListeners();
         
         updatePreorderStatuses();
@@ -233,6 +240,9 @@ async function createDefaultAdmin() {
         };
 
         await saveToFirebase(`users/${user.uid}`, adminData);
+        await saveToFirebase('settings/deliveryFee', 25.00);
+
+        console.log("Default delivery fee set");
         console.log("Default admin account created successfully");
     } catch (error) {
         if (error.code === 'auth/email-already-in-use') {
@@ -481,16 +491,27 @@ window.checkout = function() {
         return showModal('Login required', 'Please log in or create an account to place your order.', `<button onclick="hideModal(); openAuth('login')" class="px-4 py-2 bg-lime-600 text-white rounded">Log in</button><button onclick="hideModal(); openAuth('signup')" class="px-4 py-2 bg-white border rounded">Sign up</button>`);
     }
     const subtotal = window.APP_STATE.cart.reduce((s,i)=> s + i.price * i.quantity, 0);
-    showModal('Checkout', `
+    const deliveryFee = 25.00;
+    const total = subtotal + deliveryFee;
+
+showModal('Checkout', `
+
     <div>
-      <div class="text-sm text-gray-600 mb-3">Order total: <span class="font-bold text-lime-700">${formatPeso(subtotal)}</span></div>
-      <form id="checkout-form" class="grid gap-3">
-        <input id="customer-name" value="${window.APP_STATE.currentUser.name}" required placeholder="Full name" class="p-2 border rounded" />
-        <input id="customer-contact" value="${(window.APP_STATE.currentUser.contact)||''}" required placeholder="Contact number (09XX-XXX-XXXX)" class="p-2 border rounded" />
-        <textarea id="customer-address" required placeholder="unit number, building name, street, city, region, zip code" class="p-2 border rounded"></textarea>
-        <div class="text-sm text-gray-500">Payment: Cash on Delivery (COD)</div>
-      </form>
-    </div>
+      <div class="bg-gray-50 p-3 rounded-lg mb-3 space-y-1">
+        <div class="flex justify-between text-sm">
+          <span class="text-gray-600">Subtotal:</span>
+          <span class="font-semibold">${formatPeso(subtotal)}</span>
+        </div>
+        <div class="flex justify-between text-sm">
+          <span class="text-gray-600">Delivery Fee:</span>
+          <span class="font-semibold">${formatPeso(deliveryFee)}</span>
+        </div>
+        <div class="border-t pt-1 mt-1"></div>
+        <div class="flex justify-between">
+          <span class="text-gray-700 font-semibold">Total:</span>
+          <span class="font-bold text-lime-700">${formatPeso(total)}</span>
+        </div>
+      </div>
 `, `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">Cancel</button>
     <button onclick="placeOrder()" class="px-4 py-2 bg-lime-600 text-white rounded">Place Order</button>`);
 };
@@ -502,9 +523,11 @@ window.placeOrder = async function() {
     if(!name || !contact || !address) return showModal('Missing info', 'Please fill all checkout fields', `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
     const newId = 'O-' + uid();
     const itemsCopy = window.APP_STATE.cart.map(i=> ({ ...i }));
-    const total = itemsCopy.reduce((s,i)=> s + i.price * i.quantity, 0);
+    const subtotal = itemsCopy.reduce((s,i)=> s + i.price * i.quantity, 0);
+    const deliveryFee = window.APP_STATE.deliveryFee || 0;
+    const total = subtotal + deliveryFee;
     const isPreorderOrder = itemsCopy.some(it => it.preordered === true);
-    const newOrder = { id: newId, items: itemsCopy, total, status: isPreorderOrder ? 'Pre-Order Received' : 'Preparing Order', type: isPreorderOrder ? 'pre-order' : 'regular', customer: name, email: window.APP_STATE.currentUser.email, contact, address, date: new Date().toLocaleString(), userId: window.APP_STATE.currentUser.uid };
+    const newOrder = { id: newId, items: itemsCopy, subtotal: subtotal, deliveryFee: deliveryFee, total, status: isPreorderOrder ? 'Pre-Order Received' : 'Preparing Order', type: isPreorderOrder ? 'pre-order' : 'regular', customer: name, email: window.APP_STATE.currentUser.email, contact, address, date: new Date().toLocaleString(), userId: window.APP_STATE.currentUser.uid };
 
     await saveToFirebase(`orders/${newId}`, newOrder);
 
@@ -748,7 +771,11 @@ window.adminViewOrder = function(id) {
       <div><b>Address:</b> ${o.address}</div>
       <div><b>Date:</b> ${o.date}</div>
     <div class="pt-2"><b>Items</b><ul class="mt-2">${items}</ul></div>
-    <div class="pt-2"><b>Total:</b> ${formatPeso(o.total)}</div>
+    <div class="pt-2">
+  <div><b>Subtotal:</b> ${formatPeso(o.subtotal || o.total)}</div>
+  ${o.deliveryFee ? `<div><b>Delivery Fee:</b> ${formatPeso(o.deliveryFee)}</div>` : ''}
+  <div class="text-lg"><b>Total:</b> ${formatPeso(o.total)}</div>
+</div>
     <div class="pt-2"><b>Status:</b> <span class="badge bg-gray-100 text-gray-800 px-2 py-1 rounded">${o.status}</span></div>
     </div>
 `, `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">Close</button><button onclick="adminEditOrder('${o.id}')" class="px-4 py-2 bg-lime-600 text-white rounded">Update Status</button>`);
@@ -773,6 +800,38 @@ window.adminSaveOrderStatus = async function(id) {
     const newS = document.getElementById('order-new-status')?.value;
     await updateFirebase(`orders/${id}`, { status: newS });
     hideModal();
+};
+
+window.adminUpdateDeliveryFee = function() {
+    if(!window.APP_STATE.currentUser || window.APP_STATE.currentUser.role !== 'admin') {
+        return showModal('Forbidden', 'Admin access required.', `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
+    }
+    
+    showModal('Update Delivery Fee', `
+        <div class="grid gap-3">
+            <div class="text-sm text-gray-600">Set the delivery fee for all orders</div>
+            <div class="flex items-center gap-2">
+                <span class="text-gray-700">₱</span>
+                <input id="new-delivery-fee" type="number" step="0.01" min="0" value="${window.APP_STATE.deliveryFee}" class="flex-1 p-2 border rounded" />
+            </div>
+            <div class="text-xs text-gray-500">Current fee: ${formatPeso(window.APP_STATE.deliveryFee)}</div>
+        </div>
+    `, `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">Cancel</button>
+        <button onclick="adminSaveDeliveryFee()" class="px-4 py-2 bg-lime-600 text-white rounded">Save</button>`);
+};
+
+window.adminSaveDeliveryFee = async function() {
+    const newFee = parseFloat(document.getElementById('new-delivery-fee')?.value);
+    
+    if(isNaN(newFee) || newFee < 0) {
+        return showModal('Invalid Amount', 'Please enter a valid delivery fee.', `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
+    }
+    
+    await saveToFirebase('settings/deliveryFee', newFee);
+    window.APP_STATE.deliveryFee = newFee;
+    
+    hideModal();
+    showModal('Success', `Delivery fee updated to ${formatPeso(newFee)}`, `<button onclick="hideModal(); renderMain();" class="px-4 py-2 bg-lime-600 text-white rounded">OK</button>`);
 };
 
 window.adminDeleteOrder = function(id) {
@@ -1066,6 +1125,8 @@ window.renderCartDrawer = function() {
     if (window.APP_STATE.cart.length === 0) {
         body.innerHTML = `<div class="text-center py-12 text-gray-500">Your cart is empty — add fresh products from the shop.</div>`;
         document.getElementById('cart-subtotal').textContent = formatPeso(0);
+        document.getElementById('cart-delivery-fee').textContent = formatPeso(0);
+        document.getElementById('cart-total').textContent = formatPeso(0);
         updateCartBadge();
         icons();
         return;
@@ -1093,7 +1154,12 @@ window.renderCartDrawer = function() {
     }).join('');
     body.innerHTML = itemsHtml;
     const subtotal = window.APP_STATE.cart.reduce((s,i)=> s + (i.price * i.quantity), 0);
+    const deliveryFee = subtotal > 0 ? 25.00 : 0;
+    const total = subtotal + deliveryFee;
+
     document.getElementById('cart-subtotal').textContent = formatPeso(subtotal);
+    document.getElementById('cart-delivery-fee').textContent = formatPeso(deliveryFee);
+    document.getElementById('cart-total').textContent = formatPeso(total);
     updateCartBadge();
     icons();
 };
@@ -1505,12 +1571,13 @@ window.renderAdminDashboard = function() {
     return `
     <section class="px-2 sm:px-4">
       <div class="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-3">
-        <h2 class="text-xl sm:text-2xl font-bold text-gray-800">Admin Dashboard</h2>
-        <div class="flex flex-col sm:flex-row gap-2">
-          <button onclick="adminAddProduct()" class="px-3 py-2 bg-lime-600 text-white rounded text-sm sm:text-base hover:bg-lime-700">Add Product</button>
-          <button onclick="viewDeleteLogs()" class="px-3 py-2 bg-white border text-gray-700 rounded text-sm sm:text-base hover:bg-gray-50">View Deletion Logs</button>
-        </div>
-      </div>
+  <h2 class="text-xl sm:text-2xl font-bold text-gray-800">Admin Dashboard</h2>
+  <div class="flex flex-col sm:flex-row gap-2">
+    <button onclick="adminAddProduct()" class="px-3 py-2 bg-lime-600 text-white rounded text-sm sm:text-base hover:bg-lime-700">Add Product</button>
+    <button onclick="adminUpdateDeliveryFee()" class="px-3 py-2 bg-blue-600 text-white rounded text-sm sm:text-base hover:bg-blue-700">Set Delivery Fee</button>
+    <button onclick="viewDeleteLogs()" class="px-3 py-2 bg-white border text-gray-700 rounded text-sm sm:text-base hover:bg-gray-50">View Deletion Logs</button>
+  </div>
+</div>
 
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-6">
         <div class="bg-white rounded-xl p-4 shadow-sm border">
