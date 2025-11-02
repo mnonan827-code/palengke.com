@@ -654,88 +654,96 @@ window.showUserProfile = async function() {
     ).join('');
 
     showModal('My Profile', `
-        <form id="profile-form" class="grid gap-3">
-            ${hasProfile ? `
-                <div class="bg-green-50 p-3 rounded-lg border border-green-200 mb-2">
-                    <div class="flex items-center gap-2 text-sm text-green-800">
-                        <i data-lucide="check-circle" class="w-4 h-4"></i>
-                        <span class="font-semibold">Profile ${profile.verified ? 'Verified' : 'Submitted - Pending Verification'}</span>
-                    </div>
+    <form id="profile-form" class="grid gap-3">
+        ${hasProfile ? `
+            <div class="bg-green-50 p-3 rounded-lg border border-green-200 mb-2">
+                <div class="flex items-center gap-2 text-sm text-green-800">
+                    <i data-lucide="check-circle" class="w-4 h-4"></i>
+                    <span class="font-semibold">Profile ${profile.verified ? 'Verified' : 'Submitted - Pending Verification'}</span>
                 </div>
-            ` : `
-                <div class="bg-yellow-50 p-3 rounded-lg border border-yellow-200 mb-2">
-                    <div class="flex items-center gap-2 text-sm text-yellow-800">
-                        <i data-lucide="alert-circle" class="w-4 h-4"></i>
-                        <span class="font-semibold">Complete your profile to enable checkout</span>
-                    </div>
+            </div>
+        ` : `
+            <div class="bg-yellow-50 p-3 rounded-lg border border-yellow-200 mb-2">
+                <div class="flex items-center gap-2 text-sm text-yellow-800">
+                    <i data-lucide="alert-circle" class="w-4 h-4"></i>
+                    <span class="font-semibold">Complete your profile to enable checkout</span>
                 </div>
-            `}
+            </div>
+        `}
 
+        <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Full Name (as shown on ID) <span class="text-red-600">*</span></label>
+            <input id="profile-fullname" type="text" value="${profile.fullName || ''}" placeholder="Juan Dela Cruz" class="p-2 border rounded w-full" required ${profile.verified ? 'disabled' : ''} />
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
             <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Full Name (as shown on ID)</label>
-                <input id="profile-fullname" type="text" value="${profile.fullName || ''}" placeholder="Juan Dela Cruz" class="p-2 border rounded w-full" required ${profile.verified ? 'disabled' : ''} />
+                <label class="block text-sm font-medium text-gray-700 mb-1">Birthday <span class="text-red-600">*</span></label>
+                <input id="profile-birthday" type="date" value="${profile.birthday || ''}" class="p-2 border rounded w-full" required ${profile.verified ? 'disabled' : ''} />
             </div>
-
-            <div class="grid grid-cols-2 gap-2">
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Birthday</label>
-                    <input id="profile-birthday" type="date" value="${profile.birthday || ''}" class="p-2 border rounded w-full" required ${profile.verified ? 'disabled' : ''} />
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Age</label>
-                    <input id="profile-age" type="number" value="${profile.age || ''}" placeholder="18" min="18" max="120" class="p-2 border rounded w-full" required ${profile.verified ? 'disabled' : ''} />
-                </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Age <span class="text-red-600">*</span></label>
+                <input id="profile-age" type="number" value="${profile.age || ''}" placeholder="18" min="18" max="120" class="p-2 border rounded w-full" required ${profile.verified ? 'disabled' : ''} />
             </div>
+        </div>
 
+        <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Home Address in Cainta, Rizal</label>
+            
+            <input id="profile-unit" type="text" value="${profile.unit || ''}" placeholder="Unit/House Number (e.g., Unit 101, House 25)" class="p-2 border rounded w-full mb-2" required ${profile.verified ? 'disabled' : ''} />
+            
+            <input id="profile-building" type="text" value="${profile.building || ''}" placeholder="Building Name (optional)" class="p-2 border rounded w-full mb-2" ${profile.verified ? 'disabled' : ''} />
+            
+            <input id="profile-street" type="text" value="${profile.street || ''}" placeholder="Street Name (e.g., Ortigas Avenue Extension)" class="p-2 border rounded w-full mb-2" required ${profile.verified ? 'disabled' : ''} />
+            
+            <select id="profile-barangay" class="p-2 border rounded w-full mb-2" required ${profile.verified ? 'disabled' : ''}>
+                <option value="">Select Barangay</option>
+                ${barangayOptions}
+            </select>
+            
+            <div class="text-xs bg-lime-50 text-lime-800 p-2 rounded border border-lime-200">
+                <i data-lucide="map-pin" class="w-3 h-3 inline"></i> 
+                <strong>Your address will be:</strong><br>
+                <span id="address-preview">[Unit], [Building], [Street], Brgy. [Barangay], Cainta, Rizal</span>
+            </div>
+        </div>
 
-<div>
-    <label class="block text-sm font-medium text-gray-700 mb-1">Home Address in Cainta, Rizal</label>
-    
-    <input id="profile-unit" type="text" value="${profile.unit || ''}" placeholder="Unit/House Number (e.g., Unit 101, House 25)" class="p-2 border rounded w-full mb-2" required ${profile.verified ? 'disabled' : ''} />
-    
-    <input id="profile-building" type="text" value="${profile.building || ''}" placeholder="Building Name (optional)" class="p-2 border rounded w-full mb-2" ${profile.verified ? 'disabled' : ''} />
-    
-    <input id="profile-street" type="text" value="${profile.street || ''}" placeholder="Street Name (e.g., Ortigas Avenue Extension)" class="p-2 border rounded w-full mb-2" required ${profile.verified ? 'disabled' : ''} />
-    
-    <select id="profile-barangay" class="p-2 border rounded w-full mb-2" required ${profile.verified ? 'disabled' : ''}>
-        <option value="">Select Barangay</option>
-        ${barangayOptions}
-    </select>
-    
-    <div class="text-xs bg-lime-50 text-lime-800 p-2 rounded border border-lime-200">
-        <i data-lucide="map-pin" class="w-3 h-3 inline"></i> 
-        <strong>Your address will be:</strong><br>
-        <span id="address-preview">[Unit], [Building], [Street], Brgy. [Barangay], Cainta, Rizal</span>
-    </div>
-</div>
+        <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">ID Type <span class="text-red-600">*</span></label>
+            <select id="profile-idtype" class="p-2 border rounded w-full" required ${profile.verified ? 'disabled' : ''}>
+                <option value="">Select ID Type</option>
+                ${idTypeOptions}
+            </select>
+        </div>
 
-            ${!profile.verified ? `
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Upload Valid ID</label>
-                    <input id="profile-id-file" type="file" accept="image/*,.pdf" class="p-2 border rounded w-full" ${profile.idUrl ? '' : 'required'} />
-                    <div class="text-xs text-gray-500 mt-1">
-                        <i data-lucide="info" class="w-3 h-3 inline"></i> Accepted: JPG, PNG, PDF (Max 5MB)
+        ${!profile.verified ? `
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Upload Valid ID <span class="text-red-600">*</span></label>
+                <input id="profile-id-file" type="file" accept="image/*,.pdf" class="p-2 border rounded w-full" ${profile.idUrl ? '' : 'required'} />
+                <div class="text-xs text-gray-500 mt-1">
+                    <i data-lucide="info" class="w-3 h-3 inline"></i> Accepted: JPG, PNG, PDF (Max 5MB)
+                </div>
+                ${profile.idUrl ? `
+                    <div class="mt-2 p-2 bg-gray-50 rounded border">
+                        <span class="text-xs text-gray-600">Current ID on file</span>
+                        <button type="button" onclick="viewUploadedID('${profile.idUrl}')" class="ml-2 text-xs text-blue-600 underline">View</button>
                     </div>
-                    ${profile.idUrl ? `
-                        <div class="mt-2 p-2 bg-gray-50 rounded border">
-                            <span class="text-xs text-gray-600">Current ID on file</span>
-                            <button type="button" onclick="viewUploadedID('${profile.idUrl}')" class="ml-2 text-xs text-blue-600 underline">View</button>
-                        </div>
-                    ` : ''}
-                </div>
-            ` : `
-                <div class="p-3 bg-gray-50 rounded border">
-                    <div class="text-sm font-medium text-gray-700 mb-2">Uploaded ID</div>
-                    <button type="button" onclick="viewUploadedID('${profile.idUrl}')" class="text-sm text-blue-600 underline">View ID</button>
-                </div>
-            `}
+                ` : ''}
+            </div>
+        ` : `
+            <div class="p-3 bg-gray-50 rounded border">
+                <div class="text-sm font-medium text-gray-700 mb-2">ID Type: ${profile.idType}</div>
+                <div class="text-sm font-medium text-gray-700 mb-2">Uploaded ID</div>
+                <button type="button" onclick="viewUploadedID('${profile.idUrl}')" class="text-sm text-blue-600 underline">View ID</button>
+            </div>
+        `}
 
-            <div id="profile-error" class="text-xs text-red-600 mt-1 hidden font-semibold"></div>
-        </form>
-    `, `
-        <button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">Close</button>
-        ${!profile.verified ? `<button onclick="saveUserProfile()" class="px-4 py-2 bg-lime-600 text-white rounded">Save Profile</button>` : ''}
-    `);
+        <div id="profile-error" class="text-xs text-red-600 mt-1 hidden font-semibold"></div>
+    </form>
+`, `
+    <button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">Close</button>
+    ${!profile.verified ? `<button onclick="saveUserProfile()" class="px-4 py-2 bg-lime-600 text-white rounded">Save Profile</button>` : ''}
+`);
 
     setTimeout(() => icons(), 100);
 
