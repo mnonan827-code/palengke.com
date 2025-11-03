@@ -1421,14 +1421,21 @@ window.adminViewOrder = async function(id) {
                 </button>
               </div>
             ` : '<div class="text-xs text-gray-500 pt-2">No ID uploaded</div>'}
-            ${!profile.verified && profile.idUrl && !profile.denied ? `
+            ${!profile.verified && profile.idUrl ? `
   <div class="pt-2 flex gap-2">
-    <button onclick="verifyCustomerProfile('${o.userId}')" class="px-3 py-1 bg-green-600 text-white rounded text-sm hover:bg-green-700">
-      ✓ Verify Profile
-    </button>
-    <button onclick="denyCustomerProfile('${o.userId}')" class="px-3 py-1 bg-red-600 text-white rounded text-sm hover:bg-red-700">
-      ✗ Deny
-    </button>
+    ${!profile.denied ? `
+      <button onclick="verifyCustomerProfile('${o.userId}')" class="px-3 py-1 bg-green-600 text-white rounded text-sm hover:bg-green-700">
+        ✓ Verify Profile
+      </button>
+      <button onclick="denyCustomerProfile('${o.userId}')" class="px-3 py-1 bg-red-600 text-white rounded text-sm hover:bg-red-700">
+        ✗ Deny
+      </button>
+    ` : `
+      <div class="pt-2 bg-red-50 p-2 rounded border border-red-200">
+        <div class="text-xs text-red-800 font-semibold">Profile Denied</div>
+        <div class="text-xs text-red-600 mt-1">${profile.denialReason || 'No reason provided'}</div>
+      </div>
+    `}
   </div>
 ` : ''}
 ${profile.denied ? `
@@ -2578,9 +2585,10 @@ window.renderAdminDashboard = async function() {
     const preorderList = window.APP_STATE.products.filter(p => p.preorder);
 
     // 🆕 GET PENDING VERIFICATIONS
+    // ✅ GET PENDING VERIFICATIONS (excluding denied)
     const usersData = await getFromFirebase('users');
     const pendingUsers = usersData ? Object.values(usersData).filter(u => 
-        u.profile && u.profile.fullName && !u.profile.verified
+    u.profile && u.profile.fullName && !u.profile.verified && !u.profile.denied
     ) : [];
 
     const regularRows = regular.map(p => `
@@ -2832,12 +2840,16 @@ window.renderUserVerificationPage = async function() {
     // Get all users with pending verification
     const usersData = await getFromFirebase('users');
     const pendingUsers = usersData ? Object.values(usersData).filter(u => 
-        u.profile && u.profile.fullName && !u.profile.verified
+    u.profile && u.profile.fullName && !u.profile.verified && !u.profile.denied
     ) : [];
 
     // Get verified users
     const verifiedUsers = usersData ? Object.values(usersData).filter(u => 
         u.profile && u.profile.verified
+    ) : [];
+
+    const deniedUsers = usersData ? Object.values(usersData).filter(u => 
+    u.profile && u.profile.denied
     ) : [];
 
     const pendingRows = pendingUsers.map(user => `
@@ -2878,20 +2890,24 @@ window.renderUserVerificationPage = async function() {
             </div>
 
             <!-- Stats Cards -->
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-6">
-                <div class="bg-white rounded-xl p-4 shadow-sm border">
-                    <div class="text-sm text-gray-500">Pending Verifications</div>
-                    <div class="text-lg sm:text-xl font-bold text-yellow-600 mt-1">${pendingUsers.length}</div>
-                </div>
-                <div class="bg-white rounded-xl p-4 shadow-sm border">
-                    <div class="text-sm text-gray-500">Verified Users</div>
-                    <div class="text-lg sm:text-xl font-bold text-green-600 mt-1">${verifiedUsers.length}</div>
-                </div>
-                <div class="bg-white rounded-xl p-4 shadow-sm border">
-                    <div class="text-sm text-gray-500">Total Users</div>
-                    <div class="text-lg sm:text-xl font-bold mt-1">${pendingUsers.length + verifiedUsers.length}</div>
-                </div>
-            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+    <div class="bg-white rounded-xl p-4 shadow-sm border">
+        <div class="text-sm text-gray-500">Pending Verifications</div>
+        <div class="text-lg sm:text-xl font-bold text-yellow-600 mt-1">${pendingUsers.length}</div>
+    </div>
+    <div class="bg-white rounded-xl p-4 shadow-sm border">
+        <div class="text-sm text-gray-500">Verified Users</div>
+        <div class="text-lg sm:text-xl font-bold text-green-600 mt-1">${verifiedUsers.length}</div>
+    </div>
+    <div class="bg-white rounded-xl p-4 shadow-sm border">
+        <div class="text-sm text-gray-500">Denied Profiles</div>
+        <div class="text-lg sm:text-xl font-bold text-red-600 mt-1">${deniedUsers.length}</div>
+    </div>
+    <div class="bg-white rounded-xl p-4 shadow-sm border">
+        <div class="text-sm text-gray-500">Total Users</div>
+        <div class="text-lg sm:text-xl font-bold mt-1">${pendingUsers.length + verifiedUsers.length + deniedUsers.length}</div>
+    </div>
+</div>
 
             <!-- Pending Verifications Table -->
             ${pendingUsers.length > 0 ? `
