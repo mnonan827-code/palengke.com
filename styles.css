@@ -1869,6 +1869,86 @@ body.modal-open header {
 }
   }
 
+  /* ==========================================
+   Enhanced Mobile Menu Fixes
+   ========================================== */
+
+#mobile-menu {
+    transition: all 0.3s ease;
+    max-height: 0;
+    overflow: hidden;
+}
+
+#mobile-menu.active {
+    max-height: 500px;
+}
+
+#mobile-menu.hidden {
+    display: none !important;
+}
+
+/* Ensure mobile orders button is visible */
+#mobile-view-orders.hidden {
+    display: none !important;
+}
+
+#mobile-view-orders:not(.hidden) {
+    display: flex !important;
+}
+
+/* User menu overlay improvements */
+.user-menu-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.3);
+    z-index: 39;
+    display: none;
+}
+
+.user-menu-overlay.active {
+    display: block;
+}
+
+/* Prevent body scroll when menus are open */
+body.mobile-menu-open,
+body.user-menu-open,
+body.modal-open {
+    overflow: hidden;
+}
+
+/* Exit admin button styling */
+#exit-admin-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+/* Better logout button styling */
+.user-menu-item.logout {
+    border-top: 2px solid #fee2e2;
+    margin-top: 0.5rem;
+    padding-top: 0.75rem;
+}
+
+/* Mobile menu smooth animations */
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+#mobile-menu.active > div {
+    animation: slideDown 0.3s ease;
+}
+
 /* ===== Final Mobile Fix for Admin Buttons & Tables ===== */
 @media (max-width: 640px) {
     /* Ensure admin tables can scroll horizontally */

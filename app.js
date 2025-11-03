@@ -129,12 +129,24 @@ window.toggleMobileMenu = function() {
 
 window.closeMobileMenu = function() {
     const mobileMenu = document.getElementById("mobile-menu");
+    const mobileMenuBtn = document.getElementById('mobile-menu-btn');
+    
     if (mobileMenu) {
-      mobileMenu.setAttribute("aria-hidden", "true");
-      mobileMenu.classList.remove("active");
-      document.body.classList.remove("mobile-menu-open");
+        mobileMenu.setAttribute("aria-hidden", "true");
+        mobileMenu.classList.add("hidden");
+        mobileMenu.classList.remove("active");
+        document.body.classList.remove("mobile-menu-open");
     }
-  };
+    
+    // Reset menu icon
+    if(mobileMenuBtn) {
+        const icon = mobileMenuBtn.querySelector('i');
+        if(icon) {
+            icon.setAttribute('data-lucide', 'menu');
+            lucide.createIcons();
+        }
+    }
+};
   
 
 // Enhanced User Menu Functionality for Mobile
@@ -459,19 +471,36 @@ window.resendVerificationCode = async function(email, password) {
 
 window.logoutUser = async function() {
     try {
+        // Save cart if customer
         if (window.APP_STATE.currentUser && window.APP_STATE.currentUser.role === 'customer') {
             await saveToFirebase(`carts/${window.APP_STATE.currentUser.uid}`, window.APP_STATE.cart);
         }
         
+        // Sign out from Firebase
         await signOut(auth);
+        
+        // Reset app state
         window.APP_STATE.currentUser = null;
         window.APP_STATE.cart = [];
+        window.APP_STATE.view = 'shop';
+        window.APP_STATE.adminView = 'dashboard';
         
+        // Close any open menus
+        hideUserMenu();
+        closeMobileMenu();
+        toggleCartDrawer(false);
+        
+        // Update UI
         updateAuthArea();
-        renderMain();
-        showModal('Logged out', 'You have been logged out.', `<button onclick="hideModal()" class="px-4 py-2 bg-lime-600 text-white rounded">OK</button>`);
+        await renderMain();
+        
+        // Show logout message
+        showModal('Logged out', 'You have been logged out successfully.', 
+            `<button onclick="hideModal()" class="px-4 py-2 bg-lime-600 text-white rounded">OK</button>`);
     } catch (error) {
         console.error('Logout error:', error);
+        showModal('Error', 'Failed to logout. Please try again.', 
+            `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
     }
 };
 
@@ -2310,9 +2339,11 @@ if(mobileAuthArea) {
 }
 
         headerActions.innerHTML = `
-            <button id="header-logout" onclick="logoutUser()" class="btn-ghost hidden-mobile">Logout</button>
             ${window.APP_STATE.currentUser.role === 'admin' && window.APP_STATE.view === 'admin' ? 
-                `<button id="exit-admin-btn" onclick="exitAdmin()" class="btn-ghost hidden-mobile">Exit Admin</button>` : ''}
+                `<button id="exit-admin-btn" onclick="exitAdmin()" class="btn-ghost hidden-mobile">
+                    <i data-lucide="arrow-left" class="w-4 h-4"></i>
+                    Exit Admin
+                </button>` : ''}
         `;
         
         // Initialize mobile user menu functionality
@@ -2364,8 +2395,10 @@ window.openAuth = function(mode = 'login') {
 
 window.exitAdmin = function() {
     window.APP_STATE.view = 'shop';
-    renderMain();
+    window.APP_STATE.adminView = 'dashboard'; // Reset admin view
     hideUserMenu();
+    closeMobileMenu();
+    renderMain();
 };
 
 window.goAdmin = function() {
@@ -2484,19 +2517,34 @@ window.updatePreorderStatuses = function() {
     }
 };
 
-window.renderMain = async function() {  // ✅ Add async here
+window.renderMain = async function() {
     const main = document.getElementById('main-content');
     updateAuthArea();
 
     const viewOrdersBtn = document.getElementById('view-orders');
+    const mobileViewOrdersBtn = document.getElementById('mobile-view-orders');
+    
     if(window.APP_STATE.currentUser && window.APP_STATE.currentUser.role === 'admin') {
-        viewOrdersBtn.classList.remove('hidden');
-        viewOrdersBtn.textContent = 'Orders (All)';
-    } else if(window.APP_STATE.currentUser) {
-        viewOrdersBtn.classList.remove('hidden');
-        viewOrdersBtn.textContent = 'My Orders';
+        if(viewOrdersBtn) {
+            viewOrdersBtn.classList.remove('hidden');
+            viewOrdersBtn.textContent = 'Orders (All)';
+        }
+        if(mobileViewOrdersBtn) {
+            mobileViewOrdersBtn.classList.remove('hidden');
+            mobileViewOrdersBtn.textContent = 'Orders (All)';
+        }
+    } else if(window.APP_STATE.currentUser && window.APP_STATE.currentUser.role === 'customer') {
+        if(viewOrdersBtn) {
+            viewOrdersBtn.classList.remove('hidden');
+            viewOrdersBtn.textContent = 'My Orders';
+        }
+        if(mobileViewOrdersBtn) {
+            mobileViewOrdersBtn.classList.remove('hidden');
+            mobileViewOrdersBtn.textContent = 'My Orders';
+        }
     } else {
-        viewOrdersBtn.classList.add('hidden');
+        if(viewOrdersBtn) viewOrdersBtn.classList.add('hidden');
+        if(mobileViewOrdersBtn) mobileViewOrdersBtn.classList.add('hidden');
     }
 
     updatePreorderStatuses();
@@ -2519,7 +2567,17 @@ window.renderMain = async function() {  // ✅ Add async here
 
 window.switchTo = function(v) {
     window.APP_STATE.view = v;
+    
+    // Close all menus and drawers
     closeMobileMenu();
+    hideUserMenu();
+    toggleCartDrawer(false);
+    
+    // Reset admin view when switching away from admin
+    if(v !== 'admin') {
+        window.APP_STATE.adminView = 'dashboard';
+    }
+    
     renderMain();
 };
 
@@ -3142,6 +3200,10 @@ ${usersData ? (() => {
 // NEW FUNCTION: Switch between admin dashboard views
 window.switchAdminView = function(viewName) {
     window.APP_STATE.adminView = viewName;
+    
+    // Scroll to top
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    
     renderMain();
 };
 
