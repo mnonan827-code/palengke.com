@@ -2735,7 +2735,7 @@ ${pendingUsers.length > 0 ? `
             </button>
         </div>
     </div>
-` : ''}}
+` : ''}
 
       <div class="space-y-6">
         <div class="bg-white rounded-xl border overflow-hidden">
