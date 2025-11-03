@@ -42,7 +42,8 @@ window.APP_STATE = {
     currentUser: null,
     view: 'shop',
     deliveryFee: 25.00,
-    adminView: 'dashboard' // ✅ NEW: track which admin page we're on
+    adminView: 'dashboard', // ✅ NEW: track which admin page we're on
+    availableTimeSlots: []
 };
 
 const APP_KEY = 'palengke_cainta_v4';
@@ -73,7 +74,8 @@ const dbRefs = {
     users: ref(database, 'users'),
     carts: ref(database, 'carts'),
     notifications: ref(database, 'notifications'),
-    deleteLogs: ref(database, 'deleteLogs')
+    deleteLogs: ref(database, 'deleteLogs'),
+    deliverySlots: ref(database, 'deliverySlots')
 };
 
 // Make functions globally available
@@ -220,6 +222,12 @@ async function initializeFirebaseData() {
             window.APP_STATE.deliveryFee = deliveryFee;
         }
 
+        const today = new Date().toLocaleDateString('en-CA');
+        const todaySlots = await getFromFirebase(`deliverySlots/${today}`);
+        if (todaySlots) {
+            window.APP_STATE.availableTimeSlots = todaySlots;
+        }
+
         setupRealtimeListeners();
         
         updatePreorderStatuses();
@@ -291,6 +299,16 @@ function setupRealtimeListeners() {
             if (window.APP_STATE.view === 'orders' || (window.APP_STATE.currentUser && window.APP_STATE.currentUser.role === 'admin' && window.APP_STATE.view === 'admin')) {
                 renderMain();
             }
+        }
+    });
+
+    onValue(dbRefs.deliverySlots, (snapshot) => {
+        if (snapshot.exists()) {
+            const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD format
+            const todaySlots = snapshot.val()[today] || [];
+            window.APP_STATE.availableTimeSlots = todaySlots;
+        } else {
+            window.APP_STATE.availableTimeSlots = [];
         }
     });
 }
@@ -542,38 +560,46 @@ window.checkout = async function() {
         return showModal('Login required', 'Please log in or create an account to place your order.', `<button onclick="hideModal(); openAuth('login')" class="px-4 py-2 bg-lime-600 text-white rounded">Log in</button><button onclick="hideModal(); openAuth('signup')" class="px-4 py-2 bg-white border rounded">Sign up</button>`);
     }
 
-    // Check if user has completed profile
-    // Check if user has completed profile
-const userData = await getFromFirebase(`users/${window.APP_STATE.currentUser.uid}`);
-const profile = userData.profile || {};
+    const userData = await getFromFirebase(`users/${window.APP_STATE.currentUser.uid}`);
+    const profile = userData.profile || {};
 
-if(!profile.fullName || !profile.idUrl) {
-    return showModal('Complete Your Profile', `
-        <div class="space-y-3">
-            <p class="text-gray-700">Please complete your profile with valid ID before placing an order.</p>
-            <p class="text-sm text-gray-600">This is required for verification and delivery purposes.</p>
-        </div>
-    `, `<button onclick="hideModal(); showUserProfile();" class="px-4 py-2 bg-lime-600 text-white rounded">Complete Profile</button>
-        <button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">Cancel</button>`);
-}
+    if(!profile.fullName || !profile.idUrl) {
+        return showModal('Complete Your Profile', `
+            <div class="space-y-3">
+                <p class="text-gray-700">Please complete your profile with valid ID before placing an order.</p>
+                <p class="text-sm text-gray-600">This is required for verification and delivery purposes.</p>
+            </div>
+        `, `<button onclick="hideModal(); showUserProfile();" class="px-4 py-2 bg-lime-600 text-white rounded">Complete Profile</button>
+            <button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">Cancel</button>`);
+    }
 
-// ✅ NEW: Check if profile is verified
-if(!profile.verified) {
-    return showModal('Profile Verification Required', `
-        <div class="space-y-3">
-            <div class="text-center">
-                <i data-lucide="alert-circle" class="w-16 h-16 mx-auto text-yellow-500"></i>
+    if(!profile.verified) {
+        return showModal('Profile Verification Required', `
+            <div class="space-y-3">
+                <div class="text-center">
+                    <i data-lucide="alert-circle" class="w-16 h-16 mx-auto text-yellow-500"></i>
+                </div>
+                <p class="text-gray-700 text-center">Your profile is currently under review by our admin team.</p>
+                <p class="text-sm text-gray-600 text-center">You can place orders once your profile has been verified.</p>
+                <div class="bg-blue-50 p-3 rounded border-l-4 border-blue-500">
+                    <p class="text-sm text-blue-800"><strong>Profile Status:</strong> Pending Verification</p>
+                    <p class="text-xs text-blue-600 mt-1">Usually takes 24-48 hours</p>
+                </div>
             </div>
-            <p class="text-gray-700 text-center">Your profile is currently under review by our admin team.</p>
-            <p class="text-sm text-gray-600 text-center">You can place orders once your profile has been verified.</p>
-            <div class="bg-blue-50 p-3 rounded border-l-4 border-blue-500">
-                <p class="text-sm text-blue-800"><strong>Profile Status:</strong> Pending Verification</p>
-                <p class="text-xs text-blue-600 mt-1">Usually takes 24-48 hours</p>
+        `, `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>
+            <button onclick="hideModal(); showUserProfile();" class="px-4 py-2 bg-blue-600 text-white rounded">View Profile</button>`);
+    }
+
+    // ✅ CHECK IF TIME SLOTS ARE AVAILABLE
+    if(window.APP_STATE.availableTimeSlots.length === 0) {
+        return showModal('No Delivery Slots Available', `
+            <div class="space-y-3 text-center">
+                <i data-lucide="clock" class="w-16 h-16 mx-auto text-gray-400"></i>
+                <p class="text-gray-700">No delivery time slots are available for today.</p>
+                <p class="text-sm text-gray-600">Please check back later or contact support.</p>
             </div>
-        </div>
-    `, `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>
-        <button onclick="hideModal(); showUserProfile();" class="px-4 py-2 bg-blue-600 text-white rounded">View Profile</button>`);
-}
+        `, `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
+    }
     
     const subtotal = window.APP_STATE.cart.reduce((s,i)=> s + i.price * i.quantity, 0);
     const deliveryFee = window.APP_STATE.deliveryFee || 25.00;
@@ -581,6 +607,11 @@ if(!profile.verified) {
 
     const barangayOptions = CAINTA_BARANGAYS.map(brgy => 
         `<option value="${brgy}" ${profile.barangay === brgy ? 'selected' : ''}>${brgy}</option>`
+    ).join('');
+
+    // ✅ GENERATE TIME SLOT OPTIONS FROM AVAILABLE SLOTS
+    const timeSlotOptions = window.APP_STATE.availableTimeSlots.map(slot => 
+        `<option value="${slot}">${slot}</option>`
     ).join('');
 
     showModal('Checkout', `
@@ -625,23 +656,24 @@ if(!profile.verified) {
             <div id="address-error" class="text-xs text-red-600 mt-1 hidden font-semibold"></div>
           </div>
 
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Delivery Time Slot <span class="text-red-600">*</span></label>
+            <select id="delivery-time-slot" class="p-2 border rounded w-full" required>
+              <option value="">Select Time Slot</option>
+              ${timeSlotOptions}
+            </select>
+            <div class="text-xs bg-blue-50 text-blue-800 p-2 rounded border border-blue-200 mt-2">
+              <i data-lucide="clock" class="w-3 h-3 inline"></i> 
+              <strong>Available slots for today</strong>
+            </div>
+            <div id="timeslot-error" class="text-xs text-red-600 mt-1 hidden font-semibold"></div>
+          </div>
+
           <div class="bg-gray-50 p-3 rounded-lg space-y-1">
             <div class="flex justify-between text-sm">
               <span class="text-gray-600">Subtotal:</span>
               <span class="font-semibold">${formatPeso(subtotal)}</span>
             </div>
-            <div>
-  <label class="block text-sm font-medium text-gray-700 mb-1">Delivery Time Slot <span class="text-red-600">*</span></label>
-  <select id="delivery-time-slot" class="p-2 border rounded w-full" required>
-    <option value="">Select Time Slot</option>
-    <option value="11:00 PM">11:00 PM</option>
-    <option value="8:00 AM - 11:00 AM">8:00 AM - 11:00 AM</option>
-    <option value="12:00 NN - 3:00 PM">12:00 NN - 3:00 PM</option>
-    <option value="4:00 PM - 7:00 PM">4:00 PM - 7:00 PM</option>
-    
-  </select>
-  <div id="timeslot-error" class="text-xs text-red-600 mt-1 hidden font-semibold"></div>
-</div>
             <div class="flex justify-between text-sm">
               <span class="text-gray-600">Delivery Fee:</span>
               <span class="font-semibold">${formatPeso(deliveryFee)}</span>
@@ -659,14 +691,12 @@ if(!profile.verified) {
     setTimeout(() => {
         icons();
         
-        // Add event listeners for checkout address preview
         const checkoutAddressFields = ['customer-unit', 'customer-building', 'customer-street', 'customer-barangay'];
         checkoutAddressFields.forEach(fieldId => {
             document.getElementById(fieldId)?.addEventListener('input', updateCheckoutAddressPreview);
             document.getElementById(fieldId)?.addEventListener('change', updateCheckoutAddressPreview);
         });
 
-        // Initial preview update
         updateCheckoutAddressPreview();
     }, 100);
 };
@@ -1186,27 +1216,11 @@ window.validateTimeSlot = function(selectedSlot) {
         return { valid: false, message: 'Please select a delivery time slot' };
     }
 
-    const now = new Date();
-    const currentHour = now.getHours();
-    const currentMinute = now.getMinutes();
-
-    // Parse the selected time slot
-    let startHour;
-    if(selectedSlot === '11:00 PM') {
-        startHour = 3;
-    } else if(selectedSlot === '8:00 AM - 11:00 AM') {
-        startHour = 8;
-    } else if(selectedSlot === '12:00 NN - 3:00 PM') {
-        startHour = 12;
-    } else if(selectedSlot === '4:00 PM - 7:00 PM') {
-        startHour = 16;
-    }
-
-    // Check if selected time slot has already passed
-    if(currentHour > startHour || (currentHour === startHour && currentMinute > 0)) {
+    // Check if the selected slot is in the available slots
+    if(!window.APP_STATE.availableTimeSlots.includes(selectedSlot)) {
         return { 
             valid: false, 
-            message: 'This time slot has already passed. Please select a later time slot.' 
+            message: 'This time slot is no longer available. Please select another slot.' 
         };
     }
 
@@ -1788,6 +1802,105 @@ window.adminUpdateDeliveryFee = function() {
         </div>
     `, `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">Cancel</button>
         <button onclick="adminSaveDeliveryFee()" class="px-4 py-2 bg-lime-600 text-white rounded">Save</button>`);
+};
+
+window.adminManageTimeSlots = async function() {
+    if(!window.APP_STATE.currentUser || window.APP_STATE.currentUser.role !== 'admin') {
+        return showModal('Forbidden', 'Admin access required.', `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
+    }
+
+    const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD format
+    const todaySlots = await getFromFirebase(`deliverySlots/${today}`) || [];
+
+    // Common time slots
+    const commonSlots = [
+        '8:00 AM - 10:00 AM',
+        '12:00 NN - 2:00 PM',
+        '3:00 PM - 5:00 PM',
+        '6:00 PM - 8:00 PM'
+    ];
+
+    const slotCheckboxes = commonSlots.map(slot => {
+        const isChecked = todaySlots.includes(slot);
+        return `
+            <label class="flex items-center gap-2 p-3 border rounded-lg hover:bg-gray-50 cursor-pointer">
+                <input type="checkbox" value="${slot}" ${isChecked ? 'checked' : ''} class="time-slot-checkbox w-4 h-4 text-lime-600" />
+                <span class="flex-1">${slot}</span>
+            </label>
+        `;
+    }).join('');
+
+    showModal('Manage Delivery Time Slots', `
+        <div class="space-y-4">
+            <div class="bg-blue-50 p-3 rounded-lg border border-blue-200">
+                <div class="flex items-center gap-2 text-sm text-blue-800">
+                    <i data-lucide="info" class="w-4 h-4"></i>
+                    <span>Select available delivery time slots for <strong>today (${new Date().toLocaleDateString()})</strong></span>
+                </div>
+            </div>
+
+            <div class="space-y-2">
+                <div class="font-medium text-gray-700 mb-2">Available Time Slots:</div>
+                ${slotCheckboxes}
+            </div>
+
+            <div class="space-y-2">
+                <div class="font-medium text-gray-700">Add Custom Time Slot:</div>
+                <div class="flex gap-2">
+                    <input id="custom-slot-input" type="text" placeholder="e.g., 9:00 AM - 12:00 PM" class="flex-1 p-2 border rounded" />
+                    <button onclick="addCustomSlot()" class="px-4 py-2 bg-lime-600 text-white rounded hover:bg-lime-700">Add</button>
+                </div>
+                <div id="custom-slots-container" class="space-y-2 mt-2"></div>
+            </div>
+        </div>
+    `, `
+        <button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">Cancel</button>
+        <button onclick="saveTimeSlots()" class="px-4 py-2 bg-lime-600 text-white rounded">Save Time Slots</button>
+    `);
+
+    setTimeout(() => icons(), 100);
+};
+
+window.addCustomSlot = function() {
+    const input = document.getElementById('custom-slot-input');
+    const customSlot = input.value.trim();
+    
+    if(!customSlot) {
+        return;
+    }
+
+    const container = document.getElementById('custom-slots-container');
+    const slotId = 'custom-' + Date.now();
+    
+    const slotDiv = document.createElement('div');
+    slotDiv.id = slotId;
+    slotDiv.className = 'flex items-center gap-2 p-2 border rounded-lg bg-lime-50';
+    slotDiv.innerHTML = `
+        <input type="checkbox" value="${customSlot}" checked class="time-slot-checkbox w-4 h-4 text-lime-600" />
+        <span class="flex-1">${customSlot}</span>
+        <button onclick="document.getElementById('${slotId}').remove()" class="text-red-600 hover:text-red-800">
+            <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+    `;
+    
+    container.appendChild(slotDiv);
+    input.value = '';
+    icons();
+};
+
+window.saveTimeSlots = async function() {
+    const checkboxes = document.querySelectorAll('.time-slot-checkbox:checked');
+    const selectedSlots = Array.from(checkboxes).map(cb => cb.value);
+
+    if(selectedSlots.length === 0) {
+        return showModal('No Slots Selected', 'Please select at least one time slot.', `<button onclick="hideModal(); adminManageTimeSlots();" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
+    }
+
+    const today = new Date().toLocaleDateString('en-CA');
+    await saveToFirebase(`deliverySlots/${today}`, selectedSlots);
+
+    hideModal();
+    showModal('Time Slots Updated', `Successfully set ${selectedSlots.length} delivery time slot(s) for today.`, `<button onclick="hideModal(); renderMain();" class="px-4 py-2 bg-lime-600 text-white rounded">OK</button>`);
 };
 
 window.adminSaveDeliveryFee = async function() {
@@ -2756,11 +2869,13 @@ window.renderAdminDashboard = async function() {
     <button onclick="switchAdminView('verification')" class="px-3 py-2 bg-purple-600 text-white rounded text-sm sm:text-base hover:bg-purple-700">
       👤 User Verification
     </button>
+    <button onclick="adminManageTimeSlots()" class="px-3 py-2 bg-orange-600 text-white rounded text-sm sm:text-base hover:bg-orange-700">
+      🕒 Manage Time Slots
+    </button>
     <button onclick="adminAddProduct()" class="px-3 py-2 bg-lime-600 text-white rounded text-sm sm:text-base hover:bg-lime-700">Add Product</button>
     <button onclick="adminUpdateDeliveryFee()" class="px-3 py-2 bg-blue-600 text-white rounded text-sm sm:text-base hover:bg-blue-700">Set Delivery Fee</button>
     <button onclick="viewDeleteLogs()" class="px-3 py-2 bg-white border text-gray-700 rounded text-sm sm:text-base hover:bg-gray-50">View Deletion Logs</button>
   </div>
-</div>
 
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-6">
         <div class="bg-white rounded-xl p-4 shadow-sm border">
