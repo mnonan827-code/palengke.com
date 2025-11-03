@@ -2761,64 +2761,62 @@ window.renderAdminDashboard = async function() {
     const regular = window.APP_STATE.products.filter(p => !p.preorder);
     const preorderList = window.APP_STATE.products.filter(p => p.preorder);
 
-    // 🆕 GET PENDING VERIFICATIONS
-    // ✅ GET PENDING VERIFICATIONS (excluding denied)
     const usersData = await getFromFirebase('users');
     const pendingUsers = usersData ? Object.values(usersData).filter(u => 
-    u.profile && u.profile.fullName && !u.profile.verified && !u.profile.denied
+        u.profile && u.profile.fullName && !u.profile.verified && !u.profile.denied
     ) : [];
 
     const regularRows = regular.map(p => `
-    <tr class="hover:bg-gray-50 border-b">
-        <td class="px-3 py-2 text-sm">${p.name}</td>
-        <td class="px-3 py-2 text-sm hidden sm:table-cell">${p.origin}</td>
-        <td class="px-3 py-2 text-sm hidden md:table-cell">${p.farmer.name}</td>
-        <td class="px-3 py-2 text-sm font-semibold">${formatPeso(p.price)}</td>
-        <td class="px-3 py-2 text-sm">${p.quantity} ${p.unit}</td>
-        <td class="px-3 py-2 text-sm hidden lg:table-cell">
-            ${p.freshness ? `<span class="freshness-badge freshness-${p.freshnessIndicator || 'fresh'}">${getFreshnessEmoji(p.freshnessIndicator)} ${p.freshness}%</span>` : '<span class="text-gray-400">N/A</span>'}
-        </td>
-        <td class="px-3 py-2 text-sm text-right">
-            <div class="flex flex-col sm:flex-row gap-1 justify-end">
-                <button onclick="adminEditProduct(${p.id})" class="px-2 py-1 text-xs bg-white border rounded hover:bg-gray-50">Edit</button>
-                <button onclick="adminDeleteProduct(${p.id})" class="px-2 py-1 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100">Delete</button>
-            </div>
-        </td>
-    </tr>
-`).join('');
+        <tr class="hover:bg-gray-50 border-b">
+            <td class="px-3 py-3 text-sm">${p.name}</td>
+            <td class="px-3 py-3 text-sm hidden sm:table-cell">${p.origin}</td>
+            <td class="px-3 py-3 text-sm hidden md:table-cell">${p.farmer.name}</td>
+            <td class="px-3 py-3 text-sm font-semibold">${formatPeso(p.price)}</td>
+            <td class="px-3 py-3 text-sm">${p.quantity} ${p.unit}</td>
+            <td class="px-3 py-3 text-sm hidden lg:table-cell">
+                ${p.freshness ? `<span class="freshness-badge freshness-${p.freshnessIndicator || 'fresh'}">${getFreshnessEmoji(p.freshnessIndicator)} ${p.freshness}%</span>` : '<span class="text-gray-400">N/A</span>'}
+            </td>
+            <td class="px-3 py-3 text-sm">
+                <div class="flex flex-wrap gap-1 justify-end">
+                    <button onclick="adminEditProduct(${p.id})" class="px-3 py-1.5 text-xs bg-white border rounded hover:bg-gray-50 whitespace-nowrap">Edit</button>
+                    <button onclick="adminDeleteProduct(${p.id})" class="px-3 py-1.5 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100 whitespace-nowrap">Delete</button>
+                </div>
+            </td>
+        </tr>
+    `).join('');
 
     const preorderRows = preorderList.map(p => {
-    const rem = computeRemainingDays(p);
-    return `
-    <tr class="hover:bg-gray-50 border-b">
-        <td class="px-3 py-2 text-sm">${p.name}</td>
-        <td class="px-3 py-2 text-sm hidden sm:table-cell">${p.origin}</td>
-        <td class="px-3 py-2 text-sm hidden md:table-cell">${p.farmer.name}</td>
-        <td class="px-3 py-2 text-sm font-semibold">${formatPeso(p.price)}</td>
-        <td class="px-3 py-2 text-sm">${p.quantity} ${p.unit}</td>
-        <td class="px-3 py-2 text-sm hidden lg:table-cell">
-            ${p.freshness ? `<span class="freshness-badge freshness-${p.freshnessIndicator || 'fresh'}">${getFreshnessEmoji(p.freshnessIndicator)} ${p.freshness}%</span>` : '<span class="text-gray-400">N/A</span>'}
-        </td>
-        <td class="px-3 py-2 text-sm ${rem <= 3 ? 'text-red-600 font-semibold' : 'text-yellow-600'}">${rem>0? rem + ' days' : 'Ending'}</td>
-        <td class="px-3 py-2 text-sm text-right">
-            <div class="flex flex-col sm:flex-row gap-1 justify-end">
-                <button onclick="adminEditProduct(${p.id})" class="px-2 py-1 text-xs bg-white border rounded hover:bg-gray-50">Edit</button>
-                <button onclick="adminDeleteProduct(${p.id})" class="px-2 py-1 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100">Delete</button>
-            </div>
-        </td>
-    </tr>
-`;
-}).join('');
+        const rem = computeRemainingDays(p);
+        return `
+        <tr class="hover:bg-gray-50 border-b">
+            <td class="px-3 py-3 text-sm">${p.name}</td>
+            <td class="px-3 py-3 text-sm hidden sm:table-cell">${p.origin}</td>
+            <td class="px-3 py-3 text-sm hidden md:table-cell">${p.farmer.name}</td>
+            <td class="px-3 py-3 text-sm font-semibold">${formatPeso(p.price)}</td>
+            <td class="px-3 py-3 text-sm">${p.quantity} ${p.unit}</td>
+            <td class="px-3 py-3 text-sm hidden lg:table-cell">
+                ${p.freshness ? `<span class="freshness-badge freshness-${p.freshnessIndicator || 'fresh'}">${getFreshnessEmoji(p.freshnessIndicator)} ${p.freshness}%</span>` : '<span class="text-gray-400">N/A</span>'}
+            </td>
+            <td class="px-3 py-3 text-sm ${rem <= 3 ? 'text-red-600 font-semibold' : 'text-yellow-600'}">${rem>0? rem + ' days' : 'Ending'}</td>
+            <td class="px-3 py-3 text-sm">
+                <div class="flex flex-wrap gap-1 justify-end">
+                    <button onclick="adminEditProduct(${p.id})" class="px-3 py-1.5 text-xs bg-white border rounded hover:bg-gray-50 whitespace-nowrap">Edit</button>
+                    <button onclick="adminDeleteProduct(${p.id})" class="px-3 py-1.5 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100 whitespace-nowrap">Delete</button>
+                </div>
+            </td>
+        </tr>
+        `;
+    }).join('');
 
     const regularOrders = window.APP_STATE.orders.filter(o => !o.type || o.type !== 'pre-order');
     const preorderOrders = window.APP_STATE.orders.filter(o => o.type === 'pre-order');
 
     const regularOrderRows = regularOrders.map(o => `
         <tr class="hover:bg-gray-50 border-b">
-            <td class="px-3 py-2 text-sm font-mono">${o.id}</td>
-            <td class="px-3 py-2 text-sm">${o.customer}</td>
-            <td class="px-3 py-2 text-sm font-semibold">${formatPeso(o.total)}</td>
-            <td class="px-3 py-2 text-sm">
+            <td class="px-3 py-3 text-sm font-mono">${o.id}</td>
+            <td class="px-3 py-3 text-sm">${o.customer}</td>
+            <td class="px-3 py-3 text-sm font-semibold">${formatPeso(o.total)}</td>
+            <td class="px-3 py-3 text-sm">
                 <span class="inline-flex items-center px-2 py-1 rounded-full text-xs ${
                     o.status === 'Delivered' ? 'bg-green-100 text-green-800' :
                     o.status === 'Out for Delivery' ? 'bg-blue-100 text-blue-800' :
@@ -2826,12 +2824,12 @@ window.renderAdminDashboard = async function() {
                     'bg-gray-100 text-gray-800'
                 }">${o.status}</span>
             </td>
-            <td class="px-3 py-2 text-sm hidden lg:table-cell">${o.date}</td>
-            <td class="px-3 py-2 text-sm text-right">
-                <div class="flex flex-col sm:flex-row gap-1 justify-end">
-                    <button onclick="adminViewOrder('${o.id}')" class="px-2 py-1 text-xs bg-white border rounded hover:bg-gray-50">View</button>
-                    <button onclick="adminEditOrder('${o.id}')" class="px-2 py-1 text-xs bg-lime-600 text-white rounded hover:bg-lime-700">Update</button>
-                    <button onclick="adminDeleteOrder('${o.id}')" class="px-2 py-1 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100">Delete</button>
+            <td class="px-3 py-3 text-sm hidden lg:table-cell">${o.date}</td>
+            <td class="px-3 py-3 text-sm">
+                <div class="flex flex-wrap gap-1 justify-end">
+                    <button onclick="adminViewOrder('${o.id}')" class="px-3 py-1.5 text-xs bg-white border rounded hover:bg-gray-50 whitespace-nowrap">View</button>
+                    <button onclick="adminEditOrder('${o.id}')" class="px-3 py-1.5 text-xs bg-lime-600 text-white rounded hover:bg-lime-700 whitespace-nowrap">Update</button>
+                    <button onclick="adminDeleteOrder('${o.id}')" class="px-3 py-1.5 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100 whitespace-nowrap">Delete</button>
                 </div>
             </td>
         </tr>
@@ -2839,10 +2837,10 @@ window.renderAdminDashboard = async function() {
 
     const preorderOrderRows = preorderOrders.map(o => `
         <tr class="hover:bg-gray-50 border-b">
-            <td class="px-3 py-2 text-sm font-mono">${o.id}</td>
-            <td class="px-3 py-2 text-sm">${o.customer}</td>
-            <td class="px-3 py-2 text-sm font-semibold">${formatPeso(o.total)}</td>
-            <td class="px-3 py-2 text-sm">
+            <td class="px-3 py-3 text-sm font-mono">${o.id}</td>
+            <td class="px-3 py-3 text-sm">${o.customer}</td>
+            <td class="px-3 py-3 text-sm font-semibold">${formatPeso(o.total)}</td>
+            <td class="px-3 py-3 text-sm">
                 <span class="inline-flex items-center px-2 py-1 rounded-full text-xs ${
                     o.status === 'Delivered' ? 'bg-green-100 text-green-800' :
                     o.status === 'Out for Delivery' ? 'bg-blue-100 text-blue-800' :
@@ -2850,162 +2848,191 @@ window.renderAdminDashboard = async function() {
                     'bg-orange-100 text-orange-800'
                 }">${o.status}</span>
             </td>
-            <td class="px-3 py-2 text-sm hidden lg:table-cell">${o.date}</td>
-            <td class="px-3 py-2 text-sm text-right">
-                <div class="flex flex-col sm:flex-row gap-1 justify-end">
-                    <button onclick="adminViewOrder('${o.id}')" class="px-2 py-1 text-xs bg-white border rounded hover:bg-gray-50">View</button>
-                    <button onclick="adminEditOrder('${o.id}')" class="px-2 py-1 text-xs bg-lime-600 text-white rounded hover:bg-lime-700">Update</button>
-                    <button onclick="adminDeleteOrder('${o.id}')" class="px-2 py-1 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100">Delete</button>
+            <td class="px-3 py-3 text-sm hidden lg:table-cell">${o.date}</td>
+            <td class="px-3 py-3 text-sm">
+                <div class="flex flex-wrap gap-1 justify-end">
+                    <button onclick="adminViewOrder('${o.id}')" class="px-3 py-1.5 text-xs bg-white border rounded hover:bg-gray-50 whitespace-nowrap">View</button>
+                    <button onclick="adminEditOrder('${o.id}')" class="px-3 py-1.5 text-xs bg-lime-600 text-white rounded hover:bg-lime-700 whitespace-nowrap">Update</button>
+                    <button onclick="adminDeleteOrder('${o.id}')" class="px-3 py-1.5 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100 whitespace-nowrap">Delete</button>
                 </div>
             </td>
         </tr>
     `).join('');
 
     return `
-    <section class="px-2 sm:px-4">
-      <div class="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-3">
-  <h2 class="text-xl sm:text-2xl font-bold text-gray-800">Admin Dashboard</h2>
-  <div class="flex flex-col sm:flex-row gap-2">
-    <button onclick="switchAdminView('verification')" class="px-3 py-2 bg-purple-600 text-white rounded text-sm sm:text-base hover:bg-purple-700">
-      👤 User Verification
-    </button>
-    <button onclick="adminManageTimeSlots()" class="px-3 py-2 bg-orange-600 text-white rounded text-sm sm:text-base hover:bg-orange-700">
-      🕒 Manage Time Slots
-    </button>
-    <button onclick="adminAddProduct()" class="px-3 py-2 bg-lime-600 text-white rounded text-sm sm:text-base hover:bg-lime-700">Add Product</button>
-    <button onclick="adminUpdateDeliveryFee()" class="px-3 py-2 bg-blue-600 text-white rounded text-sm sm:text-base hover:bg-blue-700">Set Delivery Fee</button>
-    <button onclick="viewDeleteLogs()" class="px-3 py-2 bg-white border text-gray-700 rounded text-sm sm:text-base hover:bg-gray-50">View Deletion Logs</button>
-  </div>
+    <section class="admin-dashboard-container">
+        <div class="admin-header-actions">
+            <h2 class="text-2xl font-bold text-gray-800">Admin Dashboard</h2>
+            <div class="admin-button-grid">
+                <button onclick="switchAdminView('verification')" class="admin-btn admin-btn-purple">
+                    <i data-lucide="user-check" class="w-4 h-4"></i>
+                    <span>User Verification</span>
+                    ${pendingUsers.length > 0 ? `<span class="admin-badge">${pendingUsers.length}</span>` : ''}
+                </button>
+                <button onclick="adminManageTimeSlots()" class="admin-btn admin-btn-orange">
+                    <i data-lucide="clock" class="w-4 h-4"></i>
+                    <span>Time Slots</span>
+                </button>
+                <button onclick="adminAddProduct()" class="admin-btn admin-btn-lime">
+                    <i data-lucide="plus" class="w-4 h-4"></i>
+                    <span>Add Product</span>
+                </button>
+                <button onclick="adminUpdateDeliveryFee()" class="admin-btn admin-btn-blue">
+                    <i data-lucide="truck" class="w-4 h-4"></i>
+                    <span>Delivery Fee</span>
+                </button>
+                <button onclick="viewDeleteLogs()" class="admin-btn admin-btn-gray">
+                    <i data-lucide="file-text" class="w-4 h-4"></i>
+                    <span>Delete Logs</span>
+                </button>
+            </div>
+        </div>
 
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-6">
-        <div class="bg-white rounded-xl p-4 shadow-sm border">
-          <div class="text-sm text-gray-500">Total Sales (Delivered)</div>
-          <div class="text-lg sm:text-xl font-bold text-lime-700 mt-1">${formatPeso(totalSales)}</div>
-        </div>
-        <div class="bg-white rounded-xl p-4 shadow-sm border">
-          <div class="text-sm text-gray-500">Total Orders</div>
-          <div class="text-lg sm:text-xl font-bold mt-1">${window.APP_STATE.orders.length}</div>
-        </div>
-        <div class="bg-white rounded-xl p-4 shadow-sm border">
-          <div class="text-sm text-gray-500">Pending Orders</div>
-          <div class="text-lg sm:text-xl font-bold mt-1">${pending}</div>
-        </div>
-      </div>
-
-      <!-- 🆕 PENDING VERIFICATIONS SECTION -->
-      <!-- 🆕 PENDING VERIFICATIONS ALERT -->
-${pendingUsers.length > 0 ? `
-    <div class="bg-yellow-50 border-l-4 border-yellow-500 p-4 mb-6 rounded-r-lg">
-        <div class="flex items-center justify-between">
-            <div class="flex items-center gap-3">
-                <i data-lucide="alert-circle" class="w-6 h-6 text-yellow-600"></i>
-                <div>
-                    <h3 class="font-semibold text-yellow-800">Pending Profile Verifications</h3>
-                    <p class="text-sm text-yellow-700">${pendingUsers.length} user${pendingUsers.length > 1 ? 's' : ''} waiting for verification</p>
+        <!-- Stats Cards -->
+        <div class="admin-stats-grid">
+            <div class="admin-stat-card">
+                <div class="admin-stat-icon bg-lime-100">
+                    <i data-lucide="dollar-sign" class="w-6 h-6 text-lime-600"></i>
+                </div>
+                <div class="admin-stat-content">
+                    <div class="admin-stat-label">Total Sales</div>
+                    <div class="admin-stat-value text-lime-700">${formatPeso(totalSales)}</div>
                 </div>
             </div>
-            <button onclick="switchAdminView('verification')" class="px-4 py-2 bg-yellow-600 text-white rounded hover:bg-yellow-700 text-sm font-semibold">
-                View All →
-            </button>
-        </div>
-    </div>
-` : ''}}
-
-      <div class="space-y-6">
-        <div class="bg-white rounded-xl border overflow-hidden">
-          <div class="p-4 border-b">
-            <h3 class="font-semibold text-lg">Products — Regular</h3>
-          </div>
-          <div class="overflow-x-auto">
-            <table class="w-full text-sm">
-              <thead class="bg-gray-50 text-gray-700">
-                <tr>
-                    <th class="px-3 py-3 text-left font-medium">Name</th>
-                    <th class="px-3 py-3 text-left font-medium hidden sm:table-cell">Origin</th>
-                    <th class="px-3 py-3 text-left font-medium hidden md:table-cell">Farmer</th>
-                    <th class="px-3 py-3 text-left font-medium">Price</th>
-                    <th class="px-3 py-3 text-left font-medium">Stock</th>
-                    <th class="px-3 py-3 text-left font-medium hidden lg:table-cell">Freshness</th>
-                    <th class="px-3 py-3 text-right font-medium">Actions</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-gray-200">
-                ${regularRows || '<tr><td class="px-3 py-8 text-center text-gray-500 text-sm" colspan="7">No regular products available</td></tr>'}
-              </tbody>
-            </table>
-          </div>
+            <div class="admin-stat-card">
+                <div class="admin-stat-icon bg-blue-100">
+                    <i data-lucide="shopping-bag" class="w-6 h-6 text-blue-600"></i>
+                </div>
+                <div class="admin-stat-content">
+                    <div class="admin-stat-label">Total Orders</div>
+                    <div class="admin-stat-value text-blue-700">${window.APP_STATE.orders.length}</div>
+                </div>
+            </div>
+            <div class="admin-stat-card">
+                <div class="admin-stat-icon bg-yellow-100">
+                    <i data-lucide="clock" class="w-6 h-6 text-yellow-600"></i>
+                </div>
+                <div class="admin-stat-content">
+                    <div class="admin-stat-label">Pending Orders</div>
+                    <div class="admin-stat-value text-yellow-700">${pending}</div>
+                </div>
+            </div>
         </div>
 
-        <div class="bg-white rounded-xl border overflow-hidden">
-          <div class="p-4 border-b">
-            <h3 class="font-semibold text-lg">Products — Pre-Order</h3>
-          </div>
-          <div class="overflow-x-auto">
-            <table class="w-full text-sm">
-              <thead class="bg-gray-50 text-gray-700">
-                <tr>
-                  <th class="px-3 py-3 text-left font-medium">Name</th>
-                  <th class="px-3 py-3 text-left font-medium hidden sm:table-cell">Origin</th>
-                  <th class="px-3 py-3 text-left font-medium hidden md:table-cell">Farmer</th>
-                  <th class="px-3 py-3 text-left font-medium">Price</th>
-                  <th class="px-3 py-3 text-left font-medium">Stock</th>
-                  <th class="px-3 py-3 text-left font-medium hidden lg:table-cell">Freshness</th>
-                  <th class="px-3 py-3 text-left font-medium">Remaining</th>
-                  <th class="px-3 py-3 text-right font-medium">Actions</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-gray-200">
-                ${preorderRows || '<tr><td class="px-3 py-8 text-center text-gray-500 text-sm" colspan="8">No pre-order products available</td></tr>'}              </tbody>
-            </table>
-          </div>
+        <!-- Pending Verifications Alert -->
+        ${pendingUsers.length > 0 ? `
+            <div class="admin-alert admin-alert-warning">
+                <div class="admin-alert-content">
+                    <i data-lucide="alert-circle" class="w-6 h-6"></i>
+                    <div class="admin-alert-text">
+                        <h3 class="font-semibold">Pending Profile Verifications</h3>
+                        <p class="text-sm">${pendingUsers.length} user${pendingUsers.length > 1 ? 's' : ''} waiting for verification</p>
+                    </div>
+                </div>
+                <button onclick="switchAdminView('verification')" class="admin-alert-btn">
+                    View All →
+                </button>
+            </div>
+        ` : ''}
+
+        <!-- Products - Regular -->
+        <div class="admin-table-section">
+            <div class="admin-table-header">
+                <h3 class="admin-table-title">Products — Regular</h3>
+            </div>
+            <div class="admin-table-wrapper">
+                <table class="admin-table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th class="hidden sm:table-cell">Origin</th>
+                            <th class="hidden md:table-cell">Farmer</th>
+                            <th>Price</th>
+                            <th>Stock</th>
+                            <th class="hidden lg:table-cell">Freshness</th>
+                            <th class="text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${regularRows || '<tr><td colspan="7" class="text-center py-8 text-gray-500">No regular products available</td></tr>'}
+                    </tbody>
+                </table>
+            </div>
         </div>
 
-        <div class="bg-white rounded-xl border overflow-hidden">
-          <div class="p-4 border-b">
-            <h3 class="font-semibold text-lg">Orders — Regular</h3>
-          </div>
-          <div class="overflow-x-auto">
-            <table class="w-full text-sm">
-              <thead class="bg-gray-50 text-gray-700">
-                <tr>
-                  <th class="px-3 py-3 text-left font-medium">Order ID</th>
-                  <th class="px-3 py-3 text-left font-medium">Customer</th>
-                  <th class="px-3 py-3 text-left font-medium">Total</th>
-                  <th class="px-3 py-3 text-left font-medium">Status</th>
-                  <th class="px-3 py-3 text-left font-medium hidden lg:table-cell">Date</th>
-                  <th class="px-3 py-3 text-right font-medium">Actions</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-gray-200">
-                ${regularOrderRows || '<tr><td class="px-3 py-8 text-center text-gray-500 text-sm" colspan="6">No regular orders</td></tr>'}
-              </tbody>
-            </table>
-          </div>
+        <!-- Products - Pre-Order -->
+        <div class="admin-table-section">
+            <div class="admin-table-header">
+                <h3 class="admin-table-title">Products — Pre-Order</h3>
+            </div>
+            <div class="admin-table-wrapper">
+                <table class="admin-table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th class="hidden sm:table-cell">Origin</th>
+                            <th class="hidden md:table-cell">Farmer</th>
+                            <th>Price</th>
+                            <th>Stock</th>
+                            <th class="hidden lg:table-cell">Freshness</th>
+                            <th>Remaining</th>
+                            <th class="text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${preorderRows || '<tr><td colspan="8" class="text-center py-8 text-gray-500">No pre-order products available</td></tr>'}
+                    </tbody>
+                </table>
+            </div>
         </div>
 
-        <div class="bg-white rounded-xl border overflow-hidden">
-          <div class="p-4 border-b">
-            <h3 class="font-semibold text-lg">Orders — Pre-Order</h3>
-          </div>
-          <div class="overflow-x-auto">
-            <table class="w-full text-sm">
-              <thead class="bg-gray-50 text-gray-700">
-                <tr>
-                  <th class="px-3 py-3 text-left font-medium">Order ID</th>
-                  <th class="px-3 py-3 text-left font-medium">Customer</th>
-                  <th class="px-3 py-3 text-left font-medium">Total</th>
-                  <th class="px-3 py-3 text-left font-medium">Status</th>
-                  <th class="px-3 py-3 text-left font-medium hidden lg:table-cell">Date</th>
-                  <th class="px-3 py-3 text-right font-medium">Actions</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-gray-200">
-                ${preorderOrderRows || '<tr><td class="px-3 py-8 text-center text-gray-500 text-sm" colspan="6">No pre-order orders</td></tr>'}
-              </tbody>
-            </table>
-          </div>
+        <!-- Orders - Regular -->
+        <div class="admin-table-section">
+            <div class="admin-table-header">
+                <h3 class="admin-table-title">Orders — Regular</h3>
+            </div>
+            <div class="admin-table-wrapper">
+                <table class="admin-table">
+                    <thead>
+                        <tr>
+                            <th>Order ID</th>
+                            <th>Customer</th>
+                            <th>Total</th>
+                            <th>Status</th>
+                            <th class="hidden lg:table-cell">Date</th>
+                            <th class="text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${regularOrderRows || '<tr><td colspan="6" class="text-center py-8 text-gray-500">No regular orders</td></tr>'}
+                    </tbody>
+                </table>
+            </div>
         </div>
-      </div>
+
+        <!-- Orders - Pre-Order -->
+        <div class="admin-table-section">
+            <div class="admin-table-header">
+                <h3 class="admin-table-title">Orders — Pre-Order</h3>
+            </div>
+            <div class="admin-table-wrapper">
+                <table class="admin-table">
+                    <thead>
+                        <tr>
+                            <th>Order ID</th>
+                            <th>Customer</th>
+                            <th>Total</th>
+                            <th>Status</th>
+                            <th class="hidden lg:table-cell">Date</th>
+                            <th class="text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${preorderOrderRows || '<tr><td colspan="6" class="text-center py-8 text-gray-500">No pre-order orders</td></tr>'}
+                    </tbody>
+                </table>
+            </div>
+        </div>
     </section>
     `;
 };
@@ -3061,12 +3088,12 @@ window.renderUserVerificationPage = async function() {
 
     return `
         <section class="px-2 sm:px-4">
-            <div class="flex items-center justify-between mb-4">
-                <h2 class="text-xl sm:text-2xl font-bold text-gray-800">User Verification</h2>
-                <button onclick="switchAdminView('dashboard')" class="px-3 py-2 bg-gray-100 text-gray-700 rounded text-sm hover:bg-gray-200">
-                    ← Back to Dashboard
-                </button>
-            </div>
+            <div class="flex items-center justify-between mb-4 gap-3 flex-wrap">
+    <h2 class="text-xl sm:text-2xl font-bold text-gray-800">User Verification</h2>
+    <button onclick="switchAdminView('dashboard')" class="admin-btn admin-btn-gray">
+        ← Back to Dashboard
+    </button>
+</div>
 
             <!-- Stats Cards -->
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
