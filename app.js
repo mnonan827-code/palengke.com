@@ -41,7 +41,8 @@ window.APP_STATE = {
     cart: [],
     currentUser: null,
     view: 'shop',
-    deliveryFee: 25.00
+    deliveryFee: 25.00,
+    adminView: 'dashboard' // ✅ NEW: track which admin page we're on
 };
 
 const APP_KEY = 'palengke_cainta_v4';
@@ -2056,6 +2057,7 @@ window.exitAdmin = function() {
 
 window.goAdmin = function() {
     window.APP_STATE.view = 'admin';
+    window.APP_STATE.adminView = 'dashboard'; // ✅ Reset to dashboard
     renderMain();
     hideUserMenu();
 };
@@ -2187,11 +2189,16 @@ window.renderMain = async function() {  // ✅ Add async here
     updatePreorderStatuses();
 
     if(window.APP_STATE.currentUser && window.APP_STATE.currentUser.role === 'admin' && window.APP_STATE.view === 'admin') {
-        main.innerHTML = await renderAdminDashboard(); // ✅ Now properly awaited
+    // ✅ Check which admin view to render
+    if(window.APP_STATE.adminView === 'verification') {
+        main.innerHTML = await renderUserVerificationPage();
     } else {
-        if(window.APP_STATE.view === 'shop') main.innerHTML = renderShop();
-        else main.innerHTML = renderOrdersPublic();
+        main.innerHTML = await renderAdminDashboard();
     }
+} else {
+    if(window.APP_STATE.view === 'shop') main.innerHTML = renderShop();
+    else main.innerHTML = renderOrdersPublic();
+}
     icons();
     updateCartBadge();
     renderCartDrawer();
@@ -2544,6 +2551,9 @@ window.renderAdminDashboard = async function() {
       <div class="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-3">
   <h2 class="text-xl sm:text-2xl font-bold text-gray-800">Admin Dashboard</h2>
   <div class="flex flex-col sm:flex-row gap-2">
+    <button onclick="switchAdminView('verification')" class="px-3 py-2 bg-purple-600 text-white rounded text-sm sm:text-base hover:bg-purple-700">
+      👤 User Verification
+    </button>
     <button onclick="adminAddProduct()" class="px-3 py-2 bg-lime-600 text-white rounded text-sm sm:text-base hover:bg-lime-700">Add Product</button>
     <button onclick="adminUpdateDeliveryFee()" class="px-3 py-2 bg-blue-600 text-white rounded text-sm sm:text-base hover:bg-blue-700">Set Delivery Fee</button>
     <button onclick="viewDeleteLogs()" class="px-3 py-2 bg-white border text-gray-700 rounded text-sm sm:text-base hover:bg-gray-50">View Deletion Logs</button>
@@ -2566,46 +2576,23 @@ window.renderAdminDashboard = async function() {
       </div>
 
       <!-- 🆕 PENDING VERIFICATIONS SECTION -->
-      ${pendingUsers.length > 0 ? `
-        <div class="bg-white rounded-xl border overflow-hidden mb-6">
-            <div class="p-4 border-b bg-yellow-50">
-                <h3 class="font-semibold text-lg flex items-center gap-2">
-                    <i data-lucide="alert-circle" class="w-5 h-5 text-yellow-600"></i>
-                    Pending Profile Verifications
-                    <span class="ml-2 px-2 py-0.5 bg-yellow-500 text-white text-xs rounded-full">${pendingUsers.length}</span>
-                </h3>
+      <!-- 🆕 PENDING VERIFICATIONS ALERT -->
+${pendingUsers.length > 0 ? `
+    <div class="bg-yellow-50 border-l-4 border-yellow-500 p-4 mb-6 rounded-r-lg">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <i data-lucide="alert-circle" class="w-6 h-6 text-yellow-600"></i>
+                <div>
+                    <h3 class="font-semibold text-yellow-800">Pending Profile Verifications</h3>
+                    <p class="text-sm text-yellow-700">${pendingUsers.length} user${pendingUsers.length > 1 ? 's' : ''} waiting for verification</p>
+                </div>
             </div>
-            <div class="overflow-x-auto">
-                <table class="w-full text-sm">
-                    <thead class="bg-gray-50 text-gray-700">
-                        <tr>
-                            <th class="px-3 py-3 text-left font-medium">Customer Name</th>
-                            <th class="px-3 py-3 text-left font-medium hidden sm:table-cell">Email</th>
-                            <th class="px-3 py-3 text-left font-medium hidden md:table-cell">ID Type</th>
-                            <th class="px-3 py-3 text-left font-medium hidden lg:table-cell">Submitted</th>
-                            <th class="px-3 py-3 text-right font-medium">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-gray-200">
-                        ${pendingUsers.map(user => `
-                            <tr class="hover:bg-gray-50">
-                                <td class="px-3 py-2 text-sm font-medium">${user.profile.fullName}</td>
-                                <td class="px-3 py-2 text-sm hidden sm:table-cell">${user.email}</td>
-                                <td class="px-3 py-2 text-sm hidden md:table-cell">${user.profile.idType || 'N/A'}</td>
-                                <td class="px-3 py-2 text-sm hidden lg:table-cell">${user.profile.submittedAt ? new Date(user.profile.submittedAt).toLocaleDateString() : 'N/A'}</td>
-                                <td class="px-3 py-2 text-sm text-right">
-                                    <div class="flex flex-col sm:flex-row gap-1 justify-end">
-                                        <button onclick="viewUserProfile('${user.uid}')" class="px-2 py-1 text-xs bg-white border rounded hover:bg-gray-50">View Profile</button>
-                                        <button onclick="verifyCustomerProfile('${user.uid}')" class="px-2 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700">Verify</button>
-                                    </div>
-                                </td>
-                            </tr>
-                        `).join('')}
-                    </tbody>
-                </table>
-            </div>
+            <button onclick="switchAdminView('verification')" class="px-4 py-2 bg-yellow-600 text-white rounded hover:bg-yellow-700 text-sm font-semibold">
+                View All →
+            </button>
         </div>
-      ` : ''}
+    </div>
+` : ''}}
 
       <div class="space-y-6">
         <div class="bg-white rounded-xl border overflow-hidden">
@@ -2704,6 +2691,146 @@ window.renderAdminDashboard = async function() {
       </div>
     </section>
     `;
+};
+
+// NEW FUNCTION: Render User Verification Page
+window.renderUserVerificationPage = async function() {
+    if(!window.APP_STATE.currentUser || window.APP_STATE.currentUser.role !== 'admin') {
+        return `<div class="bg-white rounded-xl p-6 border">Admin access required.</div>`;
+    }
+
+    // Get all users with pending verification
+    const usersData = await getFromFirebase('users');
+    const pendingUsers = usersData ? Object.values(usersData).filter(u => 
+        u.profile && u.profile.fullName && !u.profile.verified
+    ) : [];
+
+    // Get verified users
+    const verifiedUsers = usersData ? Object.values(usersData).filter(u => 
+        u.profile && u.profile.verified
+    ) : [];
+
+    const pendingRows = pendingUsers.map(user => `
+        <tr class="hover:bg-gray-50 border-b">
+            <td class="px-3 py-2 text-sm font-medium">${user.profile.fullName}</td>
+            <td class="px-3 py-2 text-sm hidden sm:table-cell">${user.email}</td>
+            <td class="px-3 py-2 text-sm hidden md:table-cell">${user.profile.idType || 'N/A'}</td>
+            <td class="px-3 py-2 text-sm hidden lg:table-cell">${user.profile.submittedAt ? new Date(user.profile.submittedAt).toLocaleDateString() : 'N/A'}</td>
+            <td class="px-3 py-2 text-sm text-right">
+                <div class="flex flex-col sm:flex-row gap-1 justify-end">
+                    <button onclick="viewUserProfile('${user.uid}')" class="px-2 py-1 text-xs bg-white border rounded hover:bg-gray-50">View Details</button>
+                    <button onclick="verifyCustomerProfile('${user.uid}')" class="px-2 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700">✓ Verify</button>
+                </div>
+            </td>
+        </tr>
+    `).join('');
+
+    const verifiedRows = verifiedUsers.map(user => `
+        <tr class="hover:bg-gray-50 border-b">
+            <td class="px-3 py-2 text-sm font-medium">${user.profile.fullName}</td>
+            <td class="px-3 py-2 text-sm hidden sm:table-cell">${user.email}</td>
+            <td class="px-3 py-2 text-sm hidden md:table-cell">${user.profile.idType || 'N/A'}</td>
+            <td class="px-3 py-2 text-sm hidden lg:table-cell">${user.profile.verifiedAt ? new Date(user.profile.verifiedAt).toLocaleDateString() : 'N/A'}</td>
+            <td class="px-3 py-2 text-sm text-right">
+                <button onclick="viewUserProfile('${user.uid}')" class="px-2 py-1 text-xs bg-white border rounded hover:bg-gray-50">View Details</button>
+            </td>
+        </tr>
+    `).join('');
+
+    return `
+        <section class="px-2 sm:px-4">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-xl sm:text-2xl font-bold text-gray-800">User Verification</h2>
+                <button onclick="switchAdminView('dashboard')" class="px-3 py-2 bg-gray-100 text-gray-700 rounded text-sm hover:bg-gray-200">
+                    ← Back to Dashboard
+                </button>
+            </div>
+
+            <!-- Stats Cards -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-6">
+                <div class="bg-white rounded-xl p-4 shadow-sm border">
+                    <div class="text-sm text-gray-500">Pending Verifications</div>
+                    <div class="text-lg sm:text-xl font-bold text-yellow-600 mt-1">${pendingUsers.length}</div>
+                </div>
+                <div class="bg-white rounded-xl p-4 shadow-sm border">
+                    <div class="text-sm text-gray-500">Verified Users</div>
+                    <div class="text-lg sm:text-xl font-bold text-green-600 mt-1">${verifiedUsers.length}</div>
+                </div>
+                <div class="bg-white rounded-xl p-4 shadow-sm border">
+                    <div class="text-sm text-gray-500">Total Users</div>
+                    <div class="text-lg sm:text-xl font-bold mt-1">${pendingUsers.length + verifiedUsers.length}</div>
+                </div>
+            </div>
+
+            <!-- Pending Verifications Table -->
+            ${pendingUsers.length > 0 ? `
+                <div class="bg-white rounded-xl border overflow-hidden mb-6">
+                    <div class="p-4 border-b bg-yellow-50">
+                        <h3 class="font-semibold text-lg flex items-center gap-2">
+                            <i data-lucide="alert-circle" class="w-5 h-5 text-yellow-600"></i>
+                            Pending Verifications
+                            <span class="ml-2 px-2 py-0.5 bg-yellow-500 text-white text-xs rounded-full">${pendingUsers.length}</span>
+                        </h3>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <thead class="bg-gray-50 text-gray-700">
+                                <tr>
+                                    <th class="px-3 py-3 text-left font-medium">Customer Name</th>
+                                    <th class="px-3 py-3 text-left font-medium hidden sm:table-cell">Email</th>
+                                    <th class="px-3 py-3 text-left font-medium hidden md:table-cell">ID Type</th>
+                                    <th class="px-3 py-3 text-left font-medium hidden lg:table-cell">Submitted</th>
+                                    <th class="px-3 py-3 text-right font-medium">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-200">
+                                ${pendingRows}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            ` : `
+                <div class="bg-white rounded-xl p-6 border mb-6 text-center text-gray-500">
+                    <i data-lucide="check-circle" class="w-12 h-12 mx-auto mb-2 text-green-500"></i>
+                    <p class="font-semibold">No pending verifications</p>
+                    <p class="text-sm">All users are verified!</p>
+                </div>
+            `}
+
+            <!-- Verified Users Table -->
+            <div class="bg-white rounded-xl border overflow-hidden">
+                <div class="p-4 border-b bg-green-50">
+                    <h3 class="font-semibold text-lg flex items-center gap-2">
+                        <i data-lucide="check-circle" class="w-5 h-5 text-green-600"></i>
+                        Verified Users
+                        <span class="ml-2 px-2 py-0.5 bg-green-500 text-white text-xs rounded-full">${verifiedUsers.length}</span>
+                    </h3>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead class="bg-gray-50 text-gray-700">
+                            <tr>
+                                <th class="px-3 py-3 text-left font-medium">Customer Name</th>
+                                <th class="px-3 py-3 text-left font-medium hidden sm:table-cell">Email</th>
+                                <th class="px-3 py-3 text-left font-medium hidden md:table-cell">ID Type</th>
+                                <th class="px-3 py-3 text-left font-medium hidden lg:table-cell">Verified Date</th>
+                                <th class="px-3 py-3 text-right font-medium">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-200">
+                            ${verifiedRows || '<tr><td colspan="5" class="px-3 py-8 text-center text-gray-500">No verified users yet</td></tr>'}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+    `;
+};
+
+// NEW FUNCTION: Switch between admin dashboard views
+window.switchAdminView = function(viewName) {
+    window.APP_STATE.adminView = viewName;
+    renderMain();
 };
 
 window.toggleHowItWorks = function() {
