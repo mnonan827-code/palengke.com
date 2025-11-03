@@ -2925,7 +2925,7 @@ const deniedRows = deniedUsers.map(user => `
                     <div class="text-sm text-gray-500">Total Users</div>
                     <div class="text-lg sm:text-xl font-bold mt-1">${pendingUsers.length + verifiedUsers.length}</div>
                 </div>
-                // Find the stats cards section and add a new card:
+                
 <div class="bg-white rounded-xl p-4 shadow-sm border">
     <div class="text-sm text-gray-500">Denied Profiles</div>
     <div class="text-lg sm:text-xl font-bold text-red-600 mt-1">${deniedUsers.length}</div>
