@@ -630,6 +630,16 @@ if(!profile.verified) {
               <span class="text-gray-600">Subtotal:</span>
               <span class="font-semibold">${formatPeso(subtotal)}</span>
             </div>
+            <div>
+  <label class="block text-sm font-medium text-gray-700 mb-1">Delivery Time Slot <span class="text-red-600">*</span></label>
+  <select id="delivery-time-slot" class="p-2 border rounded w-full" required>
+    <option value="">Select Time Slot</option>
+    <option value="8:00 AM - 11:00 AM">8:00 AM - 11:00 AM</option>
+    <option value="12:00 NN - 3:00 PM">12:00 NN - 3:00 PM</option>
+    <option value="4:00 PM - 7:00 PM">4:00 PM - 7:00 PM</option>
+  </select>
+  <div id="timeslot-error" class="text-xs text-red-600 mt-1 hidden font-semibold"></div>
+</div>
             <div class="flex justify-between text-sm">
               <span class="text-gray-600">Delivery Fee:</span>
               <span class="font-semibold">${formatPeso(deliveryFee)}</span>
@@ -1008,6 +1018,7 @@ window.validateAndPlaceOrder = async function() {
     const building = document.getElementById('customer-building')?.value?.trim();
     const street = document.getElementById('customer-street')?.value?.trim();
     const barangay = document.getElementById('customer-barangay')?.value?.trim();
+    const timeSlot = document.getElementById('delivery-time-slot')?.value?.trim();
     
     console.log('Validating order:', { name, contact, unit, building, street, barangay });
     
@@ -1019,8 +1030,20 @@ window.validateAndPlaceOrder = async function() {
     }
     
     // Check all required fields are filled
-    if(!name || !contact || !unit || !street || !barangay) {
-        showModal('Missing info', 'Please fill all required checkout fields', `<button onclick="hideModal(); checkout();" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
+    // Check all required fields are filled
+    if(!name || !contact || !unit || !street || !barangay || !timeSlot) {
+        showModal('Missing info', 'Please fill all required checkout fields including delivery time slot', `<button onclick="hideModal(); checkout();" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
+        return;
+    }
+
+    // Validate time slot
+    const timeSlotValidation = validateTimeSlot(timeSlot);
+    const timeslotErrorDiv = document.getElementById('timeslot-error');
+    if(!timeSlotValidation.valid) {
+        if(timeslotErrorDiv) {
+            timeslotErrorDiv.textContent = '⚠️ ' + timeSlotValidation.message;
+            timeslotErrorDiv.classList.remove('hidden');
+        }
         return;
     }
 
@@ -1080,7 +1103,8 @@ window.validateAndPlaceOrder = async function() {
             street,
             barangay,
             city: 'Cainta',
-            province: 'Rizal'
+            province: 'Rizal',
+        deliveryTimeSlot: timeSlot,
         },
         // 🆕 ADD CUSTOMER PROFILE DATA
         customerProfile: {
@@ -1121,6 +1145,10 @@ window.validateAndPlaceOrder = async function() {
                     <div class="text-xs text-blue-800 font-semibold mb-1">📞 Contact Number</div>
                     <div class="text-sm text-blue-900">${contact}</div>
                 </div>
+                <div class="mt-3 p-3 bg-green-50 rounded text-left border-l-4 border-green-500">
+                    <div class="text-xs text-green-800 font-semibold mb-1">🕒 Delivery Time Slot</div>
+                    <div class="text-sm text-green-900">${timeSlot}</div>
+                </div>
             </div>
         `, `<button onclick="hideModal(); switchTo('orders'); renderMain();" class="px-4 py-2 bg-lime-600 text-white rounded">View My Orders</button>`);
         
@@ -1150,6 +1178,36 @@ window.updateCheckoutAddressPreview = function() {
     }
 };
 
+// Validate delivery time slot
+window.validateTimeSlot = function(selectedSlot) {
+    if(!selectedSlot) {
+        return { valid: false, message: 'Please select a delivery time slot' };
+    }
+
+    const now = new Date();
+    const currentHour = now.getHours();
+    const currentMinute = now.getMinutes();
+
+    // Parse the selected time slot
+    let startHour;
+    if(selectedSlot === '8:00 AM - 11:00 AM') {
+        startHour = 8;
+    } else if(selectedSlot === '12:00 NN - 3:00 PM') {
+        startHour = 12;
+    } else if(selectedSlot === '4:00 PM - 7:00 PM') {
+        startHour = 16;
+    }
+
+    // Check if selected time slot has already passed
+    if(currentHour > startHour || (currentHour === startHour && currentMinute > 0)) {
+        return { 
+            valid: false, 
+            message: 'This time slot has already passed. Please select a later time slot.' 
+        };
+    }
+
+    return { valid: true, message: 'Time slot validated' };
+};
 window.adminAddProduct = function() {
     if(!window.APP_STATE.currentUser || window.APP_STATE.currentUser.role !== 'admin') return showModal('Forbidden', 'Admin access required.', `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
 
@@ -1395,6 +1453,7 @@ window.adminViewOrder = async function(id) {
           <div><b>Email:</b> ${o.email || ''}</div>
           <div><b>Contact:</b> ${o.contact}</div>
           <div><b>Address:</b> ${o.address}</div>
+          <div><b>Delivery Time:</b> ${o.deliveryTimeSlot || 'Not specified'}</div>
           <div><b>Date:</b> ${o.date}</div>
           <div><b>Status:</b> <span class="badge bg-gray-100 text-gray-800 px-2 py-1 rounded">${o.status}</span></div>
         </div>
@@ -2533,12 +2592,12 @@ window.renderOrdersPublic = function() {
 
     const html = list.length ? list.map(o => `
     <div class="bg-white rounded-xl p-4 border mb-3">
-        <div class="flex items-center justify-between">
-          <div><b>${o.id}</b> • ${o.customer}</div>
-          <div class="text-lime-700 font-semibold">${formatPeso(o.total)}</div>
-        </div>
-        <div class="text-sm text-gray-500 mt-2">Status: <span class="px-2 py-1 rounded bg-gray-100 text-gray-800">${o.status}</span></div>
-        <div class="mt-2 text-sm">
+              <div class="flex items-center justify-between">
+                <div><b>${o.id}</b> • ${o.customer}</div>
+                <div class="text-lime-700 font-semibold">${formatPeso(o.total)}</div>
+              </div>
+              <div class="mt-2 text-sm text-gray-500">Date: ${o.date}</div>
+              <div class="mt-1 text-sm text-gray-500">Delivery Time: <b>${o.deliveryTimeSlot || 'Not specified'}</b></div>
           <button onclick="viewOrderDetail('${o.id}')" class="px-3 py-1 rounded bg-white border text-sm">View</button>
           ${window.APP_STATE.currentUser && window.APP_STATE.currentUser.role === 'admin' ? `<button onclick="adminEditOrder('${o.id}')" class="px-3 py-1 rounded bg-lime-600 text-white text-sm ml-2">Update</button>` : ''}
         </div>
@@ -2566,6 +2625,7 @@ window.viewOrderDetail = function(id) {
       <div><b>Customer:</b> ${o.customer}</div>
       <div><b>Contact:</b> ${o.contact}</div>
       <div><b>Address:</b> ${o.address}</div>
+      <div><b>Delivery Time:</b> ${o.deliveryTimeSlot || 'Not specified'}</div>
       <div><b>Date:</b> ${o.date}</div>
     <div class="pt-2"><b>Items</b><ul class="mt-2">${items}</ul></div>
     <div class="pt-2"><b>Total:</b> ${formatPeso(o.total)}</div>
