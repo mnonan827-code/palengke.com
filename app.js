@@ -222,7 +222,7 @@ async function initializeFirebaseData() {
         setupRealtimeListeners();
         
         updatePreorderStatuses();
-        renderMain();
+        await renderMain();
     } catch (error) {
         console.error('Error initializing Firebase data:', error);
     }
@@ -2169,7 +2169,7 @@ window.updatePreorderStatuses = function() {
     }
 };
 
-window.renderMain = async function() {  // 🆕 Add async here
+window.renderMain = async function() {  // ✅ Add async here
     const main = document.getElementById('main-content');
     updateAuthArea();
 
@@ -2187,7 +2187,7 @@ window.renderMain = async function() {  // 🆕 Add async here
     updatePreorderStatuses();
 
     if(window.APP_STATE.currentUser && window.APP_STATE.currentUser.role === 'admin' && window.APP_STATE.view === 'admin') {
-        main.innerHTML = await renderAdminDashboard(); // 🆕 Add await here
+        main.innerHTML = await renderAdminDashboard(); // ✅ Now properly awaited
     } else {
         if(window.APP_STATE.view === 'shop') main.innerHTML = renderShop();
         else main.innerHTML = renderOrdersPublic();
@@ -2772,7 +2772,7 @@ onAuthStateChanged(auth, async (user) => {
         window.APP_STATE.cart = [];
     }
     updateAuthArea();
-    renderMain();
+    await renderMain();
 });
 
 // Initialize app
