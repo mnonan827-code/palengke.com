@@ -1006,6 +1006,10 @@ window.validateAndPlaceOrder = async function() {
     const address = addressParts.join(', ');
     console.log('Formatted address:', address);
     
+    // 🆕 GET USER PROFILE DATA
+    const userData = await getFromFirebase(`users/${window.APP_STATE.currentUser.uid}`);
+    const profile = userData.profile || {};
+    
     // Proceed with placing order
     const newId = 'O-' + uid();
     const itemsCopy = window.APP_STATE.cart.map(i=> ({ ...i }));
@@ -1033,6 +1037,16 @@ window.validateAndPlaceOrder = async function() {
             barangay,
             city: 'Cainta',
             province: 'Rizal'
+        },
+        // 🆕 ADD CUSTOMER PROFILE DATA
+        customerProfile: {
+            fullName: profile.fullName || name,
+            birthday: profile.birthday || '',
+            age: profile.age || '',
+            idType: profile.idType || '',
+            idUrl: profile.idUrl || '',
+            verified: profile.verified || false,
+            homeAddress: profile.homeAddress || address
         },
         date: new Date().toLocaleString(), 
         userId: window.APP_STATE.currentUser.uid 
@@ -1315,9 +1329,16 @@ window.adminViewOrder = async function(id) {
     const o = window.APP_STATE.orders.find(x=> x.id === id);
     if(!o) return;
 
-    // Get customer profile
-    const customerData = await getFromFirebase(`users/${o.userId}`);
-    const profile = customerData?.profile || {};
+    // Get customer profile from order or from users database
+    let profile = o.customerProfile || {};
+    
+    // If not in order, fetch from users database
+    if(!profile.idUrl && o.userId) {
+        const userData = await getFromFirebase(`users/${o.userId}`);
+        if(userData && userData.profile) {
+            profile = userData.profile;
+        }
+    }
 
     const items = o.items.map(it => `<li class="flex justify-between"><span>${it.quantity} × ${it.name} (${it.unit})</span><span>${formatPeso(it.price * it.quantity)}</span></li>`).join('');
     
@@ -1344,26 +1365,35 @@ window.adminViewOrder = async function(id) {
           </h4>
           <div class="space-y-1 text-sm">
             <div><b>Full Name:</b> ${profile.fullName}</div>
-            <div><b>Birthday:</b> ${profile.birthday}</div>
-            <div><b>Age:</b> ${profile.age}</div>
-            <div><b>Home Address:</b> ${profile.homeAddress}</div>
-            <div><b>ID Type:</b> ${profile.idType}</div>
-            <div class="pt-2">
-              <button onclick="viewUploadedID('${profile.idUrl}')" class="text-sm text-blue-600 underline flex items-center gap-1">
-                <i data-lucide="file-text" class="w-3 h-3"></i>
-                View Valid ID
-              </button>
-            </div>
-            ${!profile.verified ? `
+            <div><b>Birthday:</b> ${profile.birthday || 'N/A'}</div>
+            <div><b>Age:</b> ${profile.age || 'N/A'}</div>
+            <div><b>Home Address:</b> ${profile.homeAddress || 'N/A'}</div>
+            <div><b>ID Type:</b> ${profile.idType || 'N/A'}</div>
+            ${profile.idUrl ? `
               <div class="pt-2">
-                <button onclick="verifyCustomerProfile('${o.userId}')" class="px-3 py-1 bg-green-600 text-white rounded text-sm">
-                  Verify Profile
+                <button onclick="viewUploadedID('${profile.idUrl}')" class="text-sm text-blue-600 underline flex items-center gap-1">
+                  <i data-lucide="file-text" class="w-3 h-3"></i>
+                  View Valid ID
+                </button>
+              </div>
+            ` : '<div class="text-xs text-gray-500 pt-2">No ID uploaded</div>'}
+            ${!profile.verified && profile.idUrl ? `
+              <div class="pt-2">
+                <button onclick="verifyCustomerProfile('${o.userId}')" class="px-3 py-1 bg-green-600 text-white rounded text-sm hover:bg-green-700">
+                  ✓ Verify Profile
                 </button>
               </div>
             ` : ''}
           </div>
         </div>
-      ` : ''}
+      ` : `
+        <div class="bg-yellow-50 p-3 rounded border-l-4 border-yellow-500">
+          <div class="flex items-center gap-2 text-sm text-yellow-800">
+            <i data-lucide="alert-circle" class="w-4 h-4"></i>
+            <span>Customer has not completed their profile yet</span>
+          </div>
+        </div>
+      `}
 
       <div class="bg-gray-50 p-3 rounded">
         <h4 class="font-semibold text-gray-800 mb-2">Items</h4>
@@ -1383,10 +1413,137 @@ window.adminViewOrder = async function(id) {
 
 // Verify customer profile
 window.verifyCustomerProfile = async function(userId) {
+    if(!window.APP_STATE.currentUser || window.APP_STATE.currentUser.role !== 'admin') {
+        return showModal('Forbidden', 'Admin access required.', `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
+    }
+
     try {
-        await updateFirebase(`users/${userId}/profile`, { verified: true });
+        // Get user data to display confirmation
+        const userData = await getFromFirebase(`users/${userId}`);
+        const profile = userData.profile || {};
+
+        // Show confirmation modal with profile details
+        showModal('Verify Customer Profile', `
+            <div class="space-y-3">
+                <div class="bg-blue-50 p-3 rounded border-l-4 border-blue-500">
+                    <div class="text-sm font-semibold mb-2">Profile to Verify:</div>
+                    <div class="space-y-1 text-sm">
+                        <div><b>Name:</b> ${profile.fullName}</div>
+                        <div><b>Birthday:</b> ${profile.birthday}</div>
+                        <div><b>Age:</b> ${profile.age}</div>
+                        <div><b>Address:</b> ${profile.homeAddress}</div>
+                        <div><b>ID Type:</b> ${profile.idType}</div>
+                    </div>
+                </div>
+                
+                ${profile.idUrl ? `
+                    <div class="text-center">
+                        <button onclick="viewUploadedID('${profile.idUrl}')" class="text-sm text-blue-600 underline">
+                            View Uploaded ID
+                        </button>
+                    </div>
+                ` : ''}
+                
+                <div class="bg-yellow-50 p-3 rounded border-l-4 border-yellow-500">
+                    <div class="text-xs text-yellow-800">
+                        <b>⚠️ Important:</b> Please verify that the ID matches the profile information before approving.
+                    </div>
+                </div>
+            </div>
+        `, `
+            <button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">Cancel</button>
+            <button onclick="confirmVerifyProfile('${userId}')" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">✓ Verify & Approve</button>
+        `);
+        
+        setTimeout(() => icons(), 100);
+    } catch (error) {
+        console.error('Error loading profile:', error);
+        showModal('Error', 'Failed to load profile. Please try again.', `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
+    }
+};
+
+window.viewUserProfile = async function(userId) {
+    if(!window.APP_STATE.currentUser || window.APP_STATE.currentUser.role !== 'admin') {
+        return showModal('Forbidden', 'Admin access required.', `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
+    }
+
+    try {
+        const userData = await getFromFirebase(`users/${userId}`);
+        if(!userData || !userData.profile) {
+            return showModal('Error', 'User profile not found.', `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
+        }
+
+        const profile = userData.profile;
+
+        showModal('Customer Profile', `
+            <div class="space-y-3">
+                <div class="bg-blue-50 p-3 rounded border-l-4 border-blue-600">
+                    <h4 class="font-semibold text-gray-800 mb-2 flex items-center justify-between">
+                        <span class="flex items-center gap-2">
+                            <i data-lucide="user" class="w-4 h-4"></i>
+                            Profile Information
+                        </span>
+                        ${profile.verified ? 
+                            '<span class="text-xs bg-green-500 text-white px-2 py-0.5 rounded">Verified</span>' : 
+                            '<span class="text-xs bg-yellow-500 text-white px-2 py-0.5 rounded">Pending</span>'
+                        }
+                    </h4>
+                    <div class="space-y-2 text-sm">
+                        <div><b>Full Name:</b> ${profile.fullName}</div>
+                        <div><b>Email:</b> ${userData.email}</div>
+                        <div><b>Contact:</b> ${userData.contact || 'N/A'}</div>
+                        <div><b>Birthday:</b> ${profile.birthday}</div>
+                        <div><b>Age:</b> ${profile.age}</div>
+                        <div><b>Home Address:</b> ${profile.homeAddress}</div>
+                        <div><b>ID Type:</b> ${profile.idType}</div>
+                        ${profile.submittedAt ? `<div class="text-xs text-gray-500"><b>Submitted:</b> ${new Date(profile.submittedAt).toLocaleString()}</div>` : ''}
+                        ${profile.verifiedAt ? `<div class="text-xs text-gray-500"><b>Verified:</b> ${new Date(profile.verifiedAt).toLocaleString()}</div>` : ''}
+                    </div>
+                </div>
+
+                ${profile.idUrl ? `
+                    <div class="bg-gray-50 p-3 rounded">
+                        <h4 class="font-semibold text-gray-800 mb-2">Valid ID</h4>
+                        <div class="flex justify-center">
+                            ${profile.idUrl.endsWith('.pdf') ? 
+                                `<embed src="${profile.idUrl}" type="application/pdf" width="100%" height="400px" />` :
+                                `<img src="${profile.idUrl}" alt="Valid ID" class="max-w-full h-auto rounded border" />`
+                            }
+                        </div>
+                    </div>
+                ` : '<div class="text-center text-gray-500">No ID uploaded</div>'}
+            </div>
+        `, `
+            <button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">Close</button>
+            ${!profile.verified && profile.idUrl ? `
+                <button onclick="verifyCustomerProfile('${userId}')" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">✓ Verify Profile</button>
+            ` : ''}
+        `);
+
+        setTimeout(() => icons(), 100);
+    } catch (error) {
+        console.error('Error viewing profile:', error);
+        showModal('Error', 'Failed to load profile. Please try again.', `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
+    }
+};
+
+// Add new confirmation function
+window.confirmVerifyProfile = async function(userId) {
+    try {
+        await updateFirebase(`users/${userId}/profile`, { 
+            verified: true,
+            verifiedAt: new Date().toISOString(),
+            verifiedBy: window.APP_STATE.currentUser.email
+        });
+        
         hideModal();
-        showModal('Profile Verified', 'Customer profile has been verified successfully.', `<button onclick="hideModal()" class="px-4 py-2 bg-lime-600 text-white rounded">OK</button>`);
+        showModal('Profile Verified! ✓', `
+            <div class="text-center space-y-3">
+                <div class="text-5xl text-green-600">✓</div>
+                <p class="text-gray-700">Customer profile has been successfully verified.</p>
+                <p class="text-sm text-gray-600">The customer can now place orders.</p>
+            </div>
+        `, `<button onclick="hideModal(); renderMain();" class="px-4 py-2 bg-lime-600 text-white rounded">OK</button>`);
     } catch (error) {
         console.error('Error verifying profile:', error);
         showModal('Error', 'Failed to verify profile. Please try again.', `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
@@ -2273,14 +2430,21 @@ window.viewOrderDetail = function(id) {
 `, `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">Close</button>${actions}`);
 };
 
-window.renderAdminDashboard = function() {
+window.renderAdminDashboard = async function() {
     if(!window.APP_STATE.currentUser || window.APP_STATE.currentUser.role !== 'admin') return `<div class="bg-white rounded-xl p-6 border">Admin access required.</div>`;
+    
     const totalSales = window.APP_STATE.orders.filter(o => o.status === 'Delivered').reduce((s,o) => s + Number(o.total), 0);
     const pending = window.APP_STATE.orders.filter(o => o.status !== 'Delivered').length;
     const stockValue = window.APP_STATE.products.reduce((s,p) => s + (p.price * p.quantity), 0);
 
     const regular = window.APP_STATE.products.filter(p => !p.preorder);
     const preorderList = window.APP_STATE.products.filter(p => p.preorder);
+
+    // 🆕 GET PENDING VERIFICATIONS
+    const usersData = await getFromFirebase('users');
+    const pendingUsers = usersData ? Object.values(usersData).filter(u => 
+        u.profile && u.profile.fullName && !u.profile.verified
+    ) : [];
 
     const regularRows = regular.map(p => `
     <tr class="hover:bg-gray-50 border-b">
@@ -2401,6 +2565,48 @@ window.renderAdminDashboard = function() {
         </div>
       </div>
 
+      <!-- 🆕 PENDING VERIFICATIONS SECTION -->
+      ${pendingUsers.length > 0 ? `
+        <div class="bg-white rounded-xl border overflow-hidden mb-6">
+            <div class="p-4 border-b bg-yellow-50">
+                <h3 class="font-semibold text-lg flex items-center gap-2">
+                    <i data-lucide="alert-circle" class="w-5 h-5 text-yellow-600"></i>
+                    Pending Profile Verifications
+                    <span class="ml-2 px-2 py-0.5 bg-yellow-500 text-white text-xs rounded-full">${pendingUsers.length}</span>
+                </h3>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead class="bg-gray-50 text-gray-700">
+                        <tr>
+                            <th class="px-3 py-3 text-left font-medium">Customer Name</th>
+                            <th class="px-3 py-3 text-left font-medium hidden sm:table-cell">Email</th>
+                            <th class="px-3 py-3 text-left font-medium hidden md:table-cell">ID Type</th>
+                            <th class="px-3 py-3 text-left font-medium hidden lg:table-cell">Submitted</th>
+                            <th class="px-3 py-3 text-right font-medium">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-200">
+                        ${pendingUsers.map(user => `
+                            <tr class="hover:bg-gray-50">
+                                <td class="px-3 py-2 text-sm font-medium">${user.profile.fullName}</td>
+                                <td class="px-3 py-2 text-sm hidden sm:table-cell">${user.email}</td>
+                                <td class="px-3 py-2 text-sm hidden md:table-cell">${user.profile.idType || 'N/A'}</td>
+                                <td class="px-3 py-2 text-sm hidden lg:table-cell">${user.profile.submittedAt ? new Date(user.profile.submittedAt).toLocaleDateString() : 'N/A'}</td>
+                                <td class="px-3 py-2 text-sm text-right">
+                                    <div class="flex flex-col sm:flex-row gap-1 justify-end">
+                                        <button onclick="viewUserProfile('${user.uid}')" class="px-2 py-1 text-xs bg-white border rounded hover:bg-gray-50">View Profile</button>
+                                        <button onclick="verifyCustomerProfile('${user.uid}')" class="px-2 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700">Verify</button>
+                                    </div>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+      ` : ''}
+
       <div class="space-y-6">
         <div class="bg-white rounded-xl border overflow-hidden">
           <div class="p-4 border-b">
@@ -2416,7 +2622,6 @@ window.renderAdminDashboard = function() {
                     <th class="px-3 py-3 text-left font-medium">Price</th>
                     <th class="px-3 py-3 text-left font-medium">Stock</th>
                     <th class="px-3 py-3 text-left font-medium hidden lg:table-cell">Freshness</th>
-                    <th class="px-3 py-3 text-left font-medium">Remaining</th>
                     <th class="px-3 py-3 text-right font-medium">Actions</th>
                 </tr>
               </thead>
@@ -2440,6 +2645,7 @@ window.renderAdminDashboard = function() {
                   <th class="px-3 py-3 text-left font-medium hidden md:table-cell">Farmer</th>
                   <th class="px-3 py-3 text-left font-medium">Price</th>
                   <th class="px-3 py-3 text-left font-medium">Stock</th>
+                  <th class="px-3 py-3 text-left font-medium hidden lg:table-cell">Freshness</th>
                   <th class="px-3 py-3 text-left font-medium">Remaining</th>
                   <th class="px-3 py-3 text-right font-medium">Actions</th>
                 </tr>
