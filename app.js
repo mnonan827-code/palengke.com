@@ -18,6 +18,8 @@ import {
     sendEmailVerification 
 } from './firebase-config.js';
 
+console.log("DOM loaded, main container:", document.getElementById("main"));
+
 // Initialize Lucide Icons
 lucide.createIcons();
 
