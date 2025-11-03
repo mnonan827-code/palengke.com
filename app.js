@@ -1638,6 +1638,8 @@ window.confirmDenyProfile = async function(userId) {
     const denialReason = document.getElementById('denial-reason')?.value?.trim();
     const errorDiv = document.getElementById('denial-error');
     
+    if (typeof renderMain === 'function') await renderMain();
+
     // Validate reason
     if(!denialReason || denialReason.length < 10) {
         if(errorDiv) {
@@ -2585,9 +2587,12 @@ window.renderAdminDashboard = async function() {
 
     // 🆕 GET PENDING VERIFICATIONS
     const usersData = await getFromFirebase('users');
-    const pendingUsers = usersData ? Object.values(usersData).filter(u => 
-        u.profile && u.profile.fullName && !u.profile.verified
-    ) : [];
+const pendingUsers = usersData ? Object.values(usersData).filter(u =>
+    u.profile &&
+    u.profile.fullName &&
+    !u.profile.verified &&
+    !u.profile.denied
+) : [];
 
     const regularRows = regular.map(p => `
     <tr class="hover:bg-gray-50 border-b">
@@ -2837,9 +2842,12 @@ window.renderUserVerificationPage = async function() {
 
     // Get all users with pending verification
     const usersData = await getFromFirebase('users');
-    const pendingUsers = usersData ? Object.values(usersData).filter(u => 
-        u.profile && u.profile.fullName && !u.profile.verified
-    ) : [];
+const pendingUsers = usersData ? Object.values(usersData).filter(u =>
+    u.profile &&
+    u.profile.fullName &&
+    !u.profile.verified &&        // not verified
+    !u.profile.denied             // not denied
+) : [];
 
     // Get verified users
     const verifiedUsers = usersData ? Object.values(usersData).filter(u => 
