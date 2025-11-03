@@ -633,8 +633,8 @@ if(!profile.verified) {
             <div>
   <label class="block text-sm font-medium text-gray-700 mb-1">Delivery Time Slot <span class="text-red-600">*</span></label>
   <select id="delivery-time-slot" class="p-2 border rounded w-full" required>
-    <option value="3:00 AM - 8:00 AM">3:00 AM - 8:00 AM</option>
     <option value="">Select Time Slot</option>
+    <option value="11:00 PM">11:00 PM</option>
     <option value="8:00 AM - 11:00 AM">8:00 AM - 11:00 AM</option>
     <option value="12:00 NN - 3:00 PM">12:00 NN - 3:00 PM</option>
     <option value="4:00 PM - 7:00 PM">4:00 PM - 7:00 PM</option>
@@ -1192,7 +1192,7 @@ window.validateTimeSlot = function(selectedSlot) {
 
     // Parse the selected time slot
     let startHour;
-    if(selectedSlot === '3:00 AM - 8:00 AM') {
+    if(selectedSlot === '11:00 PM') {
         startHour = 3;
     } else if(selectedSlot === '8:00 AM - 11:00 AM') {
         startHour = 8;
