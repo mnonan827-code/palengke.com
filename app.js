@@ -332,30 +332,11 @@ window.signupUser = async function() {
 await signOut(auth);
 
 // Show Data Privacy Act modal
+await signOut(auth);
+
+// Go directly to verification modal
 hideModal();
-showModal(
-    'Data Privacy Act Notice',
-    `
-    <div class="space-y-3 text-left">
-        <p class="text-gray-700">
-            Pursuant to Republic Act No. 10173, the <strong>Data Privacy Act of 2012</strong>, 
-            we are committed to protecting your personal information.
-        </p>
-        <p class="text-sm text-gray-600">
-            By continuing to use this platform, you consent to the collection and processing of your data 
-            for purposes of order fulfillment, delivery, and service improvement. 
-            Your information will be handled with strict confidentiality.
-        </p>
-    </div>
-    `,
-    `
-    <button 
-        onclick="acceptDataPrivacyPolicyAfterSignup('${user.uid}', '${email}', '${password}')"
-        class="px-4 py-2 bg-lime-600 text-white rounded hover:bg-lime-700">
-        I Understand
-    </button>
-    `
-);
+showVerificationModal(email, password);
 
 
     } catch (error) {
@@ -375,22 +356,6 @@ showModal(
         showModal('Signup Error', errorMessage, `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
     }
 };
-
-window.acceptDataPrivacyPolicyAfterSignup = async function(uid, email, password) {
-    try {
-        await updateFirebase(`users/${uid}`, { dataPrivacyAccepted: true });
-        hideModal();
-        showVerificationModal(email, password);
-    } catch (error) {
-        console.error('Error updating privacy consent:', error);
-        showModal(
-            'Error',
-            'We were unable to record your acknowledgment. Please try again.',
-            `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`
-        );
-    }
-};
-
 
 window.loginUser = async function() {
     const email = document.getElementById('login-email')?.value?.trim()?.toLowerCase();
@@ -1985,26 +1950,93 @@ window.verifyEmailCode = async function(email, password) {
             window.APP_STATE.cart = Object.values(userCart);
         }
 
+        // ✅ Show Data Privacy Act modal AFTER email verification
         hideModal();
-        updateAuthArea();
-        renderMain();
-
-        showModal(
-            'Email Verified! 🎉',
-            `
-            <div class="text-center space-y-3">
-                <div class="text-6xl">✓</div>
-                <p class="text-gray-700">Welcome to Palengke.com, <b>${userData.name}</b>!</p>
-                <p class="text-sm text-gray-600">Your account is now active and ready to use.</p>
-            </div>
-            `,
-            `<button onclick="hideModal(); renderMain();" class="px-4 py-2 bg-lime-600 text-white rounded">Start Shopping</button>`
-        );
+        showDataPrivacyModal(user.uid, userData.name);
 
     } catch (error) {
         console.error('Verification error:', error);
         document.getElementById('code-error').textContent = 'Verification failed. Please try again.';
         document.getElementById('code-error').classList.remove('hidden');
+    }
+};
+
+// ADD THIS NEW FUNCTION after verifyEmailCode (around line 1280)
+
+window.showDataPrivacyModal = function(userId, userName) {
+    showModal(
+        'Data Privacy Act Notice',
+        `
+        <div class="space-y-4">
+            <div class="text-center">
+                <div class="text-5xl mb-3">✅</div>
+                <h3 class="text-xl font-bold text-green-700 mb-2">Email Verified!</h3>
+                <p class="text-gray-600">Welcome to Palengke.com, <b>${userName}</b>!</p>
+            </div>
+            
+            <div class="border-t pt-4 space-y-3 text-left">
+                <h4 class="font-semibold text-gray-800">📋 Data Privacy Notice</h4>
+                <p class="text-gray-700 text-sm">
+                    Pursuant to Republic Act No. 10173, the <strong>Data Privacy Act of 2012</strong>, 
+                    we are committed to protecting your personal information.
+                </p>
+                <div class="bg-blue-50 p-3 rounded border-l-4 border-blue-500">
+                    <p class="text-sm text-blue-900">
+                        By continuing to use this platform, you consent to the collection and processing of your data 
+                        for purposes of order fulfillment, delivery, and service improvement. 
+                        Your information will be handled with strict confidentiality.
+                    </p>
+                </div>
+                <p class="text-xs text-gray-600">
+                    You can review our full privacy policy at any time in your account settings.
+                </p>
+            </div>
+        </div>
+        `,
+        `
+        <button 
+            onclick="acceptDataPrivacyAfterVerification('${userId}', '${userName}')"
+            class="px-6 py-3 bg-lime-600 text-white rounded-lg hover:bg-lime-700 font-semibold w-full sm:w-auto">
+            I Understand & Accept
+        </button>
+        `
+    );
+};
+
+// ADD THIS NEW FUNCTION to handle acceptance
+window.acceptDataPrivacyAfterVerification = async function(userId, userName) {
+    try {
+        await updateFirebase(`users/${userId}`, { 
+            dataPrivacyAccepted: true,
+            dataPrivacyAcceptedAt: new Date().toISOString()
+        });
+        
+        hideModal();
+        updateAuthArea();
+        renderMain();
+
+        // Show welcome message
+        setTimeout(() => {
+            showModal(
+                'Welcome! 🎉',
+                `
+                <div class="text-center space-y-3">
+                    <div class="text-6xl">🛒</div>
+                    <p class="text-gray-700 text-lg">You're all set, <b>${userName}</b>!</p>
+                    <p class="text-sm text-gray-600">Start shopping for fresh products from local farmers.</p>
+                </div>
+                `,
+                `<button onclick="hideModal(); renderMain();" class="px-4 py-2 bg-lime-600 text-white rounded">Start Shopping</button>`
+            );
+        }, 300);
+
+    } catch (error) {
+        console.error('Error accepting privacy policy:', error);
+        showModal(
+            'Error',
+            'We were unable to record your acknowledgment. Please try again.',
+            `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`
+        );
     }
 };
 
