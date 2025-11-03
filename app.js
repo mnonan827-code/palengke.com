@@ -42,8 +42,7 @@ window.APP_STATE = {
     currentUser: null,
     view: 'shop',
     deliveryFee: 25.00,
-    adminView: 'dashboard', // ✅ NEW: track which admin page we're on
-    availableTimeSlots: []
+    adminView: 'dashboard' // ✅ NEW: track which admin page we're on
 };
 
 const APP_KEY = 'palengke_cainta_v4';
@@ -74,8 +73,7 @@ const dbRefs = {
     users: ref(database, 'users'),
     carts: ref(database, 'carts'),
     notifications: ref(database, 'notifications'),
-    deleteLogs: ref(database, 'deleteLogs'),
-    deliverySlots: ref(database, 'deliverySlots')
+    deleteLogs: ref(database, 'deleteLogs')
 };
 
 // Make functions globally available
@@ -129,24 +127,12 @@ window.toggleMobileMenu = function() {
 
 window.closeMobileMenu = function() {
     const mobileMenu = document.getElementById("mobile-menu");
-    const mobileMenuBtn = document.getElementById('mobile-menu-btn');
-    
     if (mobileMenu) {
-        mobileMenu.setAttribute("aria-hidden", "true");
-        mobileMenu.classList.add("hidden");
-        mobileMenu.classList.remove("active");
-        document.body.classList.remove("mobile-menu-open");
+      mobileMenu.setAttribute("aria-hidden", "true");
+      mobileMenu.classList.remove("active");
+      document.body.classList.remove("mobile-menu-open");
     }
-    
-    // Reset menu icon
-    if(mobileMenuBtn) {
-        const icon = mobileMenuBtn.querySelector('i');
-        if(icon) {
-            icon.setAttribute('data-lucide', 'menu');
-            lucide.createIcons();
-        }
-    }
-};
+  };
   
 
 // Enhanced User Menu Functionality for Mobile
@@ -234,12 +220,6 @@ async function initializeFirebaseData() {
             window.APP_STATE.deliveryFee = deliveryFee;
         }
 
-        const today = new Date().toLocaleDateString('en-CA');
-        const todaySlots = await getFromFirebase(`deliverySlots/${today}`);
-        if (todaySlots) {
-            window.APP_STATE.availableTimeSlots = todaySlots;
-        }
-
         setupRealtimeListeners();
         
         updatePreorderStatuses();
@@ -311,16 +291,6 @@ function setupRealtimeListeners() {
             if (window.APP_STATE.view === 'orders' || (window.APP_STATE.currentUser && window.APP_STATE.currentUser.role === 'admin' && window.APP_STATE.view === 'admin')) {
                 renderMain();
             }
-        }
-    });
-
-    onValue(dbRefs.deliverySlots, (snapshot) => {
-        if (snapshot.exists()) {
-            const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD format
-            const todaySlots = snapshot.val()[today] || [];
-            window.APP_STATE.availableTimeSlots = todaySlots;
-        } else {
-            window.APP_STATE.availableTimeSlots = [];
         }
     });
 }
@@ -471,36 +441,19 @@ window.resendVerificationCode = async function(email, password) {
 
 window.logoutUser = async function() {
     try {
-        // Save cart if customer
         if (window.APP_STATE.currentUser && window.APP_STATE.currentUser.role === 'customer') {
             await saveToFirebase(`carts/${window.APP_STATE.currentUser.uid}`, window.APP_STATE.cart);
         }
         
-        // Sign out from Firebase
         await signOut(auth);
-        
-        // Reset app state
         window.APP_STATE.currentUser = null;
         window.APP_STATE.cart = [];
-        window.APP_STATE.view = 'shop';
-        window.APP_STATE.adminView = 'dashboard';
         
-        // Close any open menus
-        hideUserMenu();
-        closeMobileMenu();
-        toggleCartDrawer(false);
-        
-        // Update UI
         updateAuthArea();
-        await renderMain();
-        
-        // Show logout message
-        showModal('Logged out', 'You have been logged out successfully.', 
-            `<button onclick="hideModal()" class="px-4 py-2 bg-lime-600 text-white rounded">OK</button>`);
+        renderMain();
+        showModal('Logged out', 'You have been logged out.', `<button onclick="hideModal()" class="px-4 py-2 bg-lime-600 text-white rounded">OK</button>`);
     } catch (error) {
         console.error('Logout error:', error);
-        showModal('Error', 'Failed to logout. Please try again.', 
-            `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
     }
 };
 
@@ -589,9 +542,10 @@ window.checkout = async function() {
         return showModal('Login required', 'Please log in or create an account to place your order.', `<button onclick="hideModal(); openAuth('login')" class="px-4 py-2 bg-lime-600 text-white rounded">Log in</button><button onclick="hideModal(); openAuth('signup')" class="px-4 py-2 bg-white border rounded">Sign up</button>`);
     }
 
+    // Check if user has completed profile
     const userData = await getFromFirebase(`users/${window.APP_STATE.currentUser.uid}`);
     const profile = userData.profile || {};
-
+    
     if(!profile.fullName || !profile.idUrl) {
         return showModal('Complete Your Profile', `
             <div class="space-y-3">
@@ -601,34 +555,6 @@ window.checkout = async function() {
         `, `<button onclick="hideModal(); showUserProfile();" class="px-4 py-2 bg-lime-600 text-white rounded">Complete Profile</button>
             <button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">Cancel</button>`);
     }
-
-    if(!profile.verified) {
-        return showModal('Profile Verification Required', `
-            <div class="space-y-3">
-                <div class="text-center">
-                    <i data-lucide="alert-circle" class="w-16 h-16 mx-auto text-yellow-500"></i>
-                </div>
-                <p class="text-gray-700 text-center">Your profile is currently under review by our admin team.</p>
-                <p class="text-sm text-gray-600 text-center">You can place orders once your profile has been verified.</p>
-                <div class="bg-blue-50 p-3 rounded border-l-4 border-blue-500">
-                    <p class="text-sm text-blue-800"><strong>Profile Status:</strong> Pending Verification</p>
-                    <p class="text-xs text-blue-600 mt-1">Usually takes 24-48 hours</p>
-                </div>
-            </div>
-        `, `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>
-            <button onclick="hideModal(); showUserProfile();" class="px-4 py-2 bg-blue-600 text-white rounded">View Profile</button>`);
-    }
-
-    // ✅ CHECK IF TIME SLOTS ARE AVAILABLE
-    if(window.APP_STATE.availableTimeSlots.length === 0) {
-        return showModal('No Delivery Slots Available', `
-            <div class="space-y-3 text-center">
-                <i data-lucide="clock" class="w-16 h-16 mx-auto text-gray-400"></i>
-                <p class="text-gray-700">No delivery time slots are available for today.</p>
-                <p class="text-sm text-gray-600">Please check back later or contact support.</p>
-            </div>
-        `, `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
-    }
     
     const subtotal = window.APP_STATE.cart.reduce((s,i)=> s + i.price * i.quantity, 0);
     const deliveryFee = window.APP_STATE.deliveryFee || 25.00;
@@ -636,11 +562,6 @@ window.checkout = async function() {
 
     const barangayOptions = CAINTA_BARANGAYS.map(brgy => 
         `<option value="${brgy}" ${profile.barangay === brgy ? 'selected' : ''}>${brgy}</option>`
-    ).join('');
-
-    // ✅ GENERATE TIME SLOT OPTIONS FROM AVAILABLE SLOTS
-    const timeSlotOptions = window.APP_STATE.availableTimeSlots.map(slot => 
-        `<option value="${slot}">${slot}</option>`
     ).join('');
 
     showModal('Checkout', `
@@ -685,19 +606,6 @@ window.checkout = async function() {
             <div id="address-error" class="text-xs text-red-600 mt-1 hidden font-semibold"></div>
           </div>
 
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Delivery Time Slot <span class="text-red-600">*</span></label>
-            <select id="delivery-time-slot" class="p-2 border rounded w-full" required>
-              <option value="">Select Time Slot</option>
-              ${timeSlotOptions}
-            </select>
-            <div class="text-xs bg-blue-50 text-blue-800 p-2 rounded border border-blue-200 mt-2">
-              <i data-lucide="clock" class="w-3 h-3 inline"></i> 
-              <strong>Available slots for today</strong>
-            </div>
-            <div id="timeslot-error" class="text-xs text-red-600 mt-1 hidden font-semibold"></div>
-          </div>
-
           <div class="bg-gray-50 p-3 rounded-lg space-y-1">
             <div class="flex justify-between text-sm">
               <span class="text-gray-600">Subtotal:</span>
@@ -720,12 +628,14 @@ window.checkout = async function() {
     setTimeout(() => {
         icons();
         
+        // Add event listeners for checkout address preview
         const checkoutAddressFields = ['customer-unit', 'customer-building', 'customer-street', 'customer-barangay'];
         checkoutAddressFields.forEach(fieldId => {
             document.getElementById(fieldId)?.addEventListener('input', updateCheckoutAddressPreview);
             document.getElementById(fieldId)?.addEventListener('change', updateCheckoutAddressPreview);
         });
 
+        // Initial preview update
         updateCheckoutAddressPreview();
     }, 100);
 };
@@ -755,35 +665,13 @@ window.showUserProfile = async function() {
     showModal('My Profile', `
     <form id="profile-form" class="grid gap-3">
         ${hasProfile ? `
-    ${profile.verified ? `
-        <div class="bg-green-50 p-3 rounded-lg border border-green-200 mb-2">
-            <div class="flex items-center gap-2 text-sm text-green-800">
-                <i data-lucide="check-circle" class="w-4 h-4"></i>
-                <span class="font-semibold">Profile Verified</span>
+            <div class="bg-green-50 p-3 rounded-lg border border-green-200 mb-2">
+                <div class="flex items-center gap-2 text-sm text-green-800">
+                    <i data-lucide="check-circle" class="w-4 h-4"></i>
+                    <span class="font-semibold">Profile ${profile.verified ? 'Verified' : 'Submitted - Pending Verification'}</span>
+                </div>
             </div>
-        </div>
-    ` : profile.denied ? `
-        <div class="bg-red-50 p-3 rounded-lg border border-red-200 mb-2">
-            <div class="flex items-center gap-2 text-sm text-red-800">
-                <i data-lucide="x-circle" class="w-4 h-4"></i>
-                <span class="font-semibold">Profile Verification Denied</span>
-            </div>
-            <div class="mt-2 text-xs text-red-700">
-                <strong>Reason:</strong> ${profile.denialReason || 'No reason provided'}
-            </div>
-            <div class="mt-2 text-xs text-red-600">
-                Please update your information and resubmit.
-            </div>
-        </div>
-    ` : `
-        <div class="bg-yellow-50 p-3 rounded-lg border border-yellow-200 mb-2">
-            <div class="flex items-center gap-2 text-sm text-yellow-800">
-                <i data-lucide="clock" class="w-4 h-4"></i>
-                <span class="font-semibold">Profile Submitted - Pending Verification</span>
-            </div>
-        </div>
-    `}
-` : `
+        ` : `
             <div class="bg-yellow-50 p-3 rounded-lg border border-yellow-200 mb-2">
                 <div class="flex items-center gap-2 text-sm text-yellow-800">
                     <i data-lucide="alert-circle" class="w-4 h-4"></i>
@@ -988,21 +876,19 @@ window.saveUserProfile = async function() {
         const homeAddress = addressParts.join(', ');
 
         const profileData = {
-    fullName,
-    birthday,
-    age,
-    unit,
-    building: building || '',
-    street,
-    barangay,
-    homeAddress,
-    idType,
-    idUrl,
-    verified: false,
-    denied: false, // ✅ Reset denied status on resubmission
-    denialReason: null, // ✅ Clear denial reason
-    submittedAt: new Date().toISOString()
-};
+            fullName,
+            birthday,
+            age,
+            unit,
+            building: building || '',
+            street,
+            barangay,
+            homeAddress,
+            idType,
+            idUrl,
+            verified: false,
+            submittedAt: new Date().toISOString()
+        };
 
         await updateFirebase(`users/${window.APP_STATE.currentUser.uid}`, {
             profile: profileData
@@ -1079,7 +965,6 @@ window.validateAndPlaceOrder = async function() {
     const building = document.getElementById('customer-building')?.value?.trim();
     const street = document.getElementById('customer-street')?.value?.trim();
     const barangay = document.getElementById('customer-barangay')?.value?.trim();
-    const timeSlot = document.getElementById('delivery-time-slot')?.value?.trim();
     
     console.log('Validating order:', { name, contact, unit, building, street, barangay });
     
@@ -1091,20 +976,8 @@ window.validateAndPlaceOrder = async function() {
     }
     
     // Check all required fields are filled
-    // Check all required fields are filled
-    if(!name || !contact || !unit || !street || !barangay || !timeSlot) {
-        showModal('Missing info', 'Please fill all required checkout fields including delivery time slot', `<button onclick="hideModal(); checkout();" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
-        return;
-    }
-
-    // Validate time slot
-    const timeSlotValidation = validateTimeSlot(timeSlot);
-    const timeslotErrorDiv = document.getElementById('timeslot-error');
-    if(!timeSlotValidation.valid) {
-        if(timeslotErrorDiv) {
-            timeslotErrorDiv.textContent = '⚠️ ' + timeSlotValidation.message;
-            timeslotErrorDiv.classList.remove('hidden');
-        }
+    if(!name || !contact || !unit || !street || !barangay) {
+        showModal('Missing info', 'Please fill all required checkout fields', `<button onclick="hideModal(); checkout();" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
         return;
     }
 
@@ -1164,8 +1037,7 @@ window.validateAndPlaceOrder = async function() {
             street,
             barangay,
             city: 'Cainta',
-            province: 'Rizal',
-        deliveryTimeSlot: timeSlot,
+            province: 'Rizal'
         },
         // 🆕 ADD CUSTOMER PROFILE DATA
         customerProfile: {
@@ -1206,10 +1078,6 @@ window.validateAndPlaceOrder = async function() {
                     <div class="text-xs text-blue-800 font-semibold mb-1">📞 Contact Number</div>
                     <div class="text-sm text-blue-900">${contact}</div>
                 </div>
-                <div class="mt-3 p-3 bg-green-50 rounded text-left border-l-4 border-green-500">
-                    <div class="text-xs text-green-800 font-semibold mb-1">🕒 Delivery Time Slot</div>
-                    <div class="text-sm text-green-900">${timeSlot}</div>
-                </div>
             </div>
         `, `<button onclick="hideModal(); switchTo('orders'); renderMain();" class="px-4 py-2 bg-lime-600 text-white rounded">View My Orders</button>`);
         
@@ -1239,22 +1107,6 @@ window.updateCheckoutAddressPreview = function() {
     }
 };
 
-// Validate delivery time slot
-window.validateTimeSlot = function(selectedSlot) {
-    if(!selectedSlot) {
-        return { valid: false, message: 'Please select a delivery time slot' };
-    }
-
-    // Check if the selected slot is in the available slots
-    if(!window.APP_STATE.availableTimeSlots.includes(selectedSlot)) {
-        return { 
-            valid: false, 
-            message: 'This time slot is no longer available. Please select another slot.' 
-        };
-    }
-
-    return { valid: true, message: 'Time slot validated' };
-};
 window.adminAddProduct = function() {
     if(!window.APP_STATE.currentUser || window.APP_STATE.currentUser.role !== 'admin') return showModal('Forbidden', 'Admin access required.', `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
 
@@ -1500,7 +1352,6 @@ window.adminViewOrder = async function(id) {
           <div><b>Email:</b> ${o.email || ''}</div>
           <div><b>Contact:</b> ${o.contact}</div>
           <div><b>Address:</b> ${o.address}</div>
-          <div><b>Delivery Time:</b> ${o.deliveryTimeSlot || 'Not specified'}</div>
           <div><b>Date:</b> ${o.date}</div>
           <div><b>Status:</b> <span class="badge bg-gray-100 text-gray-800 px-2 py-1 rounded">${o.status}</span></div>
         </div>
@@ -1528,28 +1379,12 @@ window.adminViewOrder = async function(id) {
               </div>
             ` : '<div class="text-xs text-gray-500 pt-2">No ID uploaded</div>'}
             ${!profile.verified && profile.idUrl ? `
-  <div class="pt-2 flex gap-2">
-    ${!profile.denied ? `
-      <button onclick="verifyCustomerProfile('${o.userId}')" class="px-3 py-1 bg-green-600 text-white rounded text-sm hover:bg-green-700">
-        ✓ Verify Profile
-      </button>
-      <button onclick="denyCustomerProfile('${o.userId}')" class="px-3 py-1 bg-red-600 text-white rounded text-sm hover:bg-red-700">
-        ✗ Deny
-      </button>
-    ` : `
-      <div class="pt-2 bg-red-50 p-2 rounded border border-red-200">
-        <div class="text-xs text-red-800 font-semibold">Profile Denied</div>
-        <div class="text-xs text-red-600 mt-1">${profile.denialReason || 'No reason provided'}</div>
-      </div>
-    `}
-  </div>
-` : ''}
-${profile.denied ? `
-  <div class="pt-2 bg-red-50 p-2 rounded border border-red-200">
-    <div class="text-xs text-red-800 font-semibold">Profile Denied</div>
-    <div class="text-xs text-red-600 mt-1">${profile.denialReason || 'No reason provided'}</div>
-  </div>
-` : ''}
+              <div class="pt-2">
+                <button onclick="verifyCustomerProfile('${o.userId}')" class="px-3 py-1 bg-green-600 text-white rounded text-sm hover:bg-green-700">
+                  ✓ Verify Profile
+                </button>
+              </div>
+            ` : ''}
           </div>
         </div>
       ` : `
@@ -1716,84 +1551,6 @@ window.confirmVerifyProfile = async function(userId) {
     }
 };
 
-// Deny customer profile verification
-window.denyCustomerProfile = async function(userId) {
-    if(!window.APP_STATE.currentUser || window.APP_STATE.currentUser.role !== 'admin') {
-        return showModal('Forbidden', 'Admin access required.', `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
-    }
-
-    try {
-        const userData = await getFromFirebase(`users/${userId}`);
-        const profile = userData.profile || {};
-
-        showModal('Deny Profile Verification', `
-            <div class="space-y-3">
-                <div class="bg-red-50 p-3 rounded border-l-4 border-red-500">
-                    <div class="text-sm font-semibold mb-2 text-red-800">Profile to Deny:</div>
-                    <div class="space-y-1 text-sm text-red-700">
-                        <div><b>Name:</b> ${profile.fullName}</div>
-                        <div><b>Email:</b> ${userData.email}</div>
-                    </div>
-                </div>
-                
-                <div class="bg-yellow-50 p-3 rounded border-l-4 border-yellow-500">
-                    <div class="text-xs text-yellow-800">
-                        <b>⚠️ Important:</b> Please provide a reason for denial. The user will need to resubmit their profile with correct information.
-                    </div>
-                </div>
-                
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Reason for Denial <span class="text-red-600">*</span></label>
-                    <textarea id="denial-reason" rows="4" class="w-full p-2 border rounded" placeholder="e.g., ID is unclear, information doesn't match, expired document..." required></textarea>
-                </div>
-            </div>
-        `, `
-            <button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">Cancel</button>
-            <button onclick="confirmDenyProfile('${userId}')" class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700">✗ Deny Verification</button>
-        `);
-        
-        setTimeout(() => icons(), 100);
-    } catch (error) {
-        console.error('Error loading profile:', error);
-        showModal('Error', 'Failed to load profile. Please try again.', `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
-    }
-};
-
-// Confirm denial of profile verification
-window.confirmDenyProfile = async function(userId) {
-    const reason = document.getElementById('denial-reason')?.value?.trim();
-    
-    if(!reason) {
-        const errorDiv = document.createElement('div');
-        errorDiv.className = 'text-xs text-red-600 mt-1 font-semibold';
-        errorDiv.textContent = '⚠️ Please provide a reason for denial';
-        document.getElementById('denial-reason')?.parentElement.appendChild(errorDiv);
-        return;
-    }
-
-    try {
-        await updateFirebase(`users/${userId}/profile`, { 
-            verified: false,
-            denied: true,
-            deniedAt: new Date().toISOString(),
-            deniedBy: window.APP_STATE.currentUser.email,
-            denialReason: reason
-        });
-        
-        hideModal();
-        showModal('Profile Denied', `
-            <div class="text-center space-y-3">
-                <div class="text-5xl text-red-600">✗</div>
-                <p class="text-gray-700">Profile verification has been denied.</p>
-                <p class="text-sm text-gray-600">The user will be notified and can resubmit their profile.</p>
-            </div>
-        `, `<button onclick="hideModal(); renderMain();" class="px-4 py-2 bg-lime-600 text-white rounded">OK</button>`);
-    } catch (error) {
-        console.error('Error denying profile:', error);
-        showModal('Error', 'Failed to deny profile. Please try again.', `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
-    }
-};
-
 window.adminEditOrder = function(id) {
     if(!window.APP_STATE.currentUser || window.APP_STATE.currentUser.role !== 'admin') return showModal('Forbidden', 'Admin access required.', `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
     const o = window.APP_STATE.orders.find(x=> x.id === id);
@@ -1831,105 +1588,6 @@ window.adminUpdateDeliveryFee = function() {
         </div>
     `, `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">Cancel</button>
         <button onclick="adminSaveDeliveryFee()" class="px-4 py-2 bg-lime-600 text-white rounded">Save</button>`);
-};
-
-window.adminManageTimeSlots = async function() {
-    if(!window.APP_STATE.currentUser || window.APP_STATE.currentUser.role !== 'admin') {
-        return showModal('Forbidden', 'Admin access required.', `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
-    }
-
-    const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD format
-    const todaySlots = await getFromFirebase(`deliverySlots/${today}`) || [];
-
-    // Common time slots
-    const commonSlots = [
-        '8:00 AM - 10:00 AM',
-        '12:00 NN - 2:00 PM',
-        '3:00 PM - 5:00 PM',
-        '6:00 PM - 8:00 PM'
-    ];
-
-    const slotCheckboxes = commonSlots.map(slot => {
-        const isChecked = todaySlots.includes(slot);
-        return `
-            <label class="flex items-center gap-2 p-3 border rounded-lg hover:bg-gray-50 cursor-pointer">
-                <input type="checkbox" value="${slot}" ${isChecked ? 'checked' : ''} class="time-slot-checkbox w-4 h-4 text-lime-600" />
-                <span class="flex-1">${slot}</span>
-            </label>
-        `;
-    }).join('');
-
-    showModal('Manage Delivery Time Slots', `
-        <div class="space-y-4">
-            <div class="bg-blue-50 p-3 rounded-lg border border-blue-200">
-                <div class="flex items-center gap-2 text-sm text-blue-800">
-                    <i data-lucide="info" class="w-4 h-4"></i>
-                    <span>Select available delivery time slots for <strong>today (${new Date().toLocaleDateString()})</strong></span>
-                </div>
-            </div>
-
-            <div class="space-y-2">
-                <div class="font-medium text-gray-700 mb-2">Available Time Slots:</div>
-                ${slotCheckboxes}
-            </div>
-
-            <div class="space-y-2">
-                <div class="font-medium text-gray-700">Add Custom Time Slot:</div>
-                <div class="flex gap-2">
-                    <input id="custom-slot-input" type="text" placeholder="e.g., 9:00 AM - 12:00 PM" class="flex-1 p-2 border rounded" />
-                    <button onclick="addCustomSlot()" class="px-4 py-2 bg-lime-600 text-white rounded hover:bg-lime-700">Add</button>
-                </div>
-                <div id="custom-slots-container" class="space-y-2 mt-2"></div>
-            </div>
-        </div>
-    `, `
-        <button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">Cancel</button>
-        <button onclick="saveTimeSlots()" class="px-4 py-2 bg-lime-600 text-white rounded">Save Time Slots</button>
-    `);
-
-    setTimeout(() => icons(), 100);
-};
-
-window.addCustomSlot = function() {
-    const input = document.getElementById('custom-slot-input');
-    const customSlot = input.value.trim();
-    
-    if(!customSlot) {
-        return;
-    }
-
-    const container = document.getElementById('custom-slots-container');
-    const slotId = 'custom-' + Date.now();
-    
-    const slotDiv = document.createElement('div');
-    slotDiv.id = slotId;
-    slotDiv.className = 'flex items-center gap-2 p-2 border rounded-lg bg-lime-50';
-    slotDiv.innerHTML = `
-        <input type="checkbox" value="${customSlot}" checked class="time-slot-checkbox w-4 h-4 text-lime-600" />
-        <span class="flex-1">${customSlot}</span>
-        <button onclick="document.getElementById('${slotId}').remove()" class="text-red-600 hover:text-red-800">
-            <i data-lucide="x" class="w-4 h-4"></i>
-        </button>
-    `;
-    
-    container.appendChild(slotDiv);
-    input.value = '';
-    icons();
-};
-
-window.saveTimeSlots = async function() {
-    const checkboxes = document.querySelectorAll('.time-slot-checkbox:checked');
-    const selectedSlots = Array.from(checkboxes).map(cb => cb.value);
-
-    if(selectedSlots.length === 0) {
-        return showModal('No Slots Selected', 'Please select at least one time slot.', `<button onclick="hideModal(); adminManageTimeSlots();" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
-    }
-
-    const today = new Date().toLocaleDateString('en-CA');
-    await saveToFirebase(`deliverySlots/${today}`, selectedSlots);
-
-    hideModal();
-    showModal('Time Slots Updated', `Successfully set ${selectedSlots.length} delivery time slot(s) for today.`, `<button onclick="hideModal(); renderMain();" class="px-4 py-2 bg-lime-600 text-white rounded">OK</button>`);
 };
 
 window.adminSaveDeliveryFee = async function() {
@@ -2339,11 +1997,9 @@ if(mobileAuthArea) {
 }
 
         headerActions.innerHTML = `
+            <button id="header-logout" onclick="logoutUser()" class="btn-ghost hidden-mobile">Logout</button>
             ${window.APP_STATE.currentUser.role === 'admin' && window.APP_STATE.view === 'admin' ? 
-                `<button id="exit-admin-btn" onclick="exitAdmin()" class="btn-ghost hidden-mobile">
-                    <i data-lucide="arrow-left" class="w-4 h-4"></i>
-                    Exit Admin
-                </button>` : ''}
+                `<button id="exit-admin-btn" onclick="exitAdmin()" class="btn-ghost hidden-mobile">Exit Admin</button>` : ''}
         `;
         
         // Initialize mobile user menu functionality
@@ -2395,10 +2051,8 @@ window.openAuth = function(mode = 'login') {
 
 window.exitAdmin = function() {
     window.APP_STATE.view = 'shop';
-    window.APP_STATE.adminView = 'dashboard'; // Reset admin view
-    hideUserMenu();
-    closeMobileMenu();
     renderMain();
+    hideUserMenu();
 };
 
 window.goAdmin = function() {
@@ -2517,34 +2171,19 @@ window.updatePreorderStatuses = function() {
     }
 };
 
-window.renderMain = async function() {
+window.renderMain = async function() {  // ✅ Add async here
     const main = document.getElementById('main-content');
     updateAuthArea();
 
     const viewOrdersBtn = document.getElementById('view-orders');
-    const mobileViewOrdersBtn = document.getElementById('mobile-view-orders');
-    
     if(window.APP_STATE.currentUser && window.APP_STATE.currentUser.role === 'admin') {
-        if(viewOrdersBtn) {
-            viewOrdersBtn.classList.remove('hidden');
-            viewOrdersBtn.textContent = 'Orders (All)';
-        }
-        if(mobileViewOrdersBtn) {
-            mobileViewOrdersBtn.classList.remove('hidden');
-            mobileViewOrdersBtn.textContent = 'Orders (All)';
-        }
-    } else if(window.APP_STATE.currentUser && window.APP_STATE.currentUser.role === 'customer') {
-        if(viewOrdersBtn) {
-            viewOrdersBtn.classList.remove('hidden');
-            viewOrdersBtn.textContent = 'My Orders';
-        }
-        if(mobileViewOrdersBtn) {
-            mobileViewOrdersBtn.classList.remove('hidden');
-            mobileViewOrdersBtn.textContent = 'My Orders';
-        }
+        viewOrdersBtn.classList.remove('hidden');
+        viewOrdersBtn.textContent = 'Orders (All)';
+    } else if(window.APP_STATE.currentUser) {
+        viewOrdersBtn.classList.remove('hidden');
+        viewOrdersBtn.textContent = 'My Orders';
     } else {
-        if(viewOrdersBtn) viewOrdersBtn.classList.add('hidden');
-        if(mobileViewOrdersBtn) mobileViewOrdersBtn.classList.add('hidden');
+        viewOrdersBtn.classList.add('hidden');
     }
 
     updatePreorderStatuses();
@@ -2567,17 +2206,7 @@ window.renderMain = async function() {
 
 window.switchTo = function(v) {
     window.APP_STATE.view = v;
-    
-    // Close all menus and drawers
     closeMobileMenu();
-    hideUserMenu();
-    toggleCartDrawer(false);
-    
-    // Reset admin view when switching away from admin
-    if(v !== 'admin') {
-        window.APP_STATE.adminView = 'dashboard';
-    }
-    
     renderMain();
 };
 
@@ -2706,9 +2335,110 @@ window.showProduct = function(id) {
     );
 };
 
+window.renderOrdersPublic = function() {
+    let list = [];
+    if(window.APP_STATE.currentUser && window.APP_STATE.currentUser.role === 'admin') {
+        list = window.APP_STATE.orders;
+    } else if(window.APP_STATE.currentUser) {
+        list = window.APP_STATE.orders.filter(o => o.email === window.APP_STATE.currentUser.email);
+    } else {
+        return `
+        <section>
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-2xl font-bold">Orders</h2>
+                <div class="text-sm text-gray-500">Log in to see your orders</div>
+            </div>
+            <div class="bg-white rounded-xl p-6 border text-gray-600">Please <button onclick="openAuth('login')" class="underline">log in</button> or <button onclick="openAuth('signup')" class="underline">sign up</button> to view and track your orders.</div>
+        </section>
+        `;
+    }
+
+    if(window.APP_STATE.currentUser && window.APP_STATE.currentUser.role === 'customer') {
+        const html = list.length ? list.map(o => {
+            const itemsHtml = o.items.map(it => `<li class="flex justify-between py-1"><span>${it.quantity} × ${it.name} (${it.unit})</span><span>${formatPeso(it.price * it.quantity)}</span></li>`).join('');
+            return `
+            <div class="bg-white rounded-xl p-4 border mb-3">
+              <div class="flex items-center justify-between">
+                <div><b>${o.id}</b> • ${o.customer}</div>
+                <div class="text-lime-700 font-semibold">${formatPeso(o.total)}</div>
+              </div>
+              <div class="mt-2 text-sm text-gray-500">Date: ${o.date}</div>
+              <div class="mt-3">
+                <div class="font-medium">Items</div>
+                <ul class="mt-2 border rounded p-3 bg-gray-50">
+                  ${itemsHtml}
+                </ul>
+              </div>
+              <div class="mt-3 grid grid-cols-2 gap-3 text-sm">
+                <div><b>Contact</b><br>${o.contact}</div>
+                <div><b>Address</b><br>${o.address}</div>
+              </div>
+              <div class="mt-3">
+                <div class="inline-flex items-center gap-3">
+                  <div class="px-3 py-1 rounded bg-gray-100 text-gray-800">${o.status}</div>
+                  <button onclick="viewOrderDetail('${o.id}')" class="px-3 py-1 rounded bg-white border text-sm">View</button>
+                </div>
+              </div>
+            </div>
+            `;
+        }).join('') : `<div class="text-gray-500">You have no orders yet.</div>`;
+
+        return `
+        <section>
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-2xl font-bold">My Orders</h2>
+                <div class="text-sm text-gray-500">Order history & tracking</div>
+            </div>
+            ${html}
+        </section>
+        `;
+    }
+
+    const html = list.length ? list.map(o => `
+    <div class="bg-white rounded-xl p-4 border mb-3">
+        <div class="flex items-center justify-between">
+          <div><b>${o.id}</b> • ${o.customer}</div>
+          <div class="text-lime-700 font-semibold">${formatPeso(o.total)}</div>
+        </div>
+        <div class="text-sm text-gray-500 mt-2">Status: <span class="px-2 py-1 rounded bg-gray-100 text-gray-800">${o.status}</span></div>
+        <div class="mt-2 text-sm">
+          <button onclick="viewOrderDetail('${o.id}')" class="px-3 py-1 rounded bg-white border text-sm">View</button>
+          ${window.APP_STATE.currentUser && window.APP_STATE.currentUser.role === 'admin' ? `<button onclick="adminEditOrder('${o.id}')" class="px-3 py-1 rounded bg-lime-600 text-white text-sm ml-2">Update</button>` : ''}
+        </div>
+    </div>
+    `).join('') : `<div class="text-gray-500">No orders to display.</div>`;
+
+    return `
+    <section>
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="text-2xl font-bold">Orders</h2>
+            <div class="text-sm text-gray-500">Order history</div>
+        </div>
+        ${html}
+    </section>
+    `;
+};
+
+window.viewOrderDetail = function(id) {
+    const o = window.APP_STATE.orders.find(x=> x.id === id);
+    if(!o) return;
+    const items = o.items.map(it => `<li class="flex justify-between py-1"><span>${it.quantity} × ${it.name} (${it.unit})</span><span>${formatPeso(it.price * it.quantity)}</span></li>`).join('');
+    const actions = (window.APP_STATE.currentUser && window.APP_STATE.currentUser.role === 'admin') ? `<button onclick="adminEditOrder('${o.id}')" class="px-4 py-2 bg-lime-600 text-white rounded">Update Status</button>` : '';
+    showModal(`Order ${o.id}`, `
+    <div class="grid gap-2">
+      <div><b>Customer:</b> ${o.customer}</div>
+      <div><b>Contact:</b> ${o.contact}</div>
+      <div><b>Address:</b> ${o.address}</div>
+      <div><b>Date:</b> ${o.date}</div>
+    <div class="pt-2"><b>Items</b><ul class="mt-2">${items}</ul></div>
+    <div class="pt-2"><b>Total:</b> ${formatPeso(o.total)}</div>
+    <div class="pt-2"><b>Status:</b> <span class="badge bg-gray-100 text-gray-800 px-2 py-1 rounded">${o.status}</span></div>
+    </div>
+`, `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">Close</button>${actions}`);
+};
+
 window.renderAdminDashboard = async function() {
-    if(!window.APP_STATE.currentUser || window.APP_STATE.currentUser.role !== 'admin') 
-        return `<div class="bg-white rounded-xl p-6 border">Admin access required.</div>`;
+    if(!window.APP_STATE.currentUser || window.APP_STATE.currentUser.role !== 'admin') return `<div class="bg-white rounded-xl p-6 border">Admin access required.</div>`;
     
     const totalSales = window.APP_STATE.orders.filter(o => o.status === 'Delivered').reduce((s,o) => s + Number(o.total), 0);
     const pending = window.APP_STATE.orders.filter(o => o.status !== 'Delivered').length;
@@ -2717,62 +2447,63 @@ window.renderAdminDashboard = async function() {
     const regular = window.APP_STATE.products.filter(p => !p.preorder);
     const preorderList = window.APP_STATE.products.filter(p => p.preorder);
 
+    // 🆕 GET PENDING VERIFICATIONS
     const usersData = await getFromFirebase('users');
     const pendingUsers = usersData ? Object.values(usersData).filter(u => 
-        u.profile && u.profile.fullName && !u.profile.verified && !u.profile.denied
+        u.profile && u.profile.fullName && !u.profile.verified
     ) : [];
 
     const regularRows = regular.map(p => `
-        <tr class="hover:bg-gray-50 border-b">
-            <td class="px-3 py-3 text-sm">${p.name}</td>
-            <td class="px-3 py-3 text-sm hidden sm:table-cell">${p.origin}</td>
-            <td class="px-3 py-3 text-sm hidden md:table-cell">${p.farmer.name}</td>
-            <td class="px-3 py-3 text-sm font-semibold">${formatPeso(p.price)}</td>
-            <td class="px-3 py-3 text-sm">${p.quantity} ${p.unit}</td>
-            <td class="px-3 py-3 text-sm hidden lg:table-cell">
-                ${p.freshness ? `<span class="freshness-badge freshness-${p.freshnessIndicator || 'fresh'}">${getFreshnessEmoji(p.freshnessIndicator)} ${p.freshness}%</span>` : '<span class="text-gray-400">N/A</span>'}
-            </td>
-            <td class="px-3 py-3 text-sm">
-                <div class="flex flex-wrap gap-1 justify-end">
-                    <button onclick="adminEditProduct(${p.id})" class="px-3 py-1.5 text-xs bg-white border rounded hover:bg-gray-50 whitespace-nowrap">Edit</button>
-                    <button onclick="adminDeleteProduct(${p.id})" class="px-3 py-1.5 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100 whitespace-nowrap">Delete</button>
-                </div>
-            </td>
-        </tr>
-    `).join('');
+    <tr class="hover:bg-gray-50 border-b">
+        <td class="px-3 py-2 text-sm">${p.name}</td>
+        <td class="px-3 py-2 text-sm hidden sm:table-cell">${p.origin}</td>
+        <td class="px-3 py-2 text-sm hidden md:table-cell">${p.farmer.name}</td>
+        <td class="px-3 py-2 text-sm font-semibold">${formatPeso(p.price)}</td>
+        <td class="px-3 py-2 text-sm">${p.quantity} ${p.unit}</td>
+        <td class="px-3 py-2 text-sm hidden lg:table-cell">
+            ${p.freshness ? `<span class="freshness-badge freshness-${p.freshnessIndicator || 'fresh'}">${getFreshnessEmoji(p.freshnessIndicator)} ${p.freshness}%</span>` : '<span class="text-gray-400">N/A</span>'}
+        </td>
+        <td class="px-3 py-2 text-sm text-right">
+            <div class="flex flex-col sm:flex-row gap-1 justify-end">
+                <button onclick="adminEditProduct(${p.id})" class="px-2 py-1 text-xs bg-white border rounded hover:bg-gray-50">Edit</button>
+                <button onclick="adminDeleteProduct(${p.id})" class="px-2 py-1 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100">Delete</button>
+            </div>
+        </td>
+    </tr>
+`).join('');
 
     const preorderRows = preorderList.map(p => {
-        const rem = computeRemainingDays(p);
-        return `
-        <tr class="hover:bg-gray-50 border-b">
-            <td class="px-3 py-3 text-sm">${p.name}</td>
-            <td class="px-3 py-3 text-sm hidden sm:table-cell">${p.origin}</td>
-            <td class="px-3 py-3 text-sm hidden md:table-cell">${p.farmer.name}</td>
-            <td class="px-3 py-3 text-sm font-semibold">${formatPeso(p.price)}</td>
-            <td class="px-3 py-3 text-sm">${p.quantity} ${p.unit}</td>
-            <td class="px-3 py-3 text-sm hidden lg:table-cell">
-                ${p.freshness ? `<span class="freshness-badge freshness-${p.freshnessIndicator || 'fresh'}">${getFreshnessEmoji(p.freshnessIndicator)} ${p.freshness}%</span>` : '<span class="text-gray-400">N/A</span>'}
-            </td>
-            <td class="px-3 py-3 text-sm ${rem <= 3 ? 'text-red-600 font-semibold' : 'text-yellow-600'}">${rem>0? rem + ' days' : 'Ending'}</td>
-            <td class="px-3 py-3 text-sm">
-                <div class="flex flex-wrap gap-1 justify-end">
-                    <button onclick="adminEditProduct(${p.id})" class="px-3 py-1.5 text-xs bg-white border rounded hover:bg-gray-50 whitespace-nowrap">Edit</button>
-                    <button onclick="adminDeleteProduct(${p.id})" class="px-3 py-1.5 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100 whitespace-nowrap">Delete</button>
-                </div>
-            </td>
-        </tr>
-        `;
-    }).join('');
+    const rem = computeRemainingDays(p);
+    return `
+    <tr class="hover:bg-gray-50 border-b">
+        <td class="px-3 py-2 text-sm">${p.name}</td>
+        <td class="px-3 py-2 text-sm hidden sm:table-cell">${p.origin}</td>
+        <td class="px-3 py-2 text-sm hidden md:table-cell">${p.farmer.name}</td>
+        <td class="px-3 py-2 text-sm font-semibold">${formatPeso(p.price)}</td>
+        <td class="px-3 py-2 text-sm">${p.quantity} ${p.unit}</td>
+        <td class="px-3 py-2 text-sm hidden lg:table-cell">
+            ${p.freshness ? `<span class="freshness-badge freshness-${p.freshnessIndicator || 'fresh'}">${getFreshnessEmoji(p.freshnessIndicator)} ${p.freshness}%</span>` : '<span class="text-gray-400">N/A</span>'}
+        </td>
+        <td class="px-3 py-2 text-sm ${rem <= 3 ? 'text-red-600 font-semibold' : 'text-yellow-600'}">${rem>0? rem + ' days' : 'Ending'}</td>
+        <td class="px-3 py-2 text-sm text-right">
+            <div class="flex flex-col sm:flex-row gap-1 justify-end">
+                <button onclick="adminEditProduct(${p.id})" class="px-2 py-1 text-xs bg-white border rounded hover:bg-gray-50">Edit</button>
+                <button onclick="adminDeleteProduct(${p.id})" class="px-2 py-1 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100">Delete</button>
+            </div>
+        </td>
+    </tr>
+`;
+}).join('');
 
     const regularOrders = window.APP_STATE.orders.filter(o => !o.type || o.type !== 'pre-order');
     const preorderOrders = window.APP_STATE.orders.filter(o => o.type === 'pre-order');
 
     const regularOrderRows = regularOrders.map(o => `
         <tr class="hover:bg-gray-50 border-b">
-            <td class="px-3 py-3 text-sm font-mono">${o.id}</td>
-            <td class="px-3 py-3 text-sm">${o.customer}</td>
-            <td class="px-3 py-3 text-sm font-semibold">${formatPeso(o.total)}</td>
-            <td class="px-3 py-3 text-sm">
+            <td class="px-3 py-2 text-sm font-mono">${o.id}</td>
+            <td class="px-3 py-2 text-sm">${o.customer}</td>
+            <td class="px-3 py-2 text-sm font-semibold">${formatPeso(o.total)}</td>
+            <td class="px-3 py-2 text-sm">
                 <span class="inline-flex items-center px-2 py-1 rounded-full text-xs ${
                     o.status === 'Delivered' ? 'bg-green-100 text-green-800' :
                     o.status === 'Out for Delivery' ? 'bg-blue-100 text-blue-800' :
@@ -2780,12 +2511,12 @@ window.renderAdminDashboard = async function() {
                     'bg-gray-100 text-gray-800'
                 }">${o.status}</span>
             </td>
-            <td class="px-3 py-3 text-sm hidden lg:table-cell">${o.date}</td>
-            <td class="px-3 py-3 text-sm">
-                <div class="flex flex-wrap gap-1 justify-end">
-                    <button onclick="adminViewOrder('${o.id}')" class="px-3 py-1.5 text-xs bg-white border rounded hover:bg-gray-50 whitespace-nowrap">View</button>
-                    <button onclick="adminEditOrder('${o.id}')" class="px-3 py-1.5 text-xs bg-lime-600 text-white rounded hover:bg-lime-700 whitespace-nowrap">Update</button>
-                    <button onclick="adminDeleteOrder('${o.id}')" class="px-3 py-1.5 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100 whitespace-nowrap">Delete</button>
+            <td class="px-3 py-2 text-sm hidden lg:table-cell">${o.date}</td>
+            <td class="px-3 py-2 text-sm text-right">
+                <div class="flex flex-col sm:flex-row gap-1 justify-end">
+                    <button onclick="adminViewOrder('${o.id}')" class="px-2 py-1 text-xs bg-white border rounded hover:bg-gray-50">View</button>
+                    <button onclick="adminEditOrder('${o.id}')" class="px-2 py-1 text-xs bg-lime-600 text-white rounded hover:bg-lime-700">Update</button>
+                    <button onclick="adminDeleteOrder('${o.id}')" class="px-2 py-1 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100">Delete</button>
                 </div>
             </td>
         </tr>
@@ -2793,10 +2524,10 @@ window.renderAdminDashboard = async function() {
 
     const preorderOrderRows = preorderOrders.map(o => `
         <tr class="hover:bg-gray-50 border-b">
-            <td class="px-3 py-3 text-sm font-mono">${o.id}</td>
-            <td class="px-3 py-3 text-sm">${o.customer}</td>
-            <td class="px-3 py-3 text-sm font-semibold">${formatPeso(o.total)}</td>
-            <td class="px-3 py-3 text-sm">
+            <td class="px-3 py-2 text-sm font-mono">${o.id}</td>
+            <td class="px-3 py-2 text-sm">${o.customer}</td>
+            <td class="px-3 py-2 text-sm font-semibold">${formatPeso(o.total)}</td>
+            <td class="px-3 py-2 text-sm">
                 <span class="inline-flex items-center px-2 py-1 rounded-full text-xs ${
                     o.status === 'Delivered' ? 'bg-green-100 text-green-800' :
                     o.status === 'Out for Delivery' ? 'bg-blue-100 text-blue-800' :
@@ -2804,203 +2535,160 @@ window.renderAdminDashboard = async function() {
                     'bg-orange-100 text-orange-800'
                 }">${o.status}</span>
             </td>
-            <td class="px-3 py-3 text-sm hidden lg:table-cell">${o.date}</td>
-            <td class="px-3 py-3 text-sm">
-                <div class="flex flex-wrap gap-1 justify-end">
-                    <button onclick="adminViewOrder('${o.id}')" class="px-3 py-1.5 text-xs bg-white border rounded hover:bg-gray-50 whitespace-nowrap">View</button>
-                    <button onclick="adminEditOrder('${o.id}')" class="px-3 py-1.5 text-xs bg-lime-600 text-white rounded hover:bg-lime-700 whitespace-nowrap">Update</button>
-                    <button onclick="adminDeleteOrder('${o.id}')" class="px-3 py-1.5 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100 whitespace-nowrap">Delete</button>
+            <td class="px-3 py-2 text-sm hidden lg:table-cell">${o.date}</td>
+            <td class="px-3 py-2 text-sm text-right">
+                <div class="flex flex-col sm:flex-row gap-1 justify-end">
+                    <button onclick="adminViewOrder('${o.id}')" class="px-2 py-1 text-xs bg-white border rounded hover:bg-gray-50">View</button>
+                    <button onclick="adminEditOrder('${o.id}')" class="px-2 py-1 text-xs bg-lime-600 text-white rounded hover:bg-lime-700">Update</button>
+                    <button onclick="adminDeleteOrder('${o.id}')" class="px-2 py-1 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100">Delete</button>
                 </div>
             </td>
         </tr>
     `).join('');
 
     return `
-    <section class="space-y-6">
-        <!-- Header Section -->
-        <div class="flex flex-col gap-4">
-            <div class="flex items-center justify-between flex-wrap gap-3">
-                <h2 class="text-2xl font-bold text-gray-800">Admin Dashboard</h2>
-            </div>
-            
-            <!-- Action Buttons -->
-            <div class="grid grid-cols-2 sm:grid-cols-3 lg:flex lg:flex-wrap gap-2">
-                <button onclick="switchAdminView('verification')" class="flex items-center justify-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm font-semibold relative">
-                    <i data-lucide="user-check" class="w-4 h-4"></i>
-                    <span class="hidden sm:inline">User Verification</span>
-                    <span class="sm:hidden">Verify</span>
-                    ${pendingUsers.length > 0 ? `<span class="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">${pendingUsers.length}</span>` : ''}
-                </button>
-                <button onclick="adminManageTimeSlots()" class="flex items-center justify-center gap-2 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 text-sm font-semibold">
-                    <i data-lucide="clock" class="w-4 h-4"></i>
-                    <span class="hidden sm:inline">Time Slots</span>
-                    <span class="sm:hidden">Slots</span>
-                </button>
-                <button onclick="adminAddProduct()" class="flex items-center justify-center gap-2 px-4 py-2 bg-lime-600 text-white rounded-lg hover:bg-lime-700 text-sm font-semibold">
-                    <i data-lucide="plus" class="w-4 h-4"></i>
-                    <span class="hidden sm:inline">Add Product</span>
-                    <span class="sm:hidden">Add</span>
-                </button>
-                <button onclick="adminUpdateDeliveryFee()" class="flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-semibold">
-                    <i data-lucide="truck" class="w-4 h-4"></i>
-                    <span class="hidden sm:inline">Delivery Fee</span>
-                    <span class="sm:hidden">Fee</span>
-                </button>
-                <button onclick="viewDeleteLogs()" class="flex items-center justify-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 text-sm font-semibold">
-                    <i data-lucide="file-text" class="w-4 h-4"></i>
-                    <span class="hidden sm:inline">Delete Logs</span>
-                    <span class="sm:hidden">Logs</span>
-                </button>
-            </div>
-        </div>
+    <section class="px-2 sm:px-4">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-3">
+  <h2 class="text-xl sm:text-2xl font-bold text-gray-800">Admin Dashboard</h2>
+  <div class="flex flex-col sm:flex-row gap-2">
+    <button onclick="switchAdminView('verification')" class="px-3 py-2 bg-purple-600 text-white rounded text-sm sm:text-base hover:bg-purple-700">
+      👤 User Verification
+    </button>
+    <button onclick="adminAddProduct()" class="px-3 py-2 bg-lime-600 text-white rounded text-sm sm:text-base hover:bg-lime-700">Add Product</button>
+    <button onclick="adminUpdateDeliveryFee()" class="px-3 py-2 bg-blue-600 text-white rounded text-sm sm:text-base hover:bg-blue-700">Set Delivery Fee</button>
+    <button onclick="viewDeleteLogs()" class="px-3 py-2 bg-white border text-gray-700 rounded text-sm sm:text-base hover:bg-gray-50">View Deletion Logs</button>
+  </div>
+</div>
 
-        <!-- Stats Cards -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            <div class="bg-white rounded-xl border p-4 flex items-center gap-4">
-                <div class="w-12 h-12 bg-lime-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <i data-lucide="dollar-sign" class="w-6 h-6 text-lime-600"></i>
-                </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-6">
+        <div class="bg-white rounded-xl p-4 shadow-sm border">
+          <div class="text-sm text-gray-500">Total Sales (Delivered)</div>
+          <div class="text-lg sm:text-xl font-bold text-lime-700 mt-1">${formatPeso(totalSales)}</div>
+        </div>
+        <div class="bg-white rounded-xl p-4 shadow-sm border">
+          <div class="text-sm text-gray-500">Total Orders</div>
+          <div class="text-lg sm:text-xl font-bold mt-1">${window.APP_STATE.orders.length}</div>
+        </div>
+        <div class="bg-white rounded-xl p-4 shadow-sm border">
+          <div class="text-sm text-gray-500">Pending Orders</div>
+          <div class="text-lg sm:text-xl font-bold mt-1">${pending}</div>
+        </div>
+      </div>
+
+      <!-- 🆕 PENDING VERIFICATIONS SECTION -->
+      <!-- 🆕 PENDING VERIFICATIONS ALERT -->
+${pendingUsers.length > 0 ? `
+    <div class="bg-yellow-50 border-l-4 border-yellow-500 p-4 mb-6 rounded-r-lg">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <i data-lucide="alert-circle" class="w-6 h-6 text-yellow-600"></i>
                 <div>
-                    <div class="text-sm text-gray-600">Total Sales</div>
-                    <div class="text-xl font-bold text-lime-700">${formatPeso(totalSales)}</div>
+                    <h3 class="font-semibold text-yellow-800">Pending Profile Verifications</h3>
+                    <p class="text-sm text-yellow-700">${pendingUsers.length} user${pendingUsers.length > 1 ? 's' : ''} waiting for verification</p>
                 </div>
             </div>
-            <div class="bg-white rounded-xl border p-4 flex items-center gap-4">
-                <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <i data-lucide="shopping-bag" class="w-6 h-6 text-blue-600"></i>
-                </div>
-                <div>
-                    <div class="text-sm text-gray-600">Total Orders</div>
-                    <div class="text-xl font-bold text-blue-700">${window.APP_STATE.orders.length}</div>
-                </div>
-            </div>
-            <div class="bg-white rounded-xl border p-4 flex items-center gap-4">
-                <div class="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <i data-lucide="clock" class="w-6 h-6 text-yellow-600"></i>
-                </div>
-                <div>
-                    <div class="text-sm text-gray-600">Pending Orders</div>
-                    <div class="text-xl font-bold text-yellow-700">${pending}</div>
-                </div>
-            </div>
+            <button onclick="switchAdminView('verification')" class="px-4 py-2 bg-yellow-600 text-white rounded hover:bg-yellow-700 text-sm font-semibold">
+                View All →
+            </button>
         </div>
+    </div>
+` : ''}}
 
-        <!-- Pending Verifications Alert -->
-        ${pendingUsers.length > 0 ? `
-            <div class="bg-yellow-50 border border-yellow-200 rounded-xl p-4">
-                <div class="flex items-start justify-between gap-4 flex-wrap">
-                    <div class="flex items-start gap-3">
-                        <i data-lucide="alert-circle" class="w-6 h-6 text-yellow-600 flex-shrink-0 mt-0.5"></i>
-                        <div>
-                            <h3 class="font-semibold text-yellow-900">Pending Profile Verifications</h3>
-                            <p class="text-sm text-yellow-800 mt-1">${pendingUsers.length} user${pendingUsers.length > 1 ? 's' : ''} waiting for verification</p>
-                        </div>
-                    </div>
-                    <button onclick="switchAdminView('verification')" class="px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 text-sm font-semibold whitespace-nowrap">
-                        View All →
-                    </button>
-                </div>
-            </div>
-        ` : ''}
-
-        <!-- Products - Regular -->
+      <div class="space-y-6">
         <div class="bg-white rounded-xl border overflow-hidden">
-            <div class="p-4 border-b bg-gray-50">
-                <h3 class="font-semibold text-lg text-gray-800">Products — Regular</h3>
-            </div>
-            <div class="overflow-x-auto">
-                <table class="w-full text-sm">
-                    <thead class="bg-gray-50 border-b">
-                        <tr>
-                            <th class="px-3 py-3 text-left font-semibold text-gray-700">Name</th>
-                            <th class="px-3 py-3 text-left font-semibold text-gray-700 hidden sm:table-cell">Origin</th>
-                            <th class="px-3 py-3 text-left font-semibold text-gray-700 hidden md:table-cell">Farmer</th>
-                            <th class="px-3 py-3 text-left font-semibold text-gray-700">Price</th>
-                            <th class="px-3 py-3 text-left font-semibold text-gray-700">Stock</th>
-                            <th class="px-3 py-3 text-left font-semibold text-gray-700 hidden lg:table-cell">Freshness</th>
-                            <th class="px-3 py-3 text-right font-semibold text-gray-700">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${regularRows || '<tr><td colspan="7" class="text-center py-8 text-gray-500">No regular products available</td></tr>'}
-                    </tbody>
-                </table>
-            </div>
+          <div class="p-4 border-b">
+            <h3 class="font-semibold text-lg">Products — Regular</h3>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead class="bg-gray-50 text-gray-700">
+                <tr>
+                    <th class="px-3 py-3 text-left font-medium">Name</th>
+                    <th class="px-3 py-3 text-left font-medium hidden sm:table-cell">Origin</th>
+                    <th class="px-3 py-3 text-left font-medium hidden md:table-cell">Farmer</th>
+                    <th class="px-3 py-3 text-left font-medium">Price</th>
+                    <th class="px-3 py-3 text-left font-medium">Stock</th>
+                    <th class="px-3 py-3 text-left font-medium hidden lg:table-cell">Freshness</th>
+                    <th class="px-3 py-3 text-right font-medium">Actions</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-200">
+                ${regularRows || '<tr><td class="px-3 py-8 text-center text-gray-500 text-sm" colspan="7">No regular products available</td></tr>'}
+              </tbody>
+            </table>
+          </div>
         </div>
 
-        <!-- Products - Pre-Order -->
         <div class="bg-white rounded-xl border overflow-hidden">
-            <div class="p-4 border-b bg-gray-50">
-                <h3 class="font-semibold text-lg text-gray-800">Products — Pre-Order</h3>
-            </div>
-            <div class="overflow-x-auto">
-                <table class="w-full text-sm">
-                    <thead class="bg-gray-50 border-b">
-                        <tr>
-                            <th class="px-3 py-3 text-left font-semibold text-gray-700">Name</th>
-                            <th class="px-3 py-3 text-left font-semibold text-gray-700 hidden sm:table-cell">Origin</th>
-                            <th class="px-3 py-3 text-left font-semibold text-gray-700 hidden md:table-cell">Farmer</th>
-                            <th class="px-3 py-3 text-left font-semibold text-gray-700">Price</th>
-                            <th class="px-3 py-3 text-left font-semibold text-gray-700">Stock</th>
-                            <th class="px-3 py-3 text-left font-semibold text-gray-700 hidden lg:table-cell">Freshness</th>
-                            <th class="px-3 py-3 text-left font-semibold text-gray-700">Remaining</th>
-                            <th class="px-3 py-3 text-right font-semibold text-gray-700">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${preorderRows || '<tr><td colspan="8" class="text-center py-8 text-gray-500">No pre-order products available</td></tr>'}
-                    </tbody>
-                </table>
-            </div>
+          <div class="p-4 border-b">
+            <h3 class="font-semibold text-lg">Products — Pre-Order</h3>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead class="bg-gray-50 text-gray-700">
+                <tr>
+                  <th class="px-3 py-3 text-left font-medium">Name</th>
+                  <th class="px-3 py-3 text-left font-medium hidden sm:table-cell">Origin</th>
+                  <th class="px-3 py-3 text-left font-medium hidden md:table-cell">Farmer</th>
+                  <th class="px-3 py-3 text-left font-medium">Price</th>
+                  <th class="px-3 py-3 text-left font-medium">Stock</th>
+                  <th class="px-3 py-3 text-left font-medium hidden lg:table-cell">Freshness</th>
+                  <th class="px-3 py-3 text-left font-medium">Remaining</th>
+                  <th class="px-3 py-3 text-right font-medium">Actions</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-200">
+                ${preorderRows || '<tr><td class="px-3 py-8 text-center text-gray-500 text-sm" colspan="8">No pre-order products available</td></tr>'}              </tbody>
+            </table>
+          </div>
         </div>
 
-        <!-- Orders - Regular -->
         <div class="bg-white rounded-xl border overflow-hidden">
-            <div class="p-4 border-b bg-gray-50">
-                <h3 class="font-semibold text-lg text-gray-800">Orders — Regular</h3>
-            </div>
-            <div class="overflow-x-auto">
-                <table class="w-full text-sm">
-                    <thead class="bg-gray-50 border-b">
-                        <tr>
-                            <th class="px-3 py-3 text-left font-semibold text-gray-700">Order ID</th>
-                            <th class="px-3 py-3 text-left font-semibold text-gray-700">Customer</th>
-                            <th class="px-3 py-3 text-left font-semibold text-gray-700">Total</th>
-                            <th class="px-3 py-3 text-left font-semibold text-gray-700">Status</th>
-                            <th class="px-3 py-3 text-left font-semibold text-gray-700 hidden lg:table-cell">Date</th>
-                            <th class="px-3 py-3 text-right font-semibold text-gray-700">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${regularOrderRows || '<tr><td colspan="6" class="text-center py-8 text-gray-500">No regular orders</td></tr>'}
-                    </tbody>
-                </table>
-            </div>
+          <div class="p-4 border-b">
+            <h3 class="font-semibold text-lg">Orders — Regular</h3>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead class="bg-gray-50 text-gray-700">
+                <tr>
+                  <th class="px-3 py-3 text-left font-medium">Order ID</th>
+                  <th class="px-3 py-3 text-left font-medium">Customer</th>
+                  <th class="px-3 py-3 text-left font-medium">Total</th>
+                  <th class="px-3 py-3 text-left font-medium">Status</th>
+                  <th class="px-3 py-3 text-left font-medium hidden lg:table-cell">Date</th>
+                  <th class="px-3 py-3 text-right font-medium">Actions</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-200">
+                ${regularOrderRows || '<tr><td class="px-3 py-8 text-center text-gray-500 text-sm" colspan="6">No regular orders</td></tr>'}
+              </tbody>
+            </table>
+          </div>
         </div>
 
-        <!-- Orders - Pre-Order -->
         <div class="bg-white rounded-xl border overflow-hidden">
-            <div class="p-4 border-b bg-gray-50">
-                <h3 class="font-semibold text-lg text-gray-800">Orders — Pre-Order</h3>
-            </div>
-            <div class="overflow-x-auto">
-                <table class="w-full text-sm">
-                    <thead class="bg-gray-50 border-b">
-                        <tr>
-                            <th class="px-3 py-3 text-left font-semibold text-gray-700">Order ID</th>
-                            <th class="px-3 py-3 text-left font-semibold text-gray-700">Customer</th>
-                            <th class="px-3 py-3 text-left font-semibold text-gray-700">Total</th>
-                            <th class="px-3 py-3 text-left font-semibold text-gray-700">Status</th>
-                            <th class="px-3 py-3 text-left font-semibold text-gray-700 hidden lg:table-cell">Date</th>
-                            <th class="px-3 py-3 text-right font-semibold text-gray-700">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${preorderOrderRows || '<tr><td colspan="6" class="text-center py-8 text-gray-500">No pre-order orders</td></tr>'}
-                    </tbody>
-                </table>
-            </div>
+          <div class="p-4 border-b">
+            <h3 class="font-semibold text-lg">Orders — Pre-Order</h3>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead class="bg-gray-50 text-gray-700">
+                <tr>
+                  <th class="px-3 py-3 text-left font-medium">Order ID</th>
+                  <th class="px-3 py-3 text-left font-medium">Customer</th>
+                  <th class="px-3 py-3 text-left font-medium">Total</th>
+                  <th class="px-3 py-3 text-left font-medium">Status</th>
+                  <th class="px-3 py-3 text-left font-medium hidden lg:table-cell">Date</th>
+                  <th class="px-3 py-3 text-right font-medium">Actions</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-200">
+                ${preorderOrderRows || '<tr><td class="px-3 py-8 text-center text-gray-500 text-sm" colspan="6">No pre-order orders</td></tr>'}
+              </tbody>
+            </table>
+          </div>
         </div>
+      </div>
     </section>
     `;
 };
@@ -3011,20 +2699,16 @@ window.renderUserVerificationPage = async function() {
         return `<div class="bg-white rounded-xl p-6 border">Admin access required.</div>`;
     }
 
+    // Get all users with pending verification
     const usersData = await getFromFirebase('users');
     const pendingUsers = usersData ? Object.values(usersData).filter(u => 
-        u.profile && u.profile.fullName && !u.profile.verified && !u.profile.denied
+        u.profile && u.profile.fullName && !u.profile.verified
     ) : [];
 
+    // Get verified users
     const verifiedUsers = usersData ? Object.values(usersData).filter(u => 
         u.profile && u.profile.verified
     ) : [];
-
-    const deniedUsers = usersData ? Object.values(usersData).filter(u => 
-        u.profile && u.profile.denied
-    ) : [];
-    
-    // ... rest of the code
 
     const pendingRows = pendingUsers.map(user => `
         <tr class="hover:bg-gray-50 border-b">
@@ -3036,7 +2720,6 @@ window.renderUserVerificationPage = async function() {
                 <div class="flex flex-col sm:flex-row gap-1 justify-end">
                     <button onclick="viewUserProfile('${user.uid}')" class="px-2 py-1 text-xs bg-white border rounded hover:bg-gray-50">View Details</button>
                     <button onclick="verifyCustomerProfile('${user.uid}')" class="px-2 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700">✓ Verify</button>
-<button onclick="denyCustomerProfile('${user.uid}')" class="px-2 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700">✗ Deny</button>
                 </div>
             </td>
         </tr>
@@ -3056,32 +2739,28 @@ window.renderUserVerificationPage = async function() {
 
     return `
         <section class="px-2 sm:px-4">
-            <div class="flex items-center justify-between mb-4 gap-3 flex-wrap">
-    <h2 class="text-xl sm:text-2xl font-bold text-gray-800">User Verification</h2>
-    <button onclick="switchAdminView('dashboard')" class="admin-btn admin-btn-gray">
-        ← Back to Dashboard
-    </button>
-</div>
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-xl sm:text-2xl font-bold text-gray-800">User Verification</h2>
+                <button onclick="switchAdminView('dashboard')" class="px-3 py-2 bg-gray-100 text-gray-700 rounded text-sm hover:bg-gray-200">
+                    ← Back to Dashboard
+                </button>
+            </div>
 
             <!-- Stats Cards -->
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-    <div class="bg-white rounded-xl p-4 shadow-sm border">
-        <div class="text-sm text-gray-500">Pending Verifications</div>
-        <div class="text-lg sm:text-xl font-bold text-yellow-600 mt-1">${pendingUsers.length}</div>
-    </div>
-    <div class="bg-white rounded-xl p-4 shadow-sm border">
-        <div class="text-sm text-gray-500">Verified Users</div>
-        <div class="text-lg sm:text-xl font-bold text-green-600 mt-1">${verifiedUsers.length}</div>
-    </div>
-    <div class="bg-white rounded-xl p-4 shadow-sm border">
-        <div class="text-sm text-gray-500">Denied Profiles</div>
-        <div class="text-lg sm:text-xl font-bold text-red-600 mt-1">${deniedUsers.length}</div>
-    </div>
-    <div class="bg-white rounded-xl p-4 shadow-sm border">
-        <div class="text-sm text-gray-500">Total Users</div>
-        <div class="text-lg sm:text-xl font-bold mt-1">${pendingUsers.length + verifiedUsers.length + deniedUsers.length}</div>
-    </div>
-</div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-6">
+                <div class="bg-white rounded-xl p-4 shadow-sm border">
+                    <div class="text-sm text-gray-500">Pending Verifications</div>
+                    <div class="text-lg sm:text-xl font-bold text-yellow-600 mt-1">${pendingUsers.length}</div>
+                </div>
+                <div class="bg-white rounded-xl p-4 shadow-sm border">
+                    <div class="text-sm text-gray-500">Verified Users</div>
+                    <div class="text-lg sm:text-xl font-bold text-green-600 mt-1">${verifiedUsers.length}</div>
+                </div>
+                <div class="bg-white rounded-xl p-4 shadow-sm border">
+                    <div class="text-sm text-gray-500">Total Users</div>
+                    <div class="text-lg sm:text-xl font-bold mt-1">${pendingUsers.length + verifiedUsers.length}</div>
+                </div>
+            </div>
 
             <!-- Pending Verifications Table -->
             ${pendingUsers.length > 0 ? `
@@ -3144,55 +2823,6 @@ window.renderUserVerificationPage = async function() {
                     </table>
                 </div>
             </div>
-
-            <!-- Denied Profiles Section -->
-${usersData ? (() => {
-    const deniedUsers = Object.values(usersData).filter(u => 
-        u.profile && u.profile.denied
-    );
-    
-    if(deniedUsers.length === 0) return '';
-    
-    const deniedRows = deniedUsers.map(user => `
-        <tr class="hover:bg-gray-50 border-b">
-            <td class="px-3 py-2 text-sm font-medium">${user.profile.fullName}</td>
-            <td class="px-3 py-2 text-sm hidden sm:table-cell">${user.email}</td>
-            <td class="px-3 py-2 text-sm hidden md:table-cell text-red-600">${user.profile.denialReason || 'N/A'}</td>
-            <td class="px-3 py-2 text-sm hidden lg:table-cell">${user.profile.deniedAt ? new Date(user.profile.deniedAt).toLocaleDateString() : 'N/A'}</td>
-            <td class="px-3 py-2 text-sm text-right">
-                <button onclick="viewUserProfile('${user.uid}')" class="px-2 py-1 text-xs bg-white border rounded hover:bg-gray-50">View Details</button>
-            </td>
-        </tr>
-    `).join('');
-    
-    return `
-        <div class="bg-white rounded-xl border overflow-hidden mt-6">
-            <div class="p-4 border-b bg-red-50">
-                <h3 class="font-semibold text-lg flex items-center gap-2">
-                    <i data-lucide="x-circle" class="w-5 h-5 text-red-600"></i>
-                    Denied Profiles
-                    <span class="ml-2 px-2 py-0.5 bg-red-500 text-white text-xs rounded-full">${deniedUsers.length}</span>
-                </h3>
-            </div>
-            <div class="overflow-x-auto">
-                <table class="w-full text-sm">
-                    <thead class="bg-gray-50 text-gray-700">
-                        <tr>
-                            <th class="px-3 py-3 text-left font-medium">Customer Name</th>
-                            <th class="px-3 py-3 text-left font-medium hidden sm:table-cell">Email</th>
-                            <th class="px-3 py-3 text-left font-medium hidden md:table-cell">Denial Reason</th>
-                            <th class="px-3 py-3 text-left font-medium hidden lg:table-cell">Denied Date</th>
-                            <th class="px-3 py-3 text-right font-medium">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-gray-200">
-                        ${deniedRows}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    `;
-})() : ''}
         </section>
     `;
 };
@@ -3200,10 +2830,6 @@ ${usersData ? (() => {
 // NEW FUNCTION: Switch between admin dashboard views
 window.switchAdminView = function(viewName) {
     window.APP_STATE.adminView = viewName;
-    
-    // Scroll to top
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-    
     renderMain();
 };
 
