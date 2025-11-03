@@ -439,6 +439,7 @@ if (!userData.dataPrivacyAccepted) {
 }
 
 
+
     } catch (error) {
         console.error('Login error:', error);
         let errorMessage = 'Invalid email or password.';
