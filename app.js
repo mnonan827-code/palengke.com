@@ -543,18 +543,37 @@ window.checkout = async function() {
     }
 
     // Check if user has completed profile
-    const userData = await getFromFirebase(`users/${window.APP_STATE.currentUser.uid}`);
-    const profile = userData.profile || {};
-    
-    if(!profile.fullName || !profile.idUrl) {
-        return showModal('Complete Your Profile', `
-            <div class="space-y-3">
-                <p class="text-gray-700">Please complete your profile with valid ID before placing an order.</p>
-                <p class="text-sm text-gray-600">This is required for verification and delivery purposes.</p>
+    // Check if user has completed profile
+const userData = await getFromFirebase(`users/${window.APP_STATE.currentUser.uid}`);
+const profile = userData.profile || {};
+
+if(!profile.fullName || !profile.idUrl) {
+    return showModal('Complete Your Profile', `
+        <div class="space-y-3">
+            <p class="text-gray-700">Please complete your profile with valid ID before placing an order.</p>
+            <p class="text-sm text-gray-600">This is required for verification and delivery purposes.</p>
+        </div>
+    `, `<button onclick="hideModal(); showUserProfile();" class="px-4 py-2 bg-lime-600 text-white rounded">Complete Profile</button>
+        <button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">Cancel</button>`);
+}
+
+// ✅ NEW: Check if profile is verified
+if(!profile.verified) {
+    return showModal('Profile Verification Required', `
+        <div class="space-y-3">
+            <div class="text-center">
+                <i data-lucide="alert-circle" class="w-16 h-16 mx-auto text-yellow-500"></i>
             </div>
-        `, `<button onclick="hideModal(); showUserProfile();" class="px-4 py-2 bg-lime-600 text-white rounded">Complete Profile</button>
-            <button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">Cancel</button>`);
-    }
+            <p class="text-gray-700 text-center">Your profile is currently under review by our admin team.</p>
+            <p class="text-sm text-gray-600 text-center">You can place orders once your profile has been verified.</p>
+            <div class="bg-blue-50 p-3 rounded border-l-4 border-blue-500">
+                <p class="text-sm text-blue-800"><strong>Profile Status:</strong> Pending Verification</p>
+                <p class="text-xs text-blue-600 mt-1">Usually takes 24-48 hours</p>
+            </div>
+        </div>
+    `, `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>
+        <button onclick="hideModal(); showUserProfile();" class="px-4 py-2 bg-blue-600 text-white rounded">View Profile</button>`);
+}
     
     const subtotal = window.APP_STATE.cart.reduce((s,i)=> s + i.price * i.quantity, 0);
     const deliveryFee = window.APP_STATE.deliveryFee || 25.00;
@@ -665,13 +684,35 @@ window.showUserProfile = async function() {
     showModal('My Profile', `
     <form id="profile-form" class="grid gap-3">
         ${hasProfile ? `
-            <div class="bg-green-50 p-3 rounded-lg border border-green-200 mb-2">
-                <div class="flex items-center gap-2 text-sm text-green-800">
-                    <i data-lucide="check-circle" class="w-4 h-4"></i>
-                    <span class="font-semibold">Profile ${profile.verified ? 'Verified' : 'Submitted - Pending Verification'}</span>
-                </div>
+    ${profile.verified ? `
+        <div class="bg-green-50 p-3 rounded-lg border border-green-200 mb-2">
+            <div class="flex items-center gap-2 text-sm text-green-800">
+                <i data-lucide="check-circle" class="w-4 h-4"></i>
+                <span class="font-semibold">Profile Verified</span>
             </div>
-        ` : `
+        </div>
+    ` : profile.denied ? `
+        <div class="bg-red-50 p-3 rounded-lg border border-red-200 mb-2">
+            <div class="flex items-center gap-2 text-sm text-red-800">
+                <i data-lucide="x-circle" class="w-4 h-4"></i>
+                <span class="font-semibold">Profile Verification Denied</span>
+            </div>
+            <div class="mt-2 text-xs text-red-700">
+                <strong>Reason:</strong> ${profile.denialReason || 'No reason provided'}
+            </div>
+            <div class="mt-2 text-xs text-red-600">
+                Please update your information and resubmit.
+            </div>
+        </div>
+    ` : `
+        <div class="bg-yellow-50 p-3 rounded-lg border border-yellow-200 mb-2">
+            <div class="flex items-center gap-2 text-sm text-yellow-800">
+                <i data-lucide="clock" class="w-4 h-4"></i>
+                <span class="font-semibold">Profile Submitted - Pending Verification</span>
+            </div>
+        </div>
+    `}
+` : `
             <div class="bg-yellow-50 p-3 rounded-lg border border-yellow-200 mb-2">
                 <div class="flex items-center gap-2 text-sm text-yellow-800">
                     <i data-lucide="alert-circle" class="w-4 h-4"></i>
@@ -876,19 +917,21 @@ window.saveUserProfile = async function() {
         const homeAddress = addressParts.join(', ');
 
         const profileData = {
-            fullName,
-            birthday,
-            age,
-            unit,
-            building: building || '',
-            street,
-            barangay,
-            homeAddress,
-            idType,
-            idUrl,
-            verified: false,
-            submittedAt: new Date().toISOString()
-        };
+    fullName,
+    birthday,
+    age,
+    unit,
+    building: building || '',
+    street,
+    barangay,
+    homeAddress,
+    idType,
+    idUrl,
+    verified: false,
+    denied: false, // ✅ Reset denied status on resubmission
+    denialReason: null, // ✅ Clear denial reason
+    submittedAt: new Date().toISOString()
+};
 
         await updateFirebase(`users/${window.APP_STATE.currentUser.uid}`, {
             profile: profileData
@@ -1378,13 +1421,22 @@ window.adminViewOrder = async function(id) {
                 </button>
               </div>
             ` : '<div class="text-xs text-gray-500 pt-2">No ID uploaded</div>'}
-            ${!profile.verified && profile.idUrl ? `
-              <div class="pt-2">
-                <button onclick="verifyCustomerProfile('${o.userId}')" class="px-3 py-1 bg-green-600 text-white rounded text-sm hover:bg-green-700">
-                  ✓ Verify Profile
-                </button>
-              </div>
-            ` : ''}
+            ${!profile.verified && profile.idUrl && !profile.denied ? `
+  <div class="pt-2 flex gap-2">
+    <button onclick="verifyCustomerProfile('${o.userId}')" class="px-3 py-1 bg-green-600 text-white rounded text-sm hover:bg-green-700">
+      ✓ Verify Profile
+    </button>
+    <button onclick="denyCustomerProfile('${o.userId}')" class="px-3 py-1 bg-red-600 text-white rounded text-sm hover:bg-red-700">
+      ✗ Deny
+    </button>
+  </div>
+` : ''}
+${profile.denied ? `
+  <div class="pt-2 bg-red-50 p-2 rounded border border-red-200">
+    <div class="text-xs text-red-800 font-semibold">Profile Denied</div>
+    <div class="text-xs text-red-600 mt-1">${profile.denialReason || 'No reason provided'}</div>
+  </div>
+` : ''}
           </div>
         </div>
       ` : `
@@ -1548,6 +1600,84 @@ window.confirmVerifyProfile = async function(userId) {
     } catch (error) {
         console.error('Error verifying profile:', error);
         showModal('Error', 'Failed to verify profile. Please try again.', `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
+    }
+};
+
+// Deny customer profile verification
+window.denyCustomerProfile = async function(userId) {
+    if(!window.APP_STATE.currentUser || window.APP_STATE.currentUser.role !== 'admin') {
+        return showModal('Forbidden', 'Admin access required.', `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
+    }
+
+    try {
+        const userData = await getFromFirebase(`users/${userId}`);
+        const profile = userData.profile || {};
+
+        showModal('Deny Profile Verification', `
+            <div class="space-y-3">
+                <div class="bg-red-50 p-3 rounded border-l-4 border-red-500">
+                    <div class="text-sm font-semibold mb-2 text-red-800">Profile to Deny:</div>
+                    <div class="space-y-1 text-sm text-red-700">
+                        <div><b>Name:</b> ${profile.fullName}</div>
+                        <div><b>Email:</b> ${userData.email}</div>
+                    </div>
+                </div>
+                
+                <div class="bg-yellow-50 p-3 rounded border-l-4 border-yellow-500">
+                    <div class="text-xs text-yellow-800">
+                        <b>⚠️ Important:</b> Please provide a reason for denial. The user will need to resubmit their profile with correct information.
+                    </div>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Reason for Denial <span class="text-red-600">*</span></label>
+                    <textarea id="denial-reason" rows="4" class="w-full p-2 border rounded" placeholder="e.g., ID is unclear, information doesn't match, expired document..." required></textarea>
+                </div>
+            </div>
+        `, `
+            <button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">Cancel</button>
+            <button onclick="confirmDenyProfile('${userId}')" class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700">✗ Deny Verification</button>
+        `);
+        
+        setTimeout(() => icons(), 100);
+    } catch (error) {
+        console.error('Error loading profile:', error);
+        showModal('Error', 'Failed to load profile. Please try again.', `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
+    }
+};
+
+// Confirm denial of profile verification
+window.confirmDenyProfile = async function(userId) {
+    const reason = document.getElementById('denial-reason')?.value?.trim();
+    
+    if(!reason) {
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'text-xs text-red-600 mt-1 font-semibold';
+        errorDiv.textContent = '⚠️ Please provide a reason for denial';
+        document.getElementById('denial-reason')?.parentElement.appendChild(errorDiv);
+        return;
+    }
+
+    try {
+        await updateFirebase(`users/${userId}/profile`, { 
+            verified: false,
+            denied: true,
+            deniedAt: new Date().toISOString(),
+            deniedBy: window.APP_STATE.currentUser.email,
+            denialReason: reason
+        });
+        
+        hideModal();
+        showModal('Profile Denied', `
+            <div class="text-center space-y-3">
+                <div class="text-5xl text-red-600">✗</div>
+                <p class="text-gray-700">Profile verification has been denied.</p>
+                <p class="text-sm text-gray-600">The user will be notified and can resubmit their profile.</p>
+            </div>
+        `, `<button onclick="hideModal(); renderMain();" class="px-4 py-2 bg-lime-600 text-white rounded">OK</button>`);
+    } catch (error) {
+        console.error('Error denying profile:', error);
+        showModal('Error', 'Failed to deny profile. Please try again.', `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
     }
 };
 
@@ -2720,6 +2850,7 @@ window.renderUserVerificationPage = async function() {
                 <div class="flex flex-col sm:flex-row gap-1 justify-end">
                     <button onclick="viewUserProfile('${user.uid}')" class="px-2 py-1 text-xs bg-white border rounded hover:bg-gray-50">View Details</button>
                     <button onclick="verifyCustomerProfile('${user.uid}')" class="px-2 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700">✓ Verify</button>
+<button onclick="denyCustomerProfile('${user.uid}')" class="px-2 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700">✗ Deny</button>
                 </div>
             </td>
         </tr>
@@ -2823,6 +2954,55 @@ window.renderUserVerificationPage = async function() {
                     </table>
                 </div>
             </div>
+
+            <!-- Denied Profiles Section -->
+${usersData ? (() => {
+    const deniedUsers = Object.values(usersData).filter(u => 
+        u.profile && u.profile.denied
+    );
+    
+    if(deniedUsers.length === 0) return '';
+    
+    const deniedRows = deniedUsers.map(user => `
+        <tr class="hover:bg-gray-50 border-b">
+            <td class="px-3 py-2 text-sm font-medium">${user.profile.fullName}</td>
+            <td class="px-3 py-2 text-sm hidden sm:table-cell">${user.email}</td>
+            <td class="px-3 py-2 text-sm hidden md:table-cell text-red-600">${user.profile.denialReason || 'N/A'}</td>
+            <td class="px-3 py-2 text-sm hidden lg:table-cell">${user.profile.deniedAt ? new Date(user.profile.deniedAt).toLocaleDateString() : 'N/A'}</td>
+            <td class="px-3 py-2 text-sm text-right">
+                <button onclick="viewUserProfile('${user.uid}')" class="px-2 py-1 text-xs bg-white border rounded hover:bg-gray-50">View Details</button>
+            </td>
+        </tr>
+    `).join('');
+    
+    return `
+        <div class="bg-white rounded-xl border overflow-hidden mt-6">
+            <div class="p-4 border-b bg-red-50">
+                <h3 class="font-semibold text-lg flex items-center gap-2">
+                    <i data-lucide="x-circle" class="w-5 h-5 text-red-600"></i>
+                    Denied Profiles
+                    <span class="ml-2 px-2 py-0.5 bg-red-500 text-white text-xs rounded-full">${deniedUsers.length}</span>
+                </h3>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead class="bg-gray-50 text-gray-700">
+                        <tr>
+                            <th class="px-3 py-3 text-left font-medium">Customer Name</th>
+                            <th class="px-3 py-3 text-left font-medium hidden sm:table-cell">Email</th>
+                            <th class="px-3 py-3 text-left font-medium hidden md:table-cell">Denial Reason</th>
+                            <th class="px-3 py-3 text-left font-medium hidden lg:table-cell">Denied Date</th>
+                            <th class="px-3 py-3 text-right font-medium">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-200">
+                        ${deniedRows}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    `;
+})() : ''}
         </section>
     `;
 };
