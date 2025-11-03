@@ -2648,111 +2648,9 @@ window.showProduct = function(id) {
     );
 };
 
-window.renderOrdersPublic = function() {
-    let list = [];
-    if(window.APP_STATE.currentUser && window.APP_STATE.currentUser.role === 'admin') {
-        list = window.APP_STATE.orders;
-    } else if(window.APP_STATE.currentUser) {
-        list = window.APP_STATE.orders.filter(o => o.email === window.APP_STATE.currentUser.email);
-    } else {
-        return `
-        <section>
-            <div class="flex items-center justify-between mb-4">
-                <h2 class="text-2xl font-bold">Orders</h2>
-                <div class="text-sm text-gray-500">Log in to see your orders</div>
-            </div>
-            <div class="bg-white rounded-xl p-6 border text-gray-600">Please <button onclick="openAuth('login')" class="underline">log in</button> or <button onclick="openAuth('signup')" class="underline">sign up</button> to view and track your orders.</div>
-        </section>
-        `;
-    }
-
-    if(window.APP_STATE.currentUser && window.APP_STATE.currentUser.role === 'customer') {
-        const html = list.length ? list.map(o => {
-            const itemsHtml = o.items.map(it => `<li class="flex justify-between py-1"><span>${it.quantity} × ${it.name} (${it.unit})</span><span>${formatPeso(it.price * it.quantity)}</span></li>`).join('');
-            return `
-            <div class="bg-white rounded-xl p-4 border mb-3">
-              <div class="flex items-center justify-between">
-                <div><b>${o.id}</b> • ${o.customer}</div>
-                <div class="text-lime-700 font-semibold">${formatPeso(o.total)}</div>
-              </div>
-              <div class="mt-2 text-sm text-gray-500">Date: ${o.date}</div>
-              <div class="mt-3">
-                <div class="font-medium">Items</div>
-                <ul class="mt-2 border rounded p-3 bg-gray-50">
-                  ${itemsHtml}
-                </ul>
-              </div>
-              <div class="mt-3 grid grid-cols-2 gap-3 text-sm">
-                <div><b>Contact</b><br>${o.contact}</div>
-                <div><b>Address</b><br>${o.address}</div>
-              </div>
-              <div class="mt-3">
-                <div class="inline-flex items-center gap-3">
-                  <div class="px-3 py-1 rounded bg-gray-100 text-gray-800">${o.status}</div>
-                  <button onclick="viewOrderDetail('${o.id}')" class="px-3 py-1 rounded bg-white border text-sm">View</button>
-                </div>
-              </div>
-            </div>
-            `;
-        }).join('') : `<div class="text-gray-500">You have no orders yet.</div>`;
-
-        return `
-        <section>
-            <div class="flex items-center justify-between mb-4">
-                <h2 class="text-2xl font-bold">My Orders</h2>
-                <div class="text-sm text-gray-500">Order history & tracking</div>
-            </div>
-            ${html}
-        </section>
-        `;
-    }
-
-    const html = list.length ? list.map(o => `
-    <div class="bg-white rounded-xl p-4 border mb-3">
-              <div class="flex items-center justify-between">
-                <div><b>${o.id}</b> • ${o.customer}</div>
-                <div class="text-lime-700 font-semibold">${formatPeso(o.total)}</div>
-              </div>
-              <div class="mt-2 text-sm text-gray-500">Date: ${o.date}</div>
-              <div class="mt-1 text-sm text-gray-500">Delivery Time: <b>${o.deliveryTimeSlot || 'Not specified'}</b></div>
-          <button onclick="viewOrderDetail('${o.id}')" class="px-3 py-1 rounded bg-white border text-sm">View</button>
-          ${window.APP_STATE.currentUser && window.APP_STATE.currentUser.role === 'admin' ? `<button onclick="adminEditOrder('${o.id}')" class="px-3 py-1 rounded bg-lime-600 text-white text-sm ml-2">Update</button>` : ''}
-        </div>
-    </div>
-    `).join('') : `<div class="text-gray-500">No orders to display.</div>`;
-
-    return `
-    <section>
-        <div class="flex items-center justify-between mb-4">
-            <h2 class="text-2xl font-bold">Orders</h2>
-            <div class="text-sm text-gray-500">Order history</div>
-        </div>
-        ${html}
-    </section>
-    `;
-};
-
-window.viewOrderDetail = function(id) {
-    const o = window.APP_STATE.orders.find(x=> x.id === id);
-    if(!o) return;
-    const items = o.items.map(it => `<li class="flex justify-between py-1"><span>${it.quantity} × ${it.name} (${it.unit})</span><span>${formatPeso(it.price * it.quantity)}</span></li>`).join('');
-    const actions = (window.APP_STATE.currentUser && window.APP_STATE.currentUser.role === 'admin') ? `<button onclick="adminEditOrder('${o.id}')" class="px-4 py-2 bg-lime-600 text-white rounded">Update Status</button>` : '';
-    showModal(`Order ${o.id}`, `
-    <div class="grid gap-2">
-      <div><b>Customer:</b> ${o.customer}</div>
-      <div><b>Contact:</b> ${o.contact}</div>
-      <div><b>Address:</b> ${o.address}</div>
-      <div><b>Delivery Time:</b> ${o.deliveryTimeSlot || 'Not specified'}</div>
-      <div><b>Date:</b> ${o.date}</div>
-    <div class="pt-2"><b>Items</b><ul class="mt-2">${items}</ul></div>
-    <div class="pt-2"><b>Total:</b> ${formatPeso(o.total)}</div>
-    <div class="pt-2"><b>Status:</b> <span class="badge bg-gray-100 text-gray-800 px-2 py-1 rounded">${o.status}</span></div>
-    </div>
-`, `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">Close</button>${actions}`);
-};
-
 window.renderAdminDashboard = async function() {
-    if(!window.APP_STATE.currentUser || window.APP_STATE.currentUser.role !== 'admin') return `<div class="bg-white rounded-xl p-6 border">Admin access required.</div>`;
+    if(!window.APP_STATE.currentUser || window.APP_STATE.currentUser.role !== 'admin') 
+        return `<div class="bg-white rounded-xl p-6 border">Admin access required.</div>`;
     
     const totalSales = window.APP_STATE.orders.filter(o => o.status === 'Delivered').reduce((s,o) => s + Number(o.total), 0);
     const pending = window.APP_STATE.orders.filter(o => o.status !== 'Delivered').length;
@@ -2860,97 +2758,109 @@ window.renderAdminDashboard = async function() {
     `).join('');
 
     return `
-    <section class="admin-dashboard-container">
-        <div class="admin-header-actions">
-            <h2 class="text-2xl font-bold text-gray-800">Admin Dashboard</h2>
-            <div class="admin-button-grid">
-                <button onclick="switchAdminView('verification')" class="admin-btn admin-btn-purple">
+    <section class="space-y-6">
+        <!-- Header Section -->
+        <div class="flex flex-col gap-4">
+            <div class="flex items-center justify-between flex-wrap gap-3">
+                <h2 class="text-2xl font-bold text-gray-800">Admin Dashboard</h2>
+            </div>
+            
+            <!-- Action Buttons -->
+            <div class="grid grid-cols-2 sm:grid-cols-3 lg:flex lg:flex-wrap gap-2">
+                <button onclick="switchAdminView('verification')" class="flex items-center justify-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm font-semibold relative">
                     <i data-lucide="user-check" class="w-4 h-4"></i>
-                    <span>User Verification</span>
-                    ${pendingUsers.length > 0 ? `<span class="admin-badge">${pendingUsers.length}</span>` : ''}
+                    <span class="hidden sm:inline">User Verification</span>
+                    <span class="sm:hidden">Verify</span>
+                    ${pendingUsers.length > 0 ? `<span class="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">${pendingUsers.length}</span>` : ''}
                 </button>
-                <button onclick="adminManageTimeSlots()" class="admin-btn admin-btn-orange">
+                <button onclick="adminManageTimeSlots()" class="flex items-center justify-center gap-2 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 text-sm font-semibold">
                     <i data-lucide="clock" class="w-4 h-4"></i>
-                    <span>Time Slots</span>
+                    <span class="hidden sm:inline">Time Slots</span>
+                    <span class="sm:hidden">Slots</span>
                 </button>
-                <button onclick="adminAddProduct()" class="admin-btn admin-btn-lime">
+                <button onclick="adminAddProduct()" class="flex items-center justify-center gap-2 px-4 py-2 bg-lime-600 text-white rounded-lg hover:bg-lime-700 text-sm font-semibold">
                     <i data-lucide="plus" class="w-4 h-4"></i>
-                    <span>Add Product</span>
+                    <span class="hidden sm:inline">Add Product</span>
+                    <span class="sm:hidden">Add</span>
                 </button>
-                <button onclick="adminUpdateDeliveryFee()" class="admin-btn admin-btn-blue">
+                <button onclick="adminUpdateDeliveryFee()" class="flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-semibold">
                     <i data-lucide="truck" class="w-4 h-4"></i>
-                    <span>Delivery Fee</span>
+                    <span class="hidden sm:inline">Delivery Fee</span>
+                    <span class="sm:hidden">Fee</span>
                 </button>
-                <button onclick="viewDeleteLogs()" class="admin-btn admin-btn-gray">
+                <button onclick="viewDeleteLogs()" class="flex items-center justify-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 text-sm font-semibold">
                     <i data-lucide="file-text" class="w-4 h-4"></i>
-                    <span>Delete Logs</span>
+                    <span class="hidden sm:inline">Delete Logs</span>
+                    <span class="sm:hidden">Logs</span>
                 </button>
             </div>
         </div>
 
         <!-- Stats Cards -->
-        <div class="admin-stats-grid">
-            <div class="admin-stat-card">
-                <div class="admin-stat-icon bg-lime-100">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div class="bg-white rounded-xl border p-4 flex items-center gap-4">
+                <div class="w-12 h-12 bg-lime-100 rounded-lg flex items-center justify-center flex-shrink-0">
                     <i data-lucide="dollar-sign" class="w-6 h-6 text-lime-600"></i>
                 </div>
-                <div class="admin-stat-content">
-                    <div class="admin-stat-label">Total Sales</div>
-                    <div class="admin-stat-value text-lime-700">${formatPeso(totalSales)}</div>
+                <div>
+                    <div class="text-sm text-gray-600">Total Sales</div>
+                    <div class="text-xl font-bold text-lime-700">${formatPeso(totalSales)}</div>
                 </div>
             </div>
-            <div class="admin-stat-card">
-                <div class="admin-stat-icon bg-blue-100">
+            <div class="bg-white rounded-xl border p-4 flex items-center gap-4">
+                <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
                     <i data-lucide="shopping-bag" class="w-6 h-6 text-blue-600"></i>
                 </div>
-                <div class="admin-stat-content">
-                    <div class="admin-stat-label">Total Orders</div>
-                    <div class="admin-stat-value text-blue-700">${window.APP_STATE.orders.length}</div>
+                <div>
+                    <div class="text-sm text-gray-600">Total Orders</div>
+                    <div class="text-xl font-bold text-blue-700">${window.APP_STATE.orders.length}</div>
                 </div>
             </div>
-            <div class="admin-stat-card">
-                <div class="admin-stat-icon bg-yellow-100">
+            <div class="bg-white rounded-xl border p-4 flex items-center gap-4">
+                <div class="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center flex-shrink-0">
                     <i data-lucide="clock" class="w-6 h-6 text-yellow-600"></i>
                 </div>
-                <div class="admin-stat-content">
-                    <div class="admin-stat-label">Pending Orders</div>
-                    <div class="admin-stat-value text-yellow-700">${pending}</div>
+                <div>
+                    <div class="text-sm text-gray-600">Pending Orders</div>
+                    <div class="text-xl font-bold text-yellow-700">${pending}</div>
                 </div>
             </div>
         </div>
 
         <!-- Pending Verifications Alert -->
         ${pendingUsers.length > 0 ? `
-            <div class="admin-alert admin-alert-warning">
-                <div class="admin-alert-content">
-                    <i data-lucide="alert-circle" class="w-6 h-6"></i>
-                    <div class="admin-alert-text">
-                        <h3 class="font-semibold">Pending Profile Verifications</h3>
-                        <p class="text-sm">${pendingUsers.length} user${pendingUsers.length > 1 ? 's' : ''} waiting for verification</p>
+            <div class="bg-yellow-50 border border-yellow-200 rounded-xl p-4">
+                <div class="flex items-start justify-between gap-4 flex-wrap">
+                    <div class="flex items-start gap-3">
+                        <i data-lucide="alert-circle" class="w-6 h-6 text-yellow-600 flex-shrink-0 mt-0.5"></i>
+                        <div>
+                            <h3 class="font-semibold text-yellow-900">Pending Profile Verifications</h3>
+                            <p class="text-sm text-yellow-800 mt-1">${pendingUsers.length} user${pendingUsers.length > 1 ? 's' : ''} waiting for verification</p>
+                        </div>
                     </div>
+                    <button onclick="switchAdminView('verification')" class="px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 text-sm font-semibold whitespace-nowrap">
+                        View All →
+                    </button>
                 </div>
-                <button onclick="switchAdminView('verification')" class="admin-alert-btn">
-                    View All →
-                </button>
             </div>
         ` : ''}
 
         <!-- Products - Regular -->
-        <div class="admin-table-section">
-            <div class="admin-table-header">
-                <h3 class="admin-table-title">Products — Regular</h3>
+        <div class="bg-white rounded-xl border overflow-hidden">
+            <div class="p-4 border-b bg-gray-50">
+                <h3 class="font-semibold text-lg text-gray-800">Products — Regular</h3>
             </div>
-            <div class="admin-table-wrapper">
-                <table class="admin-table">
-                    <thead>
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead class="bg-gray-50 border-b">
                         <tr>
-                            <th>Name</th>
-                            <th class="hidden sm:table-cell">Origin</th>
-                            <th class="hidden md:table-cell">Farmer</th>
-                            <th>Price</th>
-                            <th>Stock</th>
-                            <th class="hidden lg:table-cell">Freshness</th>
-                            <th class="text-right">Actions</th>
+                            <th class="px-3 py-3 text-left font-semibold text-gray-700">Name</th>
+                            <th class="px-3 py-3 text-left font-semibold text-gray-700 hidden sm:table-cell">Origin</th>
+                            <th class="px-3 py-3 text-left font-semibold text-gray-700 hidden md:table-cell">Farmer</th>
+                            <th class="px-3 py-3 text-left font-semibold text-gray-700">Price</th>
+                            <th class="px-3 py-3 text-left font-semibold text-gray-700">Stock</th>
+                            <th class="px-3 py-3 text-left font-semibold text-gray-700 hidden lg:table-cell">Freshness</th>
+                            <th class="px-3 py-3 text-right font-semibold text-gray-700">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -2961,22 +2871,22 @@ window.renderAdminDashboard = async function() {
         </div>
 
         <!-- Products - Pre-Order -->
-        <div class="admin-table-section">
-            <div class="admin-table-header">
-                <h3 class="admin-table-title">Products — Pre-Order</h3>
+        <div class="bg-white rounded-xl border overflow-hidden">
+            <div class="p-4 border-b bg-gray-50">
+                <h3 class="font-semibold text-lg text-gray-800">Products — Pre-Order</h3>
             </div>
-            <div class="admin-table-wrapper">
-                <table class="admin-table">
-                    <thead>
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead class="bg-gray-50 border-b">
                         <tr>
-                            <th>Name</th>
-                            <th class="hidden sm:table-cell">Origin</th>
-                            <th class="hidden md:table-cell">Farmer</th>
-                            <th>Price</th>
-                            <th>Stock</th>
-                            <th class="hidden lg:table-cell">Freshness</th>
-                            <th>Remaining</th>
-                            <th class="text-right">Actions</th>
+                            <th class="px-3 py-3 text-left font-semibold text-gray-700">Name</th>
+                            <th class="px-3 py-3 text-left font-semibold text-gray-700 hidden sm:table-cell">Origin</th>
+                            <th class="px-3 py-3 text-left font-semibold text-gray-700 hidden md:table-cell">Farmer</th>
+                            <th class="px-3 py-3 text-left font-semibold text-gray-700">Price</th>
+                            <th class="px-3 py-3 text-left font-semibold text-gray-700">Stock</th>
+                            <th class="px-3 py-3 text-left font-semibold text-gray-700 hidden lg:table-cell">Freshness</th>
+                            <th class="px-3 py-3 text-left font-semibold text-gray-700">Remaining</th>
+                            <th class="px-3 py-3 text-right font-semibold text-gray-700">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -2987,20 +2897,20 @@ window.renderAdminDashboard = async function() {
         </div>
 
         <!-- Orders - Regular -->
-        <div class="admin-table-section">
-            <div class="admin-table-header">
-                <h3 class="admin-table-title">Orders — Regular</h3>
+        <div class="bg-white rounded-xl border overflow-hidden">
+            <div class="p-4 border-b bg-gray-50">
+                <h3 class="font-semibold text-lg text-gray-800">Orders — Regular</h3>
             </div>
-            <div class="admin-table-wrapper">
-                <table class="admin-table">
-                    <thead>
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead class="bg-gray-50 border-b">
                         <tr>
-                            <th>Order ID</th>
-                            <th>Customer</th>
-                            <th>Total</th>
-                            <th>Status</th>
-                            <th class="hidden lg:table-cell">Date</th>
-                            <th class="text-right">Actions</th>
+                            <th class="px-3 py-3 text-left font-semibold text-gray-700">Order ID</th>
+                            <th class="px-3 py-3 text-left font-semibold text-gray-700">Customer</th>
+                            <th class="px-3 py-3 text-left font-semibold text-gray-700">Total</th>
+                            <th class="px-3 py-3 text-left font-semibold text-gray-700">Status</th>
+                            <th class="px-3 py-3 text-left font-semibold text-gray-700 hidden lg:table-cell">Date</th>
+                            <th class="px-3 py-3 text-right font-semibold text-gray-700">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -3011,20 +2921,20 @@ window.renderAdminDashboard = async function() {
         </div>
 
         <!-- Orders - Pre-Order -->
-        <div class="admin-table-section">
-            <div class="admin-table-header">
-                <h3 class="admin-table-title">Orders — Pre-Order</h3>
+        <div class="bg-white rounded-xl border overflow-hidden">
+            <div class="p-4 border-b bg-gray-50">
+                <h3 class="font-semibold text-lg text-gray-800">Orders — Pre-Order</h3>
             </div>
-            <div class="admin-table-wrapper">
-                <table class="admin-table">
-                    <thead>
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead class="bg-gray-50 border-b">
                         <tr>
-                            <th>Order ID</th>
-                            <th>Customer</th>
-                            <th>Total</th>
-                            <th>Status</th>
-                            <th class="hidden lg:table-cell">Date</th>
-                            <th class="text-right">Actions</th>
+                            <th class="px-3 py-3 text-left font-semibold text-gray-700">Order ID</th>
+                            <th class="px-3 py-3 text-left font-semibold text-gray-700">Customer</th>
+                            <th class="px-3 py-3 text-left font-semibold text-gray-700">Total</th>
+                            <th class="px-3 py-3 text-left font-semibold text-gray-700">Status</th>
+                            <th class="px-3 py-3 text-left font-semibold text-gray-700 hidden lg:table-cell">Date</th>
+                            <th class="px-3 py-3 text-right font-semibold text-gray-700">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -3043,20 +2953,20 @@ window.renderUserVerificationPage = async function() {
         return `<div class="bg-white rounded-xl p-6 border">Admin access required.</div>`;
     }
 
-    // Get all users with pending verification
     const usersData = await getFromFirebase('users');
     const pendingUsers = usersData ? Object.values(usersData).filter(u => 
-    u.profile && u.profile.fullName && !u.profile.verified && !u.profile.denied
+        u.profile && u.profile.fullName && !u.profile.verified && !u.profile.denied
     ) : [];
 
-    // Get verified users
     const verifiedUsers = usersData ? Object.values(usersData).filter(u => 
         u.profile && u.profile.verified
     ) : [];
 
     const deniedUsers = usersData ? Object.values(usersData).filter(u => 
-    u.profile && u.profile.denied
+        u.profile && u.profile.denied
     ) : [];
+    
+    // ... rest of the code
 
     const pendingRows = pendingUsers.map(user => `
         <tr class="hover:bg-gray-50 border-b">
