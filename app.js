@@ -2169,7 +2169,7 @@ window.updatePreorderStatuses = function() {
     }
 };
 
-window.renderMain = function() {
+window.renderMain = async function() {  // 🆕 Add async here
     const main = document.getElementById('main-content');
     updateAuthArea();
 
@@ -2187,7 +2187,7 @@ window.renderMain = function() {
     updatePreorderStatuses();
 
     if(window.APP_STATE.currentUser && window.APP_STATE.currentUser.role === 'admin' && window.APP_STATE.view === 'admin') {
-        main.innerHTML = renderAdminDashboard();
+        main.innerHTML = await renderAdminDashboard(); // 🆕 Add await here
     } else {
         if(window.APP_STATE.view === 'shop') main.innerHTML = renderShop();
         else main.innerHTML = renderOrdersPublic();
