@@ -329,10 +329,34 @@ window.signupUser = async function() {
         await saveToFirebase(`users/${user.uid}`, userData);
 
         await sendVerificationCodeEmail(email, name, verificationCode);
-        await signOut(auth);
+await signOut(auth);
 
-        hideModal();
-        showVerificationModal(email, password);
+// Show Data Privacy Act modal
+hideModal();
+showModal(
+    'Data Privacy Act Notice',
+    `
+    <div class="space-y-3 text-left">
+        <p class="text-gray-700">
+            Pursuant to Republic Act No. 10173, the <strong>Data Privacy Act of 2012</strong>, 
+            we are committed to protecting your personal information.
+        </p>
+        <p class="text-sm text-gray-600">
+            By continuing to use this platform, you consent to the collection and processing of your data 
+            for purposes of order fulfillment, delivery, and service improvement. 
+            Your information will be handled with strict confidentiality.
+        </p>
+    </div>
+    `,
+    `
+    <button 
+        onclick="acceptDataPrivacyPolicyAfterSignup('${user.uid}', '${email}', '${password}')"
+        class="px-4 py-2 bg-lime-600 text-white rounded hover:bg-lime-700">
+        I Understand
+    </button>
+    `
+);
+
 
     } catch (error) {
         console.error('Signup error:', error);
@@ -351,6 +375,22 @@ window.signupUser = async function() {
         showModal('Signup Error', errorMessage, `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
     }
 };
+
+window.acceptDataPrivacyPolicyAfterSignup = async function(uid, email, password) {
+    try {
+        await updateFirebase(`users/${uid}`, { dataPrivacyAccepted: true });
+        hideModal();
+        showVerificationModal(email, password);
+    } catch (error) {
+        console.error('Error updating privacy consent:', error);
+        showModal(
+            'Error',
+            'We were unable to record your acknowledgment. Please try again.',
+            `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`
+        );
+    }
+};
+
 
 window.loginUser = async function() {
     const email = document.getElementById('login-email')?.value?.trim()?.toLowerCase();
@@ -405,40 +445,11 @@ window.loginUser = async function() {
 updateAuthArea();
 renderMain();
 
-// Check if user has already accepted Data Privacy Policy
-if (!userData.dataPrivacyAccepted) {
-    showModal(
-        'Data Privacy Act Notice',
-        `
-        <div class="space-y-3 text-left">
-            <p class="text-gray-700">
-                Pursuant to Republic Act No. 10173, the <strong>Data Privacy Act of 2012</strong>, 
-                we are committed to protecting your personal information.
-            </p>
-            <p class="text-sm text-gray-600">
-                By continuing to use this platform, you consent to the collection and processing of your data 
-                for purposes of order fulfillment, delivery, and service improvement. 
-                Your information will be handled with strict confidentiality.
-            </p>
-        </div>
-        `,
-        `
-        <button 
-            onclick="acceptDataPrivacyPolicy('${user.uid}')" 
-            class="px-4 py-2 bg-lime-600 text-white rounded hover:bg-lime-700">
-            I Understand
-        </button>
-        `
-    );
-} else {
-    showModal(
-        'Logged in',
-        `Welcome back, <b>${window.APP_STATE.currentUser.name}</b>!`,
-        `<button onclick="hideModal(); renderMain()" class="px-4 py-2 bg-lime-600 text-white rounded">OK</button>`
-    );
-}
-
-
+showModal(
+    'Logged in',
+    `Welcome back, <b>${window.APP_STATE.currentUser.name}</b>!`,
+    `<button onclick="hideModal(); renderMain()" class="px-4 py-2 bg-lime-600 text-white rounded">OK</button>`
+);
 
     } catch (error) {
         console.error('Login error:', error);
@@ -485,26 +496,6 @@ window.logoutUser = async function() {
         showModal('Logged out', 'You have been logged out.', `<button onclick="hideModal()" class="px-4 py-2 bg-lime-600 text-white rounded">OK</button>`);
     } catch (error) {
         console.error('Logout error:', error);
-    }
-};
-
-window.acceptDataPrivacyPolicy = async function(uid) {
-    try {
-        await updateFirebase(`users/${uid}`, { dataPrivacyAccepted: true });
-        hideModal();
-        renderMain();
-        showModal(
-            'Thank you',
-            'Your acknowledgment of the Data Privacy Act has been recorded.',
-            `<button onclick="hideModal()" class="px-4 py-2 bg-lime-600 text-white rounded">OK</button>`
-        );
-    } catch (error) {
-        console.error('Error updating privacy consent:', error);
-        showModal(
-            'Error',
-            'We were unable to record your acknowledgment. Please try again.',
-            `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`
-        );
     }
 };
 
