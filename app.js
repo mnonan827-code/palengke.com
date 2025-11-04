@@ -2193,30 +2193,30 @@ window.updateAuthArea = function() {
 
     if(window.APP_STATE.currentUser) {
         container.innerHTML = `
-    <div class="relative user-menu-container">
-        <button id="user-menu-btn" class="user-dropdown-trigger flex items-center gap-2 px-3 py-2 rounded-lg bg-white border border-gray-200 hover:bg-gray-50 transition-colors">
+    <div class="relative user-menu-wrapper">
+        <button type="button" id="user-menu-btn" class="flex items-center gap-2 px-3 py-2 rounded-lg bg-white border border-gray-200 hover:bg-gray-50 transition-colors">
           <i data-lucide="user" class="w-4 h-4 text-gray-700"></i>
           <span class="text-sm font-medium text-gray-700 hidden md:inline">${window.APP_STATE.currentUser.name}</span>
-          <i data-lucide="chevron-down" class="w-4 h-4 text-gray-500"></i>
+          <i data-lucide="chevron-down" class="w-4 h-4 text-gray-500 dropdown-icon"></i>
         </button>
-        <div id="user-menu" class="user-menu hidden">
+        <div id="user-menu" class="user-dropdown-menu">
           ${window.APP_STATE.currentUser.role === 'admin' ? 
-            `<button onclick="goAdmin(); hideUserMenu();" class="user-menu-item">
+            `<button type="button" onclick="goAdmin(); closeUserMenu();" class="user-dropdown-item">
               <i data-lucide="settings" class="w-4 h-4"></i>
-              Admin Dashboard
+              <span>Admin Dashboard</span>
             </button>` : 
-            `<button onclick="showUserProfile(); hideUserMenu();" class="user-menu-item">
+            `<button type="button" onclick="showUserProfile(); closeUserMenu();" class="user-dropdown-item">
               <i data-lucide="user-circle" class="w-4 h-4"></i>
-              My Profile
+              <span>My Profile</span>
             </button>
-            <button onclick="switchTo('orders'); hideUserMenu();" class="user-menu-item">
+            <button type="button" onclick="switchTo('orders'); closeUserMenu();" class="user-dropdown-item">
               <i data-lucide="package" class="w-4 h-4"></i>
-              My Orders
+              <span>My Orders</span>
             </button>`
           }
-          <button onclick="logoutUser(); hideUserMenu();" class="user-menu-item logout">
+          <button type="button" onclick="logoutUser(); closeUserMenu();" class="user-dropdown-item user-dropdown-logout">
             <i data-lucide="log-out" class="w-4 h-4"></i>
-            Logout
+            <span>Logout</span>
           </button>
         </div>
     </div>
@@ -2229,40 +2229,42 @@ window.updateAuthArea = function() {
           <div class="font-semibold">${window.APP_STATE.currentUser.name}</div>
           <div class="text-sm text-gray-600">${window.APP_STATE.currentUser.email}</div>
         </div>
+        <div class="mt-3 space-y-1">
         ${window.APP_STATE.currentUser.role === 'admin' ? 
-          `<button onclick="goAdmin(); closeMobileMenu();" class="mobile-nav-item">
+          `<button type="button" onclick="goAdmin(); closeMobileMenu();" class="mobile-nav-item">
             <i data-lucide="settings" class="w-5 h-5"></i>
-            Admin Dashboard
+            <span>Admin Dashboard</span>
           </button>` : 
-          `<button onclick="showUserProfile(); closeMobileMenu();" class="mobile-nav-item">
+          `<button type="button" onclick="showUserProfile(); closeMobileMenu();" class="mobile-nav-item">
             <i data-lucide="user-circle" class="w-5 h-5"></i>
-            My Profile
+            <span>My Profile</span>
           </button>
-          <button onclick="switchTo('orders'); closeMobileMenu();" class="mobile-nav-item">
+          <button type="button" onclick="switchTo('orders'); closeMobileMenu();" class="mobile-nav-item">
             <i data-lucide="package" class="w-5 h-5"></i>
-            My Orders
+            <span>My Orders</span>
           </button>`
         }
-        <button onclick="logoutUser(); closeMobileMenu();" class="mobile-nav-item" style="color: #dc2626;">
+        <button type="button" onclick="logoutUser(); closeMobileMenu();" class="mobile-nav-item" style="color: #dc2626;">
           <i data-lucide="log-out" class="w-5 h-5"></i>
-          Logout
+          <span>Logout</span>
         </button>
+        </div>
     `;
         }
 
         headerActions.innerHTML = `
             ${window.APP_STATE.currentUser.role === 'admin' && window.APP_STATE.view === 'admin' ? 
-                `<button id="exit-admin-btn" onclick="exitAdmin()" class="px-3 py-2 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 hidden md:inline-flex items-center gap-2">
+                `<button type="button" id="exit-admin-btn" onclick="exitAdmin()" class="px-3 py-2 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 hidden md:inline-flex items-center gap-2">
                     <i data-lucide="arrow-left" class="w-4 h-4"></i>
                     <span>Exit Admin</span>
                 </button>` : ''}
         `;
         
-        // Initialize user menu after DOM update
+        // Initialize dropdown after a short delay
         setTimeout(() => {
             icons();
-            setupUserMenuListeners();
-        }, 100);
+            initUserDropdown();
+        }, 50);
     } else {
         container.innerHTML = `
             <div class="flex gap-2">
@@ -2271,7 +2273,6 @@ window.updateAuthArea = function() {
             </div>
         `;
 
-        // Mobile auth area
         if(mobileAuthArea) {
             mobileAuthArea.innerHTML = `
                 <div class="flex flex-col gap-2">
@@ -2285,6 +2286,125 @@ window.updateAuthArea = function() {
         icons();
     }
 };
+
+// Initialize user dropdown functionality
+function initUserDropdown() {
+    const btn = document.getElementById('user-menu-btn');
+    const menu = document.getElementById('user-menu');
+    const wrapper = document.querySelector('.user-menu-wrapper');
+    
+    if (!btn || !menu || !wrapper) {
+        console.log('Dropdown elements not found');
+        return;
+    }
+
+    console.log('Initializing user dropdown...');
+
+    // Remove any existing listeners by cloning
+    const newBtn = btn.cloneNode(true);
+    btn.parentNode.replaceChild(newBtn, btn);
+
+    // Create or get overlay
+    let overlay = document.getElementById('user-menu-overlay');
+    if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = 'user-menu-overlay';
+        overlay.className = 'user-menu-overlay';
+        document.body.appendChild(overlay);
+    }
+
+    // Toggle dropdown on button click
+    newBtn.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        console.log('User menu button clicked');
+        toggleUserMenu();
+    });
+
+    // Close on overlay click
+    overlay.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        closeUserMenu();
+    });
+
+    // Close when clicking outside
+    document.addEventListener('click', function(e) {
+        if (!wrapper.contains(e.target) && menu.classList.contains('show')) {
+            closeUserMenu();
+        }
+    });
+
+    // Prevent closing when clicking inside menu
+    menu.addEventListener('click', function(e) {
+        e.stopPropagation();
+    });
+
+    console.log('User dropdown initialized successfully');
+}
+
+// Toggle user menu
+function toggleUserMenu() {
+    const menu = document.getElementById('user-menu');
+    const overlay = document.getElementById('user-menu-overlay');
+    const icon = document.querySelector('.dropdown-icon');
+    
+    if (!menu) return;
+
+    const isOpen = menu.classList.contains('show');
+    
+    if (isOpen) {
+        closeUserMenu();
+    } else {
+        openUserMenu();
+    }
+}
+
+// Open user menu
+function openUserMenu() {
+    const menu = document.getElementById('user-menu');
+    const overlay = document.getElementById('user-menu-overlay');
+    const icon = document.querySelector('.dropdown-icon');
+    
+    if (!menu) return;
+    
+    console.log('Opening user menu');
+    menu.classList.add('show');
+    
+    if (icon) {
+        icon.style.transform = 'rotate(180deg)';
+    }
+    
+    // Show overlay on mobile
+    if (window.innerWidth <= 768 && overlay) {
+        overlay.classList.add('show');
+        document.body.style.overflow = 'hidden';
+    }
+}
+
+// Close user menu
+function closeUserMenu() {
+    const menu = document.getElementById('user-menu');
+    const overlay = document.getElementById('user-menu-overlay');
+    const icon = document.querySelector('.dropdown-icon');
+    
+    if (!menu) return;
+    
+    console.log('Closing user menu');
+    menu.classList.remove('show');
+    
+    if (icon) {
+        icon.style.transform = 'rotate(0deg)';
+    }
+    
+    if (overlay) {
+        overlay.classList.remove('show');
+        document.body.style.overflow = '';
+    }
+}
+
+// Make closeUserMenu globally available
+window.closeUserMenu = closeUserMenu;
 
 // Setup user menu event listeners
 function setupUserMenuListeners() {
@@ -2374,15 +2494,15 @@ window.openAuth = function(mode = 'login') {
 
 window.exitAdmin = function() {
     window.APP_STATE.view = 'shop';
+    closeUserMenu();
     renderMain();
-    hideUserMenu();
 };
 
 window.goAdmin = function() {
     window.APP_STATE.view = 'admin';
-    window.APP_STATE.adminView = 'dashboard'; // ✅ Reset to dashboard
+    window.APP_STATE.adminView = 'dashboard';
+    closeUserMenu();
     renderMain();
-    hideUserMenu();
 };
 
 window.hideUserMenu = function() {

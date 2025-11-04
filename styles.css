@@ -247,19 +247,6 @@ html,body { font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, 
     display: none;
   }
   
-  /* User menu improvements for mobile */
-  #user-menu {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    top: auto;
-    width: 100%;
-    border-radius: 1rem 1rem 0 0;
-    margin: 0;
-    transform: translateY(100%);
-    transition: transform 0.3s ease;
-  }
   
   #user-menu.active {
     transform: translateY(0);
@@ -502,23 +489,6 @@ html,body { font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, 
   background: #dcfce7;
 }
 
-/* Enhanced User Menu for Mobile */
-.user-menu {
-  position: absolute;
-  top: 100%;
-  right: 0;
-  margin-top: 0.5rem;
-  background: white;
-  border-radius: 0.75rem;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
-  border: 1px solid #e5e7eb;
-  min-width: 200px;
-  z-index: 40;
-  opacity: 0;
-  visibility: hidden;
-  transform: translateY(-10px);
-  transition: all 0.2s ease;
-}
 
 .user-menu.active {
   opacity: 1;
@@ -1897,16 +1867,6 @@ body.modal-open header {
 }
 
 /* User menu overlay improvements */
-.user-menu-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.3);
-    z-index: 39;
-    display: none;
-}
 
 .user-menu-overlay.active {
     display: block;
@@ -2682,4 +2642,148 @@ body.user-menu-open {
 .user-menu.active {
   animation: dropdownSlideDown 0.2s ease forwards;
 }
+
+/* ==========================================
+   👤 USER DROPDOWN MENU - FIXED VERSION
+   ========================================== */
+
+.user-menu-wrapper {
+  position: relative;
+}
+
+#user-menu-btn {
+  cursor: pointer;
+  user-select: none;
+  min-height: 44px;
+  min-width: 44px;
+}
+
+.dropdown-icon {
+  transition: transform 0.3s ease;
+}
+
+.user-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  right: 0;
+  background: white;
+  border-radius: 0.75rem;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+  border: 1px solid #e5e7eb;
+  min-width: 220px;
+  z-index: 1000;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-10px) scale(0.95);
+  transform-origin: top right;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: none;
+}
+
+.user-dropdown-menu.show {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0) scale(1);
+  pointer-events: all;
+}
+
+.user-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.875rem 1rem;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: none;
+  color: #374151;
+  font-family: inherit;
+  font-size: 0.9375rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.user-dropdown-item:last-child {
+  border-bottom: none;
+}
+
+.user-dropdown-item:hover {
+  background: #f0fdf4;
+  color: #65a30d;
+}
+
+.user-dropdown-item:active {
+  background: #dcfce7;
+}
+
+.user-dropdown-item i {
+  flex-shrink: 0;
+}
+
+.user-dropdown-item span {
+  flex: 1;
+}
+
+.user-dropdown-logout {
+  color: #dc2626;
+  border-top: 2px solid #fee2e2;
+  margin-top: 0.25rem;
+}
+
+.user-dropdown-logout:hover {
+  background: #fef2f2 !important;
+  color: #dc2626 !important;
+}
+
+/* User Menu Overlay */
+.user-menu-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.3);
+  z-index: 999;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.3s ease;
+  display: none;
+}
+
+.user-menu-overlay.show {
+  opacity: 1;
+  visibility: visible;
+  display: block;
+}
+
+/* Mobile Styles */
+@media (max-width: 768px) {
+  .user-dropdown-menu {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    top: auto;
+    width: 100%;
+    max-width: none;
+    border-radius: 1rem 1rem 0 0;
+    transform: translateY(100%);
+    transform-origin: bottom center;
+    min-width: 100%;
+  }
   
+  .user-dropdown-menu.show {
+    transform: translateY(0);
+  }
+  
+  .user-dropdown-item {
+    padding: 1rem 1.25rem;
+    font-size: 1rem;
+    min-height: 52px;
+  }
+  
+  #user-menu-btn span.hidden {
+    display: none !important;
+  }
+}
