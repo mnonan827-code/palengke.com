@@ -3188,7 +3188,7 @@ window.renderAdminDashboard = async function() {
         <!-- ✅ REGULAR ORDERS WITH SEARCH -->
         <div class="bg-white rounded-xl border overflow-hidden">
   <div class="p-4 border-b">
-    <h3 class="font-semibold text-lg mb-3">Orders â€" Regular</h3>
+    <h3 class="font-semibold text-lg mb-3">Orders — Regular</h3>
     
     <!-- Search Bar -->
     <div class="order-search-section flex items-center gap-3">
@@ -3240,7 +3240,7 @@ window.renderAdminDashboard = async function() {
         <!-- ✅ PRE-ORDER ORDERS WITH SEARCH -->
         <div class="bg-white rounded-xl border overflow-hidden">
   <div class="p-4 border-b">
-    <h3 class="font-semibold text-lg mb-3">Orders â€" Pre-Order</h3>
+    <h3 class="font-semibold text-lg mb-3">Orders — Pre-Order</h3>
     
     <!-- Search Bar -->
     <div class="order-search-section flex items-center gap-3">
