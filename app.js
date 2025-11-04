@@ -624,47 +624,6 @@ window.openAdminChatModal = function(threadId) {
     }, 100);
 };
 
-// In app.js (Add this function)
-
-// Function to control which chat interface is visible based on user role
-window.updateChatVisibility = function() {
-    // Check if the current user is logged in AND has the 'admin' role
-    const isAdmin = window.APP_STATE.currentUser && window.APP_STATE.currentUser.role === 'admin';
-    // If not logged in, or logged in as a non-admin, they are a 'customer' view
-    const isCustomerView = !isAdmin; 
-    
-    // Get the chat containers
-    const customerChatContainer = document.getElementById('customer-chat-container');
-    const adminChatArea = document.getElementById('admin-chat-area');
-    
-    // 1. Customer Chat Bubble (Visible to ALL non-admins/guests)
-    if (customerChatContainer) {
-        if (isCustomerView) {
-            customerChatContainer.classList.remove('hidden');
-            // Check for unread messages once chat is visible
-            window.renderChatBubbleIndicator(); 
-        } else {
-            customerChatContainer.classList.add('hidden');
-            // Ensure the window is closed if an admin is viewing
-            const chatWindow = document.getElementById('customer-chat-window');
-            if(chatWindow && !chatWindow.classList.contains('hidden')) {
-                window.toggleCustomerChat(false); // Force close
-            }
-        }
-    }
-    
-    // 2. Admin Chat Dropdown (Visible ONLY to admins)
-    if (adminChatArea) {
-        if (isAdmin) {
-            adminChatArea.classList.remove('hidden');
-            // Render the dropdown content and badge
-            window.renderAdminChatDropdown();
-        } else {
-            adminChatArea.classList.add('hidden');
-        }
-    }
-};
-
 // Render Admin Chat Dropdown Content
 window.renderAdminChatDropdown = function() {
     const chatDropdownContent = document.getElementById('admin-chat-dropdown-content');
@@ -2705,8 +2664,6 @@ window.updateAuthArea = function() {
         headerActions.innerHTML = '';
         icons();
     }
-
-    window.updateChatVisibility();
 };
 
 // Initialize user dropdown functionality
