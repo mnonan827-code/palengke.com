@@ -244,71 +244,6 @@ window.closeMobileMenu = function() {
   };
   
 
-// Enhanced User Menu Functionality for Mobile
-function setupMobileUserMenu() {
-    const userMenu = document.getElementById('user-menu');
-    const userMenuBtn = document.getElementById('user-menu-btn');
-    
-    if (!userMenu || !userMenuBtn) return;
-
-    // Create overlay if it doesn't exist
-    let userMenuOverlay = document.getElementById('user-menu-overlay');
-    if (!userMenuOverlay) {
-        userMenuOverlay = document.createElement('div');
-        userMenuOverlay.id = 'user-menu-overlay';
-        userMenuOverlay.className = 'user-menu-overlay';
-        document.body.appendChild(userMenuOverlay);
-    }
-
-    // Toggle user menu
-    userMenuBtn.addEventListener('click', function(e) {
-        e.stopPropagation();
-        const isMobile = window.innerWidth <= 768;
-        
-        if (isMobile) {
-            userMenu.classList.toggle('active');
-            userMenuOverlay.classList.toggle('active');
-            document.body.classList.toggle('user-menu-open');
-        } else {
-            userMenu.classList.toggle('active');
-        }
-    });
-
-    // Close user menu when clicking overlay (mobile)
-    userMenuOverlay.addEventListener('click', function() {
-        userMenu.classList.remove('active');
-        userMenuOverlay.classList.remove('active');
-        document.body.classList.remove('user-menu-open');
-    });
-
-    // Close user menu when clicking outside (desktop)
-    document.addEventListener('click', function(e) {
-        if (userMenu.classList.contains('active') && 
-            !userMenu.contains(e.target) && 
-            !userMenuBtn.contains(e.target)) {
-            userMenu.classList.remove('active');
-        }
-    });
-
-    // Close user menu when resizing to desktop
-    window.addEventListener('resize', function() {
-        if (window.innerWidth > 768 && userMenuOverlay.classList.contains('active')) {
-            userMenuOverlay.classList.remove('active');
-            document.body.classList.remove('user-menu-open');
-        }
-    });
-
-    // Close user menu when menu items are clicked
-    const menuItems = userMenu.querySelectorAll('.user-menu-item');
-    menuItems.forEach(item => {
-        item.addEventListener('click', function() {
-            userMenu.classList.remove('active');
-            userMenuOverlay.classList.remove('active');
-            document.body.classList.remove('user-menu-open');
-        });
-    });
-}
-
 async function initializeFirebaseData() {
     try {
         const productsData = await getFromFirebase('products');
@@ -2258,15 +2193,15 @@ window.updateAuthArea = function() {
 
     if(window.APP_STATE.currentUser) {
         container.innerHTML = `
-    <div class="relative">
-        <button id="user-menu-btn" class="user-dropdown-trigger">
+    <div class="relative user-menu-container">
+        <button id="user-menu-btn" class="user-dropdown-trigger flex items-center gap-2 px-3 py-2 rounded-lg bg-white border border-gray-200 hover:bg-gray-50 transition-colors">
           <i data-lucide="user" class="w-4 h-4 text-gray-700"></i>
-          <span class="text-sm font-medium hidden-mobile">${window.APP_STATE.currentUser.name}</span>
+          <span class="text-sm font-medium text-gray-700 hidden md:inline">${window.APP_STATE.currentUser.name}</span>
           <i data-lucide="chevron-down" class="w-4 h-4 text-gray-500"></i>
         </button>
-        <div id="user-menu" class="user-menu">
+        <div id="user-menu" class="user-menu hidden">
           ${window.APP_STATE.currentUser.role === 'admin' ? 
-            `<button onclick="goAdmin()" class="user-menu-item">
+            `<button onclick="goAdmin(); hideUserMenu();" class="user-menu-item">
               <i data-lucide="settings" class="w-4 h-4"></i>
               Admin Dashboard
             </button>` : 
@@ -2279,7 +2214,7 @@ window.updateAuthArea = function() {
               My Orders
             </button>`
           }
-          <button onclick="logoutUser()" class="user-menu-item logout">
+          <button onclick="logoutUser(); hideUserMenu();" class="user-menu-item logout">
             <i data-lucide="log-out" class="w-4 h-4"></i>
             Logout
           </button>
@@ -2288,12 +2223,11 @@ window.updateAuthArea = function() {
 `;
 
         // Mobile auth area
-        // Mobile auth area
-if(mobileAuthArea) {
-    mobileAuthArea.innerHTML = `
+        if(mobileAuthArea) {
+            mobileAuthArea.innerHTML = `
         <div class="user-menu-info">
           <div class="font-semibold">${window.APP_STATE.currentUser.name}</div>
-          <div class="text-sm">${window.APP_STATE.currentUser.email}</div>
+          <div class="text-sm text-gray-600">${window.APP_STATE.currentUser.email}</div>
         </div>
         ${window.APP_STATE.currentUser.role === 'admin' ? 
           `<button onclick="goAdmin(); closeMobileMenu();" class="mobile-nav-item">
@@ -2314,21 +2248,26 @@ if(mobileAuthArea) {
           Logout
         </button>
     `;
-}
+        }
 
         headerActions.innerHTML = `
-            <button id="header-logout" onclick="logoutUser()" class="btn-ghost hidden-mobile">Logout</button>
             ${window.APP_STATE.currentUser.role === 'admin' && window.APP_STATE.view === 'admin' ? 
-                `<button id="exit-admin-btn" onclick="exitAdmin()" class="btn-ghost hidden-mobile">Exit Admin</button>` : ''}
+                `<button id="exit-admin-btn" onclick="exitAdmin()" class="px-3 py-2 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 hidden md:inline-flex items-center gap-2">
+                    <i data-lucide="arrow-left" class="w-4 h-4"></i>
+                    <span>Exit Admin</span>
+                </button>` : ''}
         `;
         
-        // Initialize mobile user menu functionality
-        setTimeout(setupMobileUserMenu, 100);
+        // Initialize user menu after DOM update
+        setTimeout(() => {
+            icons();
+            setupUserMenuListeners();
+        }, 100);
     } else {
         container.innerHTML = `
             <div class="flex gap-2">
-                <button onclick="openAuth('login')" class="px-3 py-2 rounded-lg bg-white border text-gray-700">Log in</button>
-                <button onclick="openAuth('signup')" class="px-3 py-2 rounded-lg bg-lime-600 text-white">Sign up</button>
+                <button onclick="openAuth('login')" class="px-3 py-2 rounded-lg bg-white border text-gray-700 hover:bg-gray-50">Log in</button>
+                <button onclick="openAuth('signup')" class="px-3 py-2 rounded-lg bg-lime-600 text-white hover:bg-lime-700">Sign up</button>
             </div>
         `;
 
@@ -2343,9 +2282,73 @@ if(mobileAuthArea) {
         }
 
         headerActions.innerHTML = '';
+        icons();
     }
-    icons();
 };
+
+// Setup user menu event listeners
+function setupUserMenuListeners() {
+    const userMenu = document.getElementById('user-menu');
+    const userMenuBtn = document.getElementById('user-menu-btn');
+    const userMenuContainer = document.querySelector('.user-menu-container');
+    
+    if (!userMenu || !userMenuBtn) return;
+
+    // Create overlay if it doesn't exist
+    let userMenuOverlay = document.getElementById('user-menu-overlay');
+    if (!userMenuOverlay) {
+        userMenuOverlay = document.createElement('div');
+        userMenuOverlay.id = 'user-menu-overlay';
+        userMenuOverlay.className = 'user-menu-overlay';
+        document.body.appendChild(userMenuOverlay);
+    }
+
+    // Toggle user menu on button click
+    userMenuBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        const isOpen = !userMenu.classList.contains('hidden');
+        
+        if (isOpen) {
+            hideUserMenu();
+        } else {
+            showUserMenu();
+        }
+    });
+
+    // Close when clicking overlay
+    userMenuOverlay.addEventListener('click', function() {
+        hideUserMenu();
+    });
+
+    // Close when clicking outside
+    document.addEventListener('click', function(e) {
+        if (!userMenuContainer.contains(e.target)) {
+            hideUserMenu();
+        }
+    });
+
+    // Prevent menu from closing when clicking inside it
+    userMenu.addEventListener('click', function(e) {
+        e.stopPropagation();
+    });
+}
+
+// Show user menu
+function showUserMenu() {
+    const userMenu = document.getElementById('user-menu');
+    const userMenuOverlay = document.getElementById('user-menu-overlay');
+    
+    if (userMenu) {
+        userMenu.classList.remove('hidden');
+        userMenu.classList.add('active');
+    }
+    
+    // Only show overlay on mobile
+    if (window.innerWidth <= 768 && userMenuOverlay) {
+        userMenuOverlay.classList.add('active');
+        document.body.classList.add('user-menu-open');
+    }
+}
 
 window.openAuth = function(mode = 'login') {
     if(mode === 'login') {
@@ -2385,8 +2388,14 @@ window.goAdmin = function() {
 window.hideUserMenu = function() {
     const menu = document.getElementById('user-menu');
     const overlay = document.getElementById('user-menu-overlay');
-    if(menu) menu.classList.remove('active');
-    if(overlay) overlay.classList.remove('active');
+    
+    if(menu) {
+        menu.classList.add('hidden');
+        menu.classList.remove('active');
+    }
+    if(overlay) {
+        overlay.classList.remove('active');
+    }
     document.body.classList.remove('user-menu-open');
 };
 
