@@ -96,11 +96,36 @@ window.clearSearch = function() {
 
 // Order search functionality
 window.handleOrderSearch = function(query, type = 'regular') {
+    console.log(`🔍 handleOrderSearch called: "${query}" [${type}]`);
+    
     if (type === 'regular') {
         window.APP_STATE.orderSearchQuery = query.toLowerCase().trim();
     } else {
         window.APP_STATE.preorderSearchQuery = query.toLowerCase().trim();
     }
+    
+    // Update UI without full re-render to preserve input focus
+    const orders = type === 'regular' 
+        ? window.APP_STATE.orders.filter(o => !o.type || o.type !== 'pre-order')
+        : window.APP_STATE.orders.filter(o => o.type === 'pre-order');
+    
+    const searchQuery = type === 'regular' ? window.APP_STATE.orderSearchQuery : window.APP_STATE.preorderSearchQuery;
+    const filteredOrders = filterOrders(orders, searchQuery);
+    
+    // Update counts
+    updateOrderSearchResultsCount(filteredOrders.length, orders.length, type);
+    
+    // Update clear button visibility
+    const clearBtn = document.getElementById(type === 'regular' ? 'clear-order-search-btn' : 'clear-preorder-search-btn');
+    if (clearBtn) {
+        if (searchQuery) {
+            clearBtn.classList.remove('hidden');
+        } else {
+            clearBtn.classList.add('hidden');
+        }
+    }
+    
+    // Only re-render if we need to update the table
     renderMain();
 };
 
@@ -140,14 +165,15 @@ window.updateOrderSearchResultsCount = function(filteredCount, totalCount, type 
     if (countDiv) {
         if (searchQuery) {
             countDiv.innerHTML = `Showing <strong>${filteredCount}</strong> of <strong>${totalCount}</strong> orders`;
+            countDiv.classList.remove('hidden');
             if (clearBtn) clearBtn.classList.remove('hidden');
         } else {
             countDiv.innerHTML = '';
+            countDiv.classList.add('hidden');
             if (clearBtn) clearBtn.classList.add('hidden');
         }
     }
 };
-
 window.filterProducts = function(products) {
     if (!window.APP_STATE.searchQuery) return products;
     
@@ -2651,13 +2677,31 @@ window.renderMain = async function() {  // ✅ Add async here
         if(window.APP_STATE.adminView === 'verification') {
             main.innerHTML = await renderUserVerificationPage();
         } else {
+            // Store current search values before re-render
+            const currentOrderSearch = window.APP_STATE.orderSearchQuery;
+            const currentPreorderSearch = window.APP_STATE.preorderSearchQuery;
+            
             main.innerHTML = await renderAdminDashboard();
-            // âœ… Re-initialize search listeners after DOM update
+            
+            // Re-initialize search listeners after DOM update
             setTimeout(() => {
                 initializeOrderSearchListeners();
+                
+                // Restore search values
+                const orderInput = document.getElementById('order-search-input');
+                const preorderInput = document.getElementById('preorder-search-input');
+                
+                if (orderInput && currentOrderSearch) {
+                    orderInput.value = currentOrderSearch;
+                }
+                if (preorderInput && currentPreorderSearch) {
+                    preorderInput.value = currentPreorderSearch;
+                }
             }, 50);
         }
-    } else {
+    }
+    
+    else {
         if(window.APP_STATE.view === 'shop') main.innerHTML = renderShop();
         else main.innerHTML = renderOrdersPublic();
     }
@@ -2959,7 +3003,25 @@ window.renderAdminDashboard = async function() {
     const preorderRows = filteredPreorder.map(p => {
     const rem = computeRemainingDays(p);
     return `
-        <tr> ... </tr>
+        <tr class="hover:bg-gray-50 border-b">
+            <td class="px-3 py-2 text-sm">${p.name}</td>
+            <td class="px-3 py-2 text-sm hidden sm:table-cell">${p.origin}</td>
+            <td class="px-3 py-2 text-sm hidden md:table-cell">${p.farmer.name}</td>
+            <td class="px-3 py-2 text-sm font-semibold">${formatPeso(p.price)}</td>
+            <td class="px-3 py-2 text-sm">${p.quantity} ${p.unit}</td>
+            <td class="px-3 py-2 text-sm hidden lg:table-cell">
+                ${p.freshness ? `<span class="freshness-badge freshness-${p.freshnessIndicator || 'fresh'}">${getFreshnessEmoji(p.freshnessIndicator)} ${p.freshness}%</span>` : '<span class="text-gray-400">N/A</span>'}
+            </td>
+            <td class="px-3 py-2 text-sm">
+                <span class="badge ${rem > 0 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}">${rem > 0 ? `${rem} days left` : 'Ending'}</span>
+            </td>
+            <td class="px-3 py-2 text-sm text-right">
+                <div class="flex flex-col sm:flex-row gap-1 justify-end">
+                    <button onclick="adminEditProduct(${p.id})" class="px-2 py-1 text-xs bg-white border rounded hover:bg-gray-50">Edit</button>
+                    <button onclick="adminDeleteProduct(${p.id})" class="px-2 py-1 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100">Delete</button>
+                </div>
+            </td>
+        </tr>
     `;
 }).join('');
 
@@ -3234,47 +3296,58 @@ window.renderAdminDashboard = async function() {
 
 // Initialize order search event listeners
 window.initializeOrderSearchListeners = function() {
+    console.log('🔍 Initializing order search listeners...');
+    
     // Regular orders search
     const orderSearchInput = document.getElementById('order-search-input');
     const orderClearBtn = document.getElementById('clear-order-search-btn');
     const orderClearButton = document.getElementById('clear-order-search-button');
     
     if (orderSearchInput) {
-        // Remove any existing listeners
+        console.log('✅ Found order search input');
+        
+        // Remove existing event listeners by replacing the element
         const newOrderInput = orderSearchInput.cloneNode(true);
         orderSearchInput.parentNode.replaceChild(newOrderInput, orderSearchInput);
         
+        // Set initial value
+        newOrderInput.value = window.APP_STATE.orderSearchQuery || '';
+        
+        // Add input event listener
         newOrderInput.addEventListener('input', function(e) {
             const query = e.target.value;
-            window.APP_STATE.orderSearchQuery = query.toLowerCase().trim();
-            
-            // Show/hide clear button
-            if (orderClearBtn) {
-                orderClearBtn.classList.toggle('hidden', !query);
-            }
-            
-            renderMain();
+            console.log('📝 Order search input:', query);
+            handleOrderSearch(query, 'regular');
         });
         
-        // Clear button in input
+        // Clear button in input (X icon)
         if (orderClearBtn) {
-            orderClearBtn.addEventListener('click', function() {
-                window.APP_STATE.orderSearchQuery = '';
-                newOrderInput.value = '';
-                orderClearBtn.classList.add('hidden');
-                renderMain();
+            const newOrderClearBtn = orderClearBtn.cloneNode(true);
+            orderClearBtn.parentNode.replaceChild(newOrderClearBtn, orderClearBtn);
+            
+            newOrderClearBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                console.log('🧹 Clear order search clicked (X button)');
+                clearOrderSearch('regular');
             });
         }
         
         // Clear button outside input
         if (orderClearButton) {
-            orderClearButton.addEventListener('click', function() {
-                window.APP_STATE.orderSearchQuery = '';
-                newOrderInput.value = '';
-                if (orderClearBtn) orderClearBtn.classList.add('hidden');
-                renderMain();
+            const newOrderClearButton = orderClearButton.cloneNode(true);
+            orderClearButton.parentNode.replaceChild(newOrderClearButton, orderClearButton);
+            
+            newOrderClearButton.addEventListener('click', function(e) {
+                e.preventDefault();
+                console.log('🧹 Clear order search clicked (Clear button)');
+                clearOrderSearch('regular');
             });
         }
+        
+        // Update counts immediately
+        const regularOrders = window.APP_STATE.orders.filter(o => !o.type || o.type !== 'pre-order');
+        const filtered = filterOrders(regularOrders, window.APP_STATE.orderSearchQuery);
+        updateOrderSearchResultsCount(filtered.length, regularOrders.length, 'regular');
     }
     
     // Pre-order orders search
@@ -3283,45 +3356,54 @@ window.initializeOrderSearchListeners = function() {
     const preorderClearButton = document.getElementById('clear-preorder-search-button');
     
     if (preorderSearchInput) {
-        // Remove any existing listeners
+        console.log('✅ Found preorder search input');
+        
+        // Remove existing event listeners by replacing the element
         const newPreorderInput = preorderSearchInput.cloneNode(true);
         preorderSearchInput.parentNode.replaceChild(newPreorderInput, preorderSearchInput);
         
+        // Set initial value
+        newPreorderInput.value = window.APP_STATE.preorderSearchQuery || '';
+        
+        // Add input event listener
         newPreorderInput.addEventListener('input', function(e) {
             const query = e.target.value;
-            window.APP_STATE.preorderSearchQuery = query.toLowerCase().trim();
-            
-            // Show/hide clear button
-            if (preorderClearBtn) {
-                preorderClearBtn.classList.toggle('hidden', !query);
-            }
-            
-            renderMain();
+            console.log('📝 Preorder search input:', query);
+            handleOrderSearch(query, 'preorder');
         });
         
-        // Clear button in input
+        // Clear button in input (X icon)
         if (preorderClearBtn) {
-            preorderClearBtn.addEventListener('click', function() {
-                window.APP_STATE.preorderSearchQuery = '';
-                newPreorderInput.value = '';
-                preorderClearBtn.classList.add('hidden');
-                renderMain();
+            const newPreorderClearBtn = preorderClearBtn.cloneNode(true);
+            preorderClearBtn.parentNode.replaceChild(newPreorderClearBtn, preorderClearBtn);
+            
+            newPreorderClearBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                console.log('🧹 Clear preorder search clicked (X button)');
+                clearOrderSearch('preorder');
             });
         }
         
         // Clear button outside input
         if (preorderClearButton) {
-            preorderClearButton.addEventListener('click', function() {
-                window.APP_STATE.preorderSearchQuery = '';
-                newPreorderInput.value = '';
-                if (preorderClearBtn) preorderClearBtn.classList.add('hidden');
-                renderMain();
+            const newPreorderClearButton = preorderClearButton.cloneNode(true);
+            preorderClearButton.parentNode.replaceChild(newPreorderClearButton, preorderClearButton);
+            
+            newPreorderClearButton.addEventListener('click', function(e) {
+                e.preventDefault();
+                console.log('🧹 Clear preorder search clicked (Clear button)');
+                clearOrderSearch('preorder');
             });
         }
+        
+        // Update counts immediately
+        const preorderOrders = window.APP_STATE.orders.filter(o => o.type === 'pre-order');
+        const filtered = filterOrders(preorderOrders, window.APP_STATE.preorderSearchQuery);
+        updateOrderSearchResultsCount(filtered.length, preorderOrders.length, 'preorder');
     }
     
     // Reinitialize icons
-    icons();
+    setTimeout(() => icons(), 50);
 };
 
 // Initialize order search event listeners
