@@ -2787,17 +2787,3 @@ body.user-menu-open {
     display: none !important;
   }
 }
-
-/* ==========================================
-   💬 Chat Bot Styles
-   ========================================== */
-
-/* The admin chat scrollbar is already handled by .custom-scroll */
-/* Ensure the customer chat scrollbar is also hidden/styled */
-#customer-chat-messages::-webkit-scrollbar {
-    width: 8px; /* For vertical scrollbar */
-}
-#customer-chat-messages::-webkit-scrollbar-thumb { 
-    background: rgba(0,0,0,0.12); 
-    border-radius: 6px; 
-}
