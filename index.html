@@ -124,6 +124,35 @@
       </div>
     </section>
 
+    <section id="search-section" class="mt-6 bg-white rounded-2xl p-4 shadow-sm border">
+      <div class="flex items-center gap-3">
+        <div class="flex-1 relative">
+          <i data-lucide="search" class="w-5 h-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
+          <input 
+            id="search-input" 
+            type="text" 
+            placeholder="Search products by name, farm, or farmer..." 
+            class="w-full pl-10 pr-10 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-lime-500 focus:border-transparent"
+            oninput="handleSearch(this.value)"
+          />
+          <button 
+            id="clear-search-btn" 
+            onclick="clearSearch()" 
+            class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 hidden"
+          >
+            <i data-lucide="x" class="w-5 h-5"></i>
+          </button>
+        </div>
+        <button 
+          onclick="clearSearch()" 
+          class="px-4 py-2.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+        >
+          Clear
+        </button>
+      </div>
+      <div id="search-results-count" class="mt-2 text-sm text-gray-600"></div>
+    </section>
+
     <main id="main-content" class="mt-6"></main>
 
     <!-- Cart Drawer -->

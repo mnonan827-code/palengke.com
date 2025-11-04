@@ -44,7 +44,8 @@ window.APP_STATE = {
     currentUser: null,
     view: 'shop',
     deliveryFee: 25.00,
-    adminView: 'dashboard' // ✅ NEW: track which admin page we're on
+    adminView: 'dashboard',
+    searchQuery: ''
 };
 
 const APP_KEY = 'palengke_cainta_v4';
@@ -76,6 +77,56 @@ const dbRefs = {
     carts: ref(database, 'carts'),
     notifications: ref(database, 'notifications'),
     deleteLogs: ref(database, 'deleteLogs')
+};
+
+// Search functionality
+window.handleSearch = function(query) {
+    window.APP_STATE.searchQuery = query.toLowerCase().trim();
+    renderMain();
+};
+
+window.clearSearch = function() {
+    const searchInput = document.getElementById('search-input');
+    if (searchInput) searchInput.value = '';
+    window.APP_STATE.searchQuery = '';
+    renderMain();
+};
+
+window.filterProducts = function(products) {
+    if (!window.APP_STATE.searchQuery) return products;
+    
+    return products.filter(p => {
+        const searchLower = window.APP_STATE.searchQuery;
+        return (
+            p.name.toLowerCase().includes(searchLower) ||
+            p.origin.toLowerCase().includes(searchLower) ||
+            p.farmer.name.toLowerCase().includes(searchLower) ||
+            (p.description && p.description.toLowerCase().includes(searchLower))
+        );
+    });
+};
+
+window.updateSearchResultsCount = function(filteredCount, totalCount) {
+    const countDiv = document.getElementById('search-results-count');
+    const clearBtn = document.getElementById('clear-search-btn');
+    const searchInput = document.getElementById('search-input');
+    
+    if (countDiv) {
+        if (window.APP_STATE.searchQuery) {
+            countDiv.innerHTML = `Showing <strong>${filteredCount}</strong> of <strong>${totalCount}</strong> products`;
+            if (clearBtn) clearBtn.classList.remove('hidden');
+        } else {
+            countDiv.innerHTML = '';
+            if (clearBtn) clearBtn.classList.add('hidden');
+        }
+    }
+    
+    // Show/hide clear button in input
+    if (searchInput && searchInput.value) {
+        if (clearBtn) clearBtn.classList.remove('hidden');
+    } else {
+        if (clearBtn) clearBtn.classList.add('hidden');
+    }
 };
 
 // Make functions globally available
@@ -2412,9 +2463,13 @@ window.renderMain = async function() {  // ✅ Add async here
     if(window.APP_STATE.view === 'shop') main.innerHTML = renderShop();
     else main.innerHTML = renderOrdersPublic();
 }
-    icons();
+    icons(); // ✅ Make sure this is called
     updateCartBadge();
     renderCartDrawer();
+    const searchInput = document.getElementById('search-input');
+    if (searchInput && window.APP_STATE.searchQuery) {
+        searchInput.value = window.APP_STATE.searchQuery;
+    }
 };
 
 window.switchTo = function(v) {
@@ -2424,13 +2479,18 @@ window.switchTo = function(v) {
 };
 
 window.renderShop = function() {
-    const grid = window.APP_STATE.products.length ? window.APP_STATE.products.map(p => {
+    // ✅ Filter products based on search query
+    const filteredProducts = filterProducts(window.APP_STATE.products);
+    
+    // ✅ Update search results count
+    updateSearchResultsCount(filteredProducts.length, window.APP_STATE.products.length);
+    
+    const grid = filteredProducts.length ? filteredProducts.map(p => {
         const lowStock = p.quantity <= 5;
         const isPre = !!p.preorder;
         const rem = isPre ? computeRemainingDays(p) : null;
         const preorderBadge = isPre ? `<div class="badge bg-yellow-100 text-yellow-700">🟡 Pre-Order • ${rem>0? rem + ' days left' : 'Ending'}</div>` : '';
         
-        // Freshness badge and meter
         const freshnessBadge = p.freshness && p.freshnessIndicator ? 
             `<div class="freshness-badge freshness-${p.freshnessIndicator}">${getFreshnessEmoji(p.freshnessIndicator)} ${p.freshness}% Fresh</div>` : '';
         
@@ -2446,6 +2506,7 @@ window.renderShop = function() {
                 (isAdminViewing 
                     ? `<button class="px-3 py-1.5 rounded-md bg-yellow-200 text-yellow-800 text-sm cursor-not-allowed" disabled>View only</button>` 
                     : `<button onclick="preOrderItem(${p.id},1)" class="px-3 py-1.5 rounded-md bg-yellow-400 text-white text-sm">Pre-Order</button>`));
+        
         return `
             <div class="card bg-white rounded-xl border p-3 flex flex-col">
                 <div class="h-40 w-full rounded-md overflow-hidden bg-gray-50 relative">
@@ -2474,7 +2535,12 @@ window.renderShop = function() {
                     </div>
                 </div>
             `;
-    }).join('') : `<div class="col-span-full text-center py-12 text-gray-500">No products available.</div>`;
+    }).join('') : `<div class="col-span-full text-center py-12 text-gray-500">
+        ${window.APP_STATE.searchQuery ? 
+            `No products found matching "<strong>${window.APP_STATE.searchQuery}</strong>"<br><button onclick="clearSearch()" class="mt-3 px-4 py-2 bg-lime-600 text-white rounded-lg">Clear Search</button>` : 
+            'No products available.'
+        }
+    </div>`;
 
     return `
         <section>
@@ -2669,7 +2735,12 @@ const pendingUsers = usersData ? Object.values(usersData).filter(u =>
     !u.profile.denied
 ) : [];
 
-    const regularRows = regular.map(p => `
+    // ✅ Add this right after the stats cards in renderAdminDashboard
+const filteredRegular = filterProducts(regular);
+const filteredPreorder = filterProducts(preorderList);
+
+// Update the regular products table section
+const regularRows = filteredRegular.map(p => `
     <tr class="hover:bg-gray-50 border-b">
         <td class="px-3 py-2 text-sm">${p.name}</td>
         <td class="px-3 py-2 text-sm hidden sm:table-cell">${p.origin}</td>
@@ -2688,7 +2759,7 @@ const pendingUsers = usersData ? Object.values(usersData).filter(u =>
     </tr>
 `).join('');
 
-    const preorderRows = preorderList.map(p => {
+const preorderRows = filteredPreorder.map(p => {
     const rem = computeRemainingDays(p);
     return `
     <tr class="hover:bg-gray-50 border-b">
@@ -2709,7 +2780,7 @@ const pendingUsers = usersData ? Object.values(usersData).filter(u =>
         </td>
     </tr>
 `;
-}).join('');
+}).join('');;
 
     const regularOrders = window.APP_STATE.orders.filter(o => !o.type || o.type !== 'pre-order');
     const preorderOrders = window.APP_STATE.orders.filter(o => o.type === 'pre-order');
@@ -2812,9 +2883,12 @@ ${pendingUsers.length > 0 ? `
 
       <div class="space-y-6">
         <div class="bg-white rounded-xl border overflow-hidden">
-          <div class="p-4 border-b">
-            <h3 class="font-semibold text-lg">Products — Regular</h3>
-          </div>
+  <div class="p-4 border-b">
+    <div class="flex items-center justify-between">
+      <h3 class="font-semibold text-lg">Products — Regular</h3>
+      ${window.APP_STATE.searchQuery ? `<span class="text-sm text-gray-600">Showing ${filteredRegular.length} of ${regular.length}</span>` : ''}
+    </div>
+  </div>
           <div class="overflow-x-auto">
             <table class="w-full text-sm">
               <thead class="bg-gray-50 text-gray-700">
@@ -2883,9 +2957,12 @@ ${pendingUsers.length > 0 ? `
         </div>
 
         <div class="bg-white rounded-xl border overflow-hidden">
-          <div class="p-4 border-b">
-            <h3 class="font-semibold text-lg">Orders — Pre-Order</h3>
-          </div>
+  <div class="p-4 border-b">
+    <div class="flex items-center justify-between">
+      <h3 class="font-semibold text-lg">Products — Pre-Order</h3>
+      ${window.APP_STATE.searchQuery ? `<span class="text-sm text-gray-600">Showing ${filteredPreorder.length} of ${preorderList.length}</span>` : ''}
+    </div>
+  </div>
           <div class="overflow-x-auto">
             <table class="w-full text-sm">
               <thead class="bg-gray-50 text-gray-700">
