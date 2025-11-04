@@ -4063,23 +4063,16 @@ window.updateAdminChatTabBadge = function(count) {
     }
 };
 
-// ===========================================
-// ADMIN AREA RENDERING (NEW TAB)
-// ===========================================
 
-// You need to update the core admin rendering function. Since the full 
-// renderAdminArea is not provided, this is the assumed structure you must
-// integrate into your existing `renderAdminArea` function in app.js.
+// --- Start of Corrected renderAdminArea function ---
 
 window.renderAdminArea = function() {
-    // ... existing setup code ...
-    // let contentHtml = '';
-    
-    // Calculate unread count for the badge
+    // Calculate unread count for the badge (using current state)
     const unreadChatsCount = window.APP_STATE.chats.filter(c => c.adminUnreadCount > 0).length;
     
+    // Admin Navigation Bar
     const navHtml = `
-        <div class="admin-nav bg-white rounded-xl shadow-sm p-4 flex gap-4 mb-6 sticky top-[4rem] z-20 overflow-x-auto custom-scroll">
+        <div class="admin-nav bg-white rounded-xl shadow-sm p-4 flex gap-4 mb-6 sticky top-4 md:top-0 z-30 overflow-x-auto custom-scroll">
             <button onclick="window.APP_STATE.adminView = 'dashboard'; renderMain()" 
                 class="btn-ghost ${window.APP_STATE.adminView === 'dashboard' ? 'bg-lime-600 text-white hover:bg-lime-700' : 'hover:bg-gray-50'}">
                 <i data-lucide="layout-dashboard" class="w-5 h-5"></i> Dashboard
@@ -4114,22 +4107,41 @@ window.renderAdminArea = function() {
     `;
 
     let contentHtml = '';
-    // ... existing switch case ...
+    // This switch case determines the content area
     switch (window.APP_STATE.adminView) {
-        // ... existing cases (dashboard, products, orders, preorders, users, settings) ...
-        case 'chats':
-            contentHtml = window.renderAdminChatsView(); // <--- ADD THIS CASE
+        case 'dashboard':
+            contentHtml = renderAdminDashboard();
             break;
-        // ... default case ...
+        case 'products':
+            contentHtml = renderAdminProducts();
+            break;
+        case 'orders':
+            contentHtml = renderAdminOrders();
+            break;
+        case 'preorders':
+            contentHtml = renderAdminPreOrders();
+            break;
+        case 'users':
+            contentHtml = renderAdminUsers();
+            break;
+        case 'settings':
+            contentHtml = renderAdminSettings();
+            break;
+        case 'chats':
+            contentHtml = window.renderAdminChatsView(); // <--- ADDED CHAT VIEW
+            break;
+        default:
+            contentHtml = '<div class="p-4 text-center text-red-500">View not found.</div>';
     }
     
-    // ... return navHtml + contentHtml ...
+    // Return the combined HTML
     return navHtml + `
         <div class="mt-8">
             ${contentHtml}
         </div>
     `;
 };
+// --- End of Corrected renderAdminArea function ---
 // Final function to initialize lucide icons and update the badge after main render
 window.renderMain = async function() {
     // ... (rest of renderMain function)
