@@ -2624,12 +2624,9 @@ window.renderMain = async function() {  // ✅ Add async here
     const main = document.getElementById('main-content');
     updateAuthArea();
 
-    const searchSection = document.getElementById('search-section'); // ✅ Add this
-    updateAuthArea();
-
-    // ✅ Add this block to control search visibility
+    const searchSection = document.getElementById('search-section');
+    
     if (searchSection) {
-        // Show search only on shop view
         if (window.APP_STATE.view === 'shop') {
             searchSection.style.display = 'block';
         } else {
@@ -2651,19 +2648,25 @@ window.renderMain = async function() {  // ✅ Add async here
     updatePreorderStatuses();
 
     if(window.APP_STATE.currentUser && window.APP_STATE.currentUser.role === 'admin' && window.APP_STATE.view === 'admin') {
-    // ✅ Check which admin view to render
-    if(window.APP_STATE.adminView === 'verification') {
-        main.innerHTML = await renderUserVerificationPage();
+        if(window.APP_STATE.adminView === 'verification') {
+            main.innerHTML = await renderUserVerificationPage();
+        } else {
+            main.innerHTML = await renderAdminDashboard();
+            // âœ… Re-initialize search listeners after DOM update
+            setTimeout(() => {
+                initializeOrderSearchListeners();
+            }, 50);
+        }
     } else {
-        main.innerHTML = await renderAdminDashboard();
+        if(window.APP_STATE.view === 'shop') main.innerHTML = renderShop();
+        else main.innerHTML = renderOrdersPublic();
     }
-} else {
-    if(window.APP_STATE.view === 'shop') main.innerHTML = renderShop();
-    else main.innerHTML = renderOrdersPublic();
-}
-    icons(); // ✅ Make sure this is called
+    
+    icons();
     updateCartBadge();
     renderCartDrawer();
+    
+    // Restore search input value if exists
     const searchInput = document.getElementById('search-input');
     if (searchInput && window.APP_STATE.searchQuery) {
         searchInput.value = window.APP_STATE.searchQuery;
@@ -3018,8 +3021,7 @@ window.renderAdminDashboard = async function() {
 
     // ✅ UPDATE SEARCH COUNTS
     setTimeout(() => {
-        updateOrderSearchResultsCount(filteredRegularOrders.length, regularOrders.length, 'regular');
-        updateOrderSearchResultsCount(filteredPreorderOrders.length, preorderOrders.length, 'preorder');
+        initializeOrderSearchListeners();
     }, 100);
 
     return `
@@ -3123,38 +3125,36 @@ window.renderAdminDashboard = async function() {
 
         <!-- ✅ REGULAR ORDERS WITH SEARCH -->
         <div class="bg-white rounded-xl border overflow-hidden">
-          <div class="p-4 border-b">
-            <h3 class="font-semibold text-lg mb-3">Orders — Regular</h3>
-            
-            <!-- Search Bar -->
-            <div class="flex items-center gap-3">
-              <div class="flex-1 relative">
-                <i data-lucide="search" class="w-5 h-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
-                <input 
-                  id="order-search-input" 
-                  type="text" 
-                  placeholder="Search by Order ID, Customer, Email, Contact..." 
-                  class="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-lime-500 text-sm"
-                  oninput="handleOrderSearch(this.value, 'regular')"
-                  value="${window.APP_STATE.orderSearchQuery}"
-                />
-                <button 
-                  id="clear-order-search-btn" 
-                  onclick="clearOrderSearch('regular')" 
-                  class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 ${window.APP_STATE.orderSearchQuery ? '' : 'hidden'}"
-                >
-                  <i data-lucide="x" class="w-5 h-5"></i>
-                </button>
-              </div>
-              <button 
-                onclick="clearOrderSearch('regular')" 
-                class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm"
-              >
-                Clear
-              </button>
-            </div>
-            <div id="order-search-results-count" class="mt-2 text-sm text-gray-600"></div>
-          </div>
+  <div class="p-4 border-b">
+    <h3 class="font-semibold text-lg mb-3">Orders â€" Regular</h3>
+    
+    <!-- Search Bar -->
+    <div class="order-search-section flex items-center gap-3">
+      <div class="flex-1 relative">
+        <i data-lucide="search" class="w-5 h-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
+        <input 
+          id="order-search-input" 
+          type="text" 
+          placeholder="Search by Order ID, Customer, Email, Contact, Status..." 
+          class="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-lime-500 text-sm"
+          value=""
+        />
+        <button 
+          id="clear-order-search-btn" 
+          class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 hidden"
+        >
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+      <button 
+        id="clear-order-search-button"
+        class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm"
+      >
+        Clear
+      </button>
+    </div>
+    <div id="order-search-results-count" class="mt-2 text-sm text-gray-600"></div>
+  </div>
           
           <div class="overflow-x-auto">
             <table class="w-full text-sm">
@@ -3177,38 +3177,36 @@ window.renderAdminDashboard = async function() {
 
         <!-- ✅ PRE-ORDER ORDERS WITH SEARCH -->
         <div class="bg-white rounded-xl border overflow-hidden">
-          <div class="p-4 border-b">
-            <h3 class="font-semibold text-lg mb-3">Orders — Pre-Order</h3>
-            
-            <!-- Search Bar -->
-            <div class="flex items-center gap-3">
-              <div class="flex-1 relative">
-                <i data-lucide="search" class="w-5 h-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
-                <input 
-                  id="preorder-search-input" 
-                  type="text" 
-                  placeholder="Search by Order ID, Customer, Email, Contact..." 
-                  class="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-lime-500 text-sm"
-                  oninput="handleOrderSearch(this.value, 'preorder')"
-                  value="${window.APP_STATE.preorderSearchQuery}"
-                />
-                <button 
-                  id="clear-preorder-search-btn" 
-                  onclick="clearOrderSearch('preorder')" 
-                  class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 ${window.APP_STATE.preorderSearchQuery ? '' : 'hidden'}"
-                >
-                  <i data-lucide="x" class="w-5 h-5"></i>
-                </button>
-              </div>
-              <button 
-                onclick="clearOrderSearch('preorder')" 
-                class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm"
-              >
-                Clear
-              </button>
-            </div>
-            <div id="preorder-search-results-count" class="mt-2 text-sm text-gray-600"></div>
-          </div>
+  <div class="p-4 border-b">
+    <h3 class="font-semibold text-lg mb-3">Orders â€" Pre-Order</h3>
+    
+    <!-- Search Bar -->
+    <div class="order-search-section flex items-center gap-3">
+      <div class="flex-1 relative">
+        <i data-lucide="search" class="w-5 h-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
+        <input 
+          id="preorder-search-input" 
+          type="text" 
+          placeholder="Search by Order ID, Customer, Email, Contact, Status..." 
+          class="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-lime-500 text-sm"
+          value=""
+        />
+        <button 
+          id="clear-preorder-search-btn" 
+          class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 hidden"
+        >
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+      <button 
+        id="clear-preorder-search-button"
+        class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm"
+      >
+        Clear
+      </button>
+    </div>
+    <div id="preorder-search-results-count" class="mt-2 text-sm text-gray-600"></div>
+  </div>
           
           <div class="overflow-x-auto">
             <table class="w-full text-sm">
@@ -3230,8 +3228,195 @@ window.renderAdminDashboard = async function() {
         </div>
       </div>
     </section>
+ 
     `;
 };
+
+// Initialize order search event listeners
+window.initializeOrderSearchListeners = function() {
+    // Regular orders search
+    const orderSearchInput = document.getElementById('order-search-input');
+    const orderClearBtn = document.getElementById('clear-order-search-btn');
+    const orderClearButton = document.getElementById('clear-order-search-button');
+    
+    if (orderSearchInput) {
+        // Remove any existing listeners
+        const newOrderInput = orderSearchInput.cloneNode(true);
+        orderSearchInput.parentNode.replaceChild(newOrderInput, orderSearchInput);
+        
+        newOrderInput.addEventListener('input', function(e) {
+            const query = e.target.value;
+            window.APP_STATE.orderSearchQuery = query.toLowerCase().trim();
+            
+            // Show/hide clear button
+            if (orderClearBtn) {
+                orderClearBtn.classList.toggle('hidden', !query);
+            }
+            
+            renderMain();
+        });
+        
+        // Clear button in input
+        if (orderClearBtn) {
+            orderClearBtn.addEventListener('click', function() {
+                window.APP_STATE.orderSearchQuery = '';
+                newOrderInput.value = '';
+                orderClearBtn.classList.add('hidden');
+                renderMain();
+            });
+        }
+        
+        // Clear button outside input
+        if (orderClearButton) {
+            orderClearButton.addEventListener('click', function() {
+                window.APP_STATE.orderSearchQuery = '';
+                newOrderInput.value = '';
+                if (orderClearBtn) orderClearBtn.classList.add('hidden');
+                renderMain();
+            });
+        }
+    }
+    
+    // Pre-order orders search
+    const preorderSearchInput = document.getElementById('preorder-search-input');
+    const preorderClearBtn = document.getElementById('clear-preorder-search-btn');
+    const preorderClearButton = document.getElementById('clear-preorder-search-button');
+    
+    if (preorderSearchInput) {
+        // Remove any existing listeners
+        const newPreorderInput = preorderSearchInput.cloneNode(true);
+        preorderSearchInput.parentNode.replaceChild(newPreorderInput, preorderSearchInput);
+        
+        newPreorderInput.addEventListener('input', function(e) {
+            const query = e.target.value;
+            window.APP_STATE.preorderSearchQuery = query.toLowerCase().trim();
+            
+            // Show/hide clear button
+            if (preorderClearBtn) {
+                preorderClearBtn.classList.toggle('hidden', !query);
+            }
+            
+            renderMain();
+        });
+        
+        // Clear button in input
+        if (preorderClearBtn) {
+            preorderClearBtn.addEventListener('click', function() {
+                window.APP_STATE.preorderSearchQuery = '';
+                newPreorderInput.value = '';
+                preorderClearBtn.classList.add('hidden');
+                renderMain();
+            });
+        }
+        
+        // Clear button outside input
+        if (preorderClearButton) {
+            preorderClearButton.addEventListener('click', function() {
+                window.APP_STATE.preorderSearchQuery = '';
+                newPreorderInput.value = '';
+                if (preorderClearBtn) preorderClearBtn.classList.add('hidden');
+                renderMain();
+            });
+        }
+    }
+    
+    // Reinitialize icons
+    icons();
+};
+
+// Initialize order search event listeners
+window.initializeOrderSearchListeners = function() {
+    // Regular orders search
+    const orderSearchInput = document.getElementById('order-search-input');
+    const orderClearBtn = document.getElementById('clear-order-search-btn');
+    const orderClearButton = document.getElementById('clear-order-search-button');
+    
+    if (orderSearchInput) {
+        // Remove any existing listeners
+        const newOrderInput = orderSearchInput.cloneNode(true);
+        orderSearchInput.parentNode.replaceChild(newOrderInput, orderSearchInput);
+        
+        newOrderInput.addEventListener('input', function(e) {
+            const query = e.target.value;
+            window.APP_STATE.orderSearchQuery = query.toLowerCase().trim();
+            
+            // Show/hide clear button
+            if (orderClearBtn) {
+                orderClearBtn.classList.toggle('hidden', !query);
+            }
+            
+            renderMain();
+        });
+        
+        // Clear button in input
+        if (orderClearBtn) {
+            orderClearBtn.addEventListener('click', function() {
+                window.APP_STATE.orderSearchQuery = '';
+                newOrderInput.value = '';
+                orderClearBtn.classList.add('hidden');
+                renderMain();
+            });
+        }
+        
+        // Clear button outside input
+        if (orderClearButton) {
+            orderClearButton.addEventListener('click', function() {
+                window.APP_STATE.orderSearchQuery = '';
+                newOrderInput.value = '';
+                if (orderClearBtn) orderClearBtn.classList.add('hidden');
+                renderMain();
+            });
+        }
+    }
+    
+    // Pre-order orders search
+    const preorderSearchInput = document.getElementById('preorder-search-input');
+    const preorderClearBtn = document.getElementById('clear-preorder-search-btn');
+    const preorderClearButton = document.getElementById('clear-preorder-search-button');
+    
+    if (preorderSearchInput) {
+        // Remove any existing listeners
+        const newPreorderInput = preorderSearchInput.cloneNode(true);
+        preorderSearchInput.parentNode.replaceChild(newPreorderInput, preorderSearchInput);
+        
+        newPreorderInput.addEventListener('input', function(e) {
+            const query = e.target.value;
+            window.APP_STATE.preorderSearchQuery = query.toLowerCase().trim();
+            
+            // Show/hide clear button
+            if (preorderClearBtn) {
+                preorderClearBtn.classList.toggle('hidden', !query);
+            }
+            
+            renderMain();
+        });
+        
+        // Clear button in input
+        if (preorderClearBtn) {
+            preorderClearBtn.addEventListener('click', function() {
+                window.APP_STATE.preorderSearchQuery = '';
+                newPreorderInput.value = '';
+                preorderClearBtn.classList.add('hidden');
+                renderMain();
+            });
+        }
+        
+        // Clear button outside input
+        if (preorderClearButton) {
+            preorderClearButton.addEventListener('click', function() {
+                window.APP_STATE.preorderSearchQuery = '';
+                newPreorderInput.value = '';
+                if (preorderClearBtn) preorderClearBtn.classList.add('hidden');
+                renderMain();
+            });
+        }
+    }
+    
+    // Reinitialize icons
+    icons();
+};
+
+
 
 // NEW FUNCTION: Render User Verification Page
 window.renderUserVerificationPage = async function() {
