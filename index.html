@@ -193,5 +193,37 @@
 
   <script src="email-service.js"></script>
   <script type="module" src="app.js"></script>
+
+  <div id="customer-chat-container">
+    <button id="chat-bubble-btn" onclick="toggleChatModal()" 
+            class="fixed bottom-6 right-6 z-50 p-4 bg-lime-600 text-white rounded-full shadow-lg hover:bg-lime-700 transition duration-300">
+        <i data-lucide="message-square" class="w-6 h-6"></i>
+        <span id="chat-unread-badge" class="hidden absolute top-0 right-0 text-xs px-2 py-0.5 bg-red-600 text-white rounded-full border-2 border-white">0</span>
+    </button>
+
+    <div id="customer-chat-modal" class="hidden fixed bottom-24 right-6 w-80 md:w-96 h-[400px] bg-white rounded-xl shadow-2xl z-50 flex flex-col transition-all duration-300 transform origin-bottom-right">
+        <div class="p-4 bg-lime-600 text-white rounded-t-xl flex justify-between items-center">
+            <h3 class="text-lg font-semibold">Customer Service</h3>
+            <button onclick="toggleChatModal(false)" class="text-white hover:text-gray-100">
+                <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+        </div>
+
+        <div id="customer-chat-messages" class="flex-1 p-4 overflow-y-auto custom-scroll space-y-3">
+            <div class="text-center text-gray-500">Log in to start a chat.</div>
+        </div>
+
+        <div class="p-3 border-t bg-gray-50 rounded-b-xl">
+            <div class="flex gap-2">
+                <input type="text" id="customer-chat-input" placeholder="Ask us anything..." 
+                       class="flex-1 p-2 border rounded-lg focus:ring-lime-600 focus:border-lime-600 text-sm"
+                       onkeydown="if(event.key==='Enter') sendChatMessage(true)">
+                <button onclick="sendChatMessage(true)" class="bg-lime-600 text-white p-2 rounded-lg hover:bg-lime-700 transition">
+                    <i data-lucide="send" class="w-5 h-5"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 </body>
 </html>
