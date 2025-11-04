@@ -66,6 +66,23 @@
 
         <div id="auth-area" class="relative"></div>
         <div id="header-actions" class="header-actions"></div>
+        <div class="relative" id="admin-chat-area">
+    <button id="admin-chat-toggle-btn" 
+            onclick="window.toggleAdminChatDropdown()"
+            class="btn-ghost relative">
+        <i data-lucide="message-square" class="w-5 h-5"></i>
+        <span id="admin-chat-badge" class="absolute top-0 right-0 w-5 h-5 bg-red-600 text-white text-xs font-bold rounded-full flex items-center justify-center -mt-2 -mr-2 hidden z-10">0</span>
+    </button>
+    <div id="admin-chat-dropdown" class="hidden absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-2xl border border-gray-200 z-40 overflow-hidden">
+        <div class="p-3 border-b bg-gray-50">
+            <h4 class="font-bold text-gray-700">Active Customer Chats</h4>
+            <p class="text-xs text-gray-500">Click to reply</p>
+        </div>
+        <div id="admin-chat-dropdown-content" class="max-h-80 overflow-y-auto custom-scroll">
+            <div class="p-3 text-gray-500 text-sm">Loading chats...</div>
+        </div>
+    </div>
+</div>
       </div>
 
       <!-- Mobile menu -->
@@ -193,5 +210,21 @@
 
   <script src="email-service.js"></script>
   <script type="module" src="app.js"></script>
+
+  <div class="fixed bottom-6 left-6 z-50">
+    <button id="chat-bubble-toggle" 
+            onclick="window.toggleCustomerChat()"
+            class="w-16 h-16 bg-lime-600 rounded-full flex items-center justify-center text-white shadow-xl hover:bg-lime-700 transition focus:outline-none focus:ring-4 focus:ring-lime-300">
+        <i id="chat-bubble-icon" data-lucide="message-circle" class="w-8 h-8"></i>
+        <span id="chat-unread-indicator" class="absolute top-0 right-0 w-4 h-4 bg-red-500 rounded-full border-2 border-white hidden"></span>
+    </button>
+    
+    <div id="customer-chat-window" class="hidden fixed bottom-24 left-6 w-[350px] h-[500px] bg-white rounded-xl shadow-2xl border border-gray-100 flex flex-col overflow-hidden">
+        <div id="customer-chat-window-content" class="flex-grow h-full">
+            <div class="flex items-center justify-center h-full text-gray-500">Loading chat...</div>
+        </div>
+    </div>
+</div>
+
 </body>
 </html>

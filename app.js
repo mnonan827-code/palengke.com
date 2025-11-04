@@ -47,7 +47,8 @@ window.APP_STATE = {
     adminView: 'dashboard',
     searchQuery: '',
     orderSearchQuery: '',        // ✅ Add this
-    preorderSearchQuery: ''      // ✅ Add this
+    preorderSearchQuery: '',      // ✅ Add this
+    chats: [], // 🟢 ADD THIS LINE
 };
 
 const APP_KEY = 'palengke_cainta_v4';
@@ -78,7 +79,8 @@ const dbRefs = {
     users: ref(database, 'users'),
     carts: ref(database, 'carts'),
     notifications: ref(database, 'notifications'),
-    deleteLogs: ref(database, 'deleteLogs')
+    deleteLogs: ref(database, 'deleteLogs'),
+    chats: ref(database, 'chats') // 🟢 ADD THIS LINE
 };
 
 // Debounce utility function
@@ -365,6 +367,319 @@ async function createDefaultAdmin() {
     }
 }
 
+// In app.js (Add these functions)
+
+// Utility function to generate a simple unique ID for new chat threads
+const uid = () => 'C' + Date.now().toString(36) + Math.random().toString(36).substring(2);
+
+// Find or create a chat thread ID for the current user (UID for logged in, Session ID for guest)
+window.getChatThreadId = function() {
+    if (!window.APP_STATE.currentUser) {
+        let guestId = sessionStorage.getItem('guestChatId');
+        if (!guestId) {
+            guestId = uid();
+            sessionStorage.setItem('guestChatId', guestId);
+        }
+        return guestId;
+    }
+    return window.APP_STATE.currentUser.uid;
+};
+
+// Send a chat message (customer or admin)
+window.sendChatMessage = async function(threadId, sender, messageText, role) {
+    if (!messageText.trim()) return;
+
+    const timestamp = new Date().toISOString();
+    const newMessage = {
+        id: uid(),
+        sender: sender,
+        text: messageText.trim(),
+        role: role,
+        timestamp: timestamp
+    };
+    
+    try {
+        const chatRef = ref(database, `chats/${threadId}`);
+        const chatSnapshot = await get(chatRef);
+        const chatData = chatSnapshot.exists() ? chatSnapshot.val() : null;
+        
+        const updates = {
+            lastMessageAt: timestamp,
+            lastMessageBy: sender,
+            lastMessageText: newMessage.text,
+            unreadCustomer: role === 'admin' ? true : false,
+            unreadAdmin: role === 'customer' ? true : false
+        };
+
+        if (!chatData) {
+            // New thread setup
+            const initialChatData = {
+                customerName: window.APP_STATE.currentUser ? window.APP_STATE.currentUser.name : 'Guest',
+                customerUid: window.APP_STATE.currentUser ? window.APP_STATE.currentUser.uid : null,
+                status: 'open',
+                messages: [{ [newMessage.id]: newMessage }], // Initialize with the first message
+                ...updates
+            };
+            await set(chatRef, initialChatData);
+        } else {
+            // Append new message and update thread metadata
+            const messageListRef = ref(database, `chats/${threadId}/messages`);
+            await push(messageListRef, newMessage);
+            await update(chatRef, updates);
+        }
+        
+        const chatInput = document.getElementById(`chat-input-${threadId}`);
+        if(chatInput) chatInput.value = '';
+
+        window.scrollToChatBottom(threadId);
+
+    } catch (error) {
+        console.error('Error sending chat message:', error);
+        showModal('Error', 'Failed to send message. Please try again.', `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
+    }
+};
+
+// Update unread status
+window.markChatAsRead = async function(threadId, role) {
+    const field = role === 'customer' ? 'unreadCustomer' : 'unreadAdmin';
+    try {
+        await update(ref(database, `chats/${threadId}`), { [field]: false });
+    } catch (error) {
+        console.error(`Error marking chat read for ${role}:`, error);
+    }
+};
+
+// Scroll to bottom of chat container
+window.scrollToChatBottom = function(threadId) {
+    const messagesContainer = document.getElementById(`chat-messages-${threadId}`);
+    if (messagesContainer) {
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
+};
+
+// Render the messages for the customer chat window
+window.renderCustomerChatWindow = function() {
+    const threadId = window.getChatThreadId();
+    const thread = window.APP_STATE.chats.find(c => c.id === threadId || c.customerUid === threadId);
+    // Convert messages from object to array
+    const messages = thread?.messages ? Object.values(thread.messages) : [];
+    
+    // Determine sender info
+    const senderName = window.APP_STATE.currentUser ? window.APP_STATE.currentUser.name : 'Guest';
+    const senderRole = 'customer';
+
+    if (thread && thread.unreadCustomer) {
+        window.markChatAsRead(threadId, 'customer');
+    }
+
+    const messagesHtml = messages.map(msg => {
+        const isCustomer = msg.role === 'customer';
+        // Tailwind classes for message bubbles
+        const msgClass = isCustomer ? 'bg-lime-600 text-white self-end rounded-br-none' : 'bg-gray-200 text-gray-800 self-start rounded-tl-none';
+        const nameText = isCustomer ? senderName : 'Admin';
+        
+        return `
+            <div class="flex flex-col ${isCustomer ? 'items-end' : 'items-start'} mb-3">
+                <div class="text-xs text-gray-500 mb-1">${nameText} - ${new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                <div class="${msgClass} max-w-xs p-3 rounded-xl shadow-sm">
+                    ${msg.text}
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    return `
+        <div id="chat-window-content-${threadId}" class="flex flex-col h-full">
+            <div class="p-4 border-b border-gray-200 flex-shrink-0">
+                <h3 class="font-bold text-lg text-gray-800">Customer Support Chat</h3>
+                <p class="text-sm text-gray-500">How can we help you today?</p>
+            </div>
+            <div id="chat-messages-${threadId}" class="flex-grow p-4 overflow-y-auto custom-scroll space-y-3 bg-gray-50">
+                ${messagesHtml.length > 0 ? messagesHtml : '<div class="text-center text-gray-500 p-5">Start a conversation!</div>'}
+            </div>
+            <div class="p-4 border-t border-gray-200 flex-shrink-0">
+                <div class="flex gap-2">
+                    <input type="text" id="chat-input-${threadId}" class="flex-grow p-3 border rounded-lg focus:ring-2 focus:ring-lime-500 focus:border-lime-500 text-sm" placeholder="Type your message..." onkeydown="if(event.key === 'Enter') document.getElementById('chat-send-btn-${threadId}').click()">
+                    <button id="chat-send-btn-${threadId}" 
+                            onclick="window.sendChatMessage('${threadId}', '${senderName}', document.getElementById('chat-input-${threadId}').value, '${senderRole}')"
+                            class="p-3 bg-lime-600 text-white rounded-lg hover:bg-lime-700 transition">
+                        <i data-lucide="send" class="w-5 h-5"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+};
+
+// Central render function for customer chat window (called on toggle)
+window.renderChatWindowUI = function() {
+    const chatWindowContent = document.getElementById('customer-chat-window-content');
+    if (chatWindowContent) {
+        chatWindowContent.innerHTML = window.renderCustomerChatWindow();
+        lucide.createIcons();
+    }
+};
+
+// Toggle customer chat window
+window.toggleCustomerChat = function(force) {
+    const chatWindow = document.getElementById('customer-chat-window');
+    const bubbleIcon = document.getElementById('chat-bubble-icon');
+    
+    if (chatWindow.classList.contains('hidden') || force === true) {
+        chatWindow.classList.remove('hidden');
+        bubbleIcon.setAttribute('data-lucide', 'x');
+        window.renderChatWindowUI();
+        setTimeout(() => window.scrollToChatBottom(window.getChatThreadId()), 50);
+        
+        // Hide the unread indicator
+        const indicator = document.getElementById('chat-unread-indicator');
+        if (indicator) indicator.classList.add('hidden');
+        
+    } else {
+        chatWindow.classList.add('hidden');
+        bubbleIcon.setAttribute('data-lucide', 'message-circle');
+    }
+    lucide.createIcons();
+};
+
+// Render unread indicator on the customer bubble
+window.renderChatBubbleIndicator = function() {
+    const indicator = document.getElementById('chat-unread-indicator');
+    if (!indicator) return;
+
+    const threadId = window.getChatThreadId();
+    // Search by threadId (guest) or customerUid (logged in user)
+    const thread = window.APP_STATE.chats.find(c => c.id === threadId || c.customerUid === threadId);
+
+    if (thread && thread.unreadCustomer) {
+        indicator.classList.remove('hidden');
+    } else {
+        indicator.classList.add('hidden');
+    }
+};
+
+// Admin Chat Modal Functionality
+
+window.openAdminChatModal = function(threadId) {
+    const thread = window.APP_STATE.chats.find(c => c.id === threadId || c.customerUid === threadId);
+    if (!thread) {
+        return showModal('Error', 'Chat thread not found.', `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
+    }
+
+    if (thread.unreadAdmin) {
+        window.markChatAsRead(thread.id, 'admin');
+    }
+
+    const messages = thread.messages ? Object.values(thread.messages) : [];
+    
+    const messagesHtml = messages.map(msg => {
+        const isAdmin = msg.role === 'admin';
+        // Tailwind classes for message bubbles
+        const msgClass = isAdmin ? 'bg-lime-600 text-white self-end rounded-br-none' : 'bg-gray-200 text-gray-800 self-start rounded-tl-none';
+        const nameText = isAdmin ? 'Admin' : thread.customerName;
+        
+        return `
+            <div class="flex flex-col ${isAdmin ? 'items-end' : 'items-start'} mb-3">
+                <div class="text-xs text-gray-500 mb-1">${nameText} - ${new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                <div class="${msgClass} max-w-xs p-3 rounded-xl shadow-sm">
+                    ${msg.text}
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    const modalTitle = `Chat with ${thread.customerName || thread.id}`;
+    const modalContent = `
+        <div class="flex flex-col h-full admin-chat-container">
+            <div id="chat-messages-${thread.id}" class="flex-grow p-4 overflow-y-auto custom-scroll space-y-3 bg-gray-50 rounded-lg mb-3 border">
+                ${messagesHtml.length > 0 ? messagesHtml : '<div class="text-center text-gray-500 p-5">Start a conversation!</div>'}
+            </div>
+            <div class="flex gap-2 flex-shrink-0">
+                <input type="text" id="chat-input-${thread.id}" class="flex-grow p-3 border rounded-lg focus:ring-2 focus:ring-lime-500 focus:border-lime-500 text-sm" placeholder="Type your reply...">
+                <button id="chat-send-btn-${thread.id}" 
+                        onclick="window.sendChatMessage('${thread.id}', '${window.APP_STATE.currentUser.name}', document.getElementById('chat-input-${thread.id}').value, 'admin')"
+                        class="p-3 bg-lime-600 text-white rounded-lg hover:bg-lime-700 transition">
+                    <i data-lucide="send" class="w-5 h-5"></i>
+                </button>
+            </div>
+        </div>
+    `;
+    // Use true to open the modal wider for the chat interface
+    showModal(modalTitle, modalContent, `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">Close</button>`, true); 
+
+    setTimeout(() => {
+        lucide.createIcons();
+        window.scrollToChatBottom(thread.id);
+        
+        // Add Enter key listener
+        const chatInput = document.getElementById(`chat-input-${thread.id}`);
+        if(chatInput) {
+             chatInput.addEventListener('keydown', function(e) { 
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    document.getElementById(`chat-send-btn-${thread.id}`).click();
+                }
+            });
+        }
+    }, 100);
+};
+
+// Render Admin Chat Dropdown Content
+window.renderAdminChatDropdown = function() {
+    const chatDropdownContent = document.getElementById('admin-chat-dropdown-content');
+    const chatBadge = document.getElementById('admin-chat-badge');
+    
+    if (!chatDropdownContent) return;
+
+    const unreadChats = window.APP_STATE.chats.filter(c => c.unreadAdmin).length;
+    
+    if (chatBadge) {
+        if (unreadChats > 0) {
+            chatBadge.classList.remove('hidden');
+            chatBadge.textContent = unreadChats;
+        } else {
+            chatBadge.classList.add('hidden');
+        }
+    }
+
+    if (window.APP_STATE.chats.length === 0) {
+        chatDropdownContent.innerHTML = '<div class="p-3 text-gray-500 text-sm">No active chat threads.</div>';
+        return;
+    }
+
+    const chatItems = window.APP_STATE.chats.map(chat => {
+        const isUnread = chat.unreadAdmin;
+        const lastMsgTime = new Date(chat.lastMessageAt).toLocaleString('en-US', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short' });
+        
+        return `
+            <button onclick="window.openAdminChatModal('${chat.id}'); window.toggleAdminChatDropdown();" class="flex items-center gap-3 p-3 w-full text-left border-b hover:bg-gray-50 transition ${isUnread ? 'bg-lime-50' : ''}">
+                <div class="flex-grow min-w-0">
+                    <div class="font-semibold text-gray-800 truncate ${isUnread ? 'font-extrabold text-lime-700' : ''}">
+                        ${chat.customerName || chat.id}
+                        ${isUnread ? '<span class="text-xs text-red-500 ml-2">NEW</span>' : ''}
+                    </div>
+                    <p class="text-sm text-gray-500 truncate">${chat.lastMessageText || 'No messages yet.'}</p>
+                </div>
+                <div class="flex-shrink-0 text-xs text-gray-400">
+                    ${lastMsgTime}
+                </div>
+            </button>
+        `;
+    }).join('');
+
+    chatDropdownContent.innerHTML = chatItems;
+    lucide.createIcons();
+};
+
+// Toggle Admin Chat Dropdown
+window.toggleAdminChatDropdown = function() {
+    const dropdown = document.getElementById('admin-chat-dropdown');
+    dropdown.classList.toggle('hidden');
+    if (!dropdown.classList.contains('hidden')) {
+        window.renderAdminChatDropdown();
+    }
+};
+
 function setupRealtimeListeners() {
     onValue(dbRefs.products, (snapshot) => {
         if (snapshot.exists()) {
@@ -381,6 +696,24 @@ function setupRealtimeListeners() {
             if (window.APP_STATE.view === 'orders' || (window.APP_STATE.currentUser && window.APP_STATE.currentUser.role === 'admin' && window.APP_STATE.view === 'admin')) {
                 renderMain();
             }
+        }
+    });
+
+onValue(dbRefs.chats, (snapshot) => {
+        if (snapshot.exists()) {
+            // Convert Firebase object of chat threads to an array and sort by last message time
+            window.APP_STATE.chats = Object.keys(snapshot.val()).map(chatId => ({
+                id: chatId,
+                ...snapshot.val()[chatId]
+            })).sort((a, b) => new Date(b.lastMessageAt) - new Date(a.lastMessageAt));
+            
+            // Re-render UI components that rely on chat data
+            renderAdminChatDropdown();
+            renderChatBubbleIndicator();
+        } else {
+            window.APP_STATE.chats = [];
+            renderAdminChatDropdown();
+            renderChatBubbleIndicator();
         }
     });
 }

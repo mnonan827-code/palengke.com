@@ -2787,3 +2787,32 @@ body.user-menu-open {
     display: none !important;
   }
 }
+
+/* In styles.css (Add to the end) */
+
+/* ==========================================
+   💬 Chat Bot Styles
+   ========================================== */
+
+/* Ensure the chat window scrolls correctly and is on top of other elements */
+#customer-chat-window {
+    z-index: 1000; 
+}
+
+/* Custom scrollbar for chat messages */
+.custom-scroll::-webkit-scrollbar {
+    width: 6px;
+}
+.custom-scroll::-webkit-scrollbar-thumb {
+    /* Use a color related to your theme (lime-600) */
+    background: rgba(132, 204, 22, 0.5); 
+    border-radius: 6px;
+}
+
+/* Admin chat modal size override for better chat view */
+.admin-chat-container {
+    height: 60vh;
+    min-height: 400px;
+    /* Ensure the modal content is full height */
+    max-height: calc(100vh - 120px); 
+}
