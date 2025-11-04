@@ -386,121 +386,55 @@ window.getChatThreadId = function() {
 };
 
 // Send a chat message (customer or admin)
-// ===========================================
-// CHAT / CUSTOMER SERVICE FUNCTIONS (FIXED)
-// ===========================================
+window.sendChatMessage = async function(threadId, sender, messageText, role) {
+    if (!messageText.trim()) return;
 
-window.sendChatMessage = async function(isCustomer) {
-    let inputId, messagesContainerId, isReply;
-    let recipientUnreadCountKey;
-
-    if (isCustomer) {
-        if (!window.APP_STATE.currentUser) {
-            return showModal('Login Required', 'Please log in or sign up to start a chat.', `<button onclick="hideModal(); openAuth('login')" class="px-4 py-2 bg-lime-600 text-white rounded">Log in</button>`);
-        }
-        inputId = 'customer-chat-input';
-        messagesContainerId = 'customer-chat-messages';
-        isReply = false;
-        recipientUnreadCountKey = 'adminUnreadCount';
-    } else { // Admin reply
-        inputId = 'admin-chat-reply-input';
-        messagesContainerId = 'admin-chat-messages';
-        isReply = true;
-        recipientUnreadCountKey = 'customerUnreadCount';
-    }
-
-    const input = document.getElementById(inputId);
-    const messageText = input?.value?.trim();
-    if (!messageText) return;
-
-    const messagesContainer = document.getElementById(messagesContainerId);
-    if (!messagesContainer) return;
-
-    // Determine the chat ID
-    const userId = isCustomer ? window.APP_STATE.currentUser.uid : window.APP_STATE.selectedChatId;
-    if (!userId) return;
-
-    const chatRef = `chats/${userId}`;
-    const message = {
-        sender: isCustomer ? window.APP_STATE.currentUser.name : 'Admin',
-        senderId: isCustomer ? userId : 'admin-id',
-        message: messageText,
-        timestamp: new Date().toISOString()
+    const timestamp = new Date().toISOString();
+    const newMessage = {
+        id: uid(),
+        sender: sender,
+        text: messageText.trim(),
+        role: role,
+        timestamp: timestamp
     };
-
+    
     try {
-        // Fetch current chat data
-        const currentChat = await getFromFirebase(chatRef);
+        const chatRef = ref(database, `chats/${threadId}`);
+        const chatSnapshot = await get(chatRef);
+        const chatData = chatSnapshot.exists() ? chatSnapshot.val() : null;
         
-        let messages = currentChat?.messages || [];
-        messages.push(message);
-
-        // Calculate new unread count for the recipient
-        let updates = {
-            messages: messages,
-            lastMessageAt: message.timestamp,
-            lastMessage: message.message
+        const updates = {
+            lastMessageAt: timestamp,
+            lastMessageBy: sender,
+            lastMessageText: newMessage.text,
+            unreadCustomer: role === 'admin' ? true : false,
+            unreadAdmin: role === 'customer' ? true : false
         };
 
-        if (!currentChat) {
-            // New chat thread
-            const customerName = window.APP_STATE.currentUser?.name || 'Customer';
-            const customerEmail = window.APP_STATE.currentUser?.email || 'N/A';
-            updates = {
-                ...updates,
-                customerName: customerName,
-                customerEmail: customerEmail,
-                adminUnreadCount: 1, 
-                customerUnreadCount: 0,
-                status: 'Open'
+        if (!chatData) {
+            // New thread setup
+            const initialChatData = {
+                customerName: window.APP_STATE.currentUser ? window.APP_STATE.currentUser.name : 'Guest',
+                customerUid: window.APP_STATE.currentUser ? window.APP_STATE.currentUser.uid : null,
+                status: 'open',
+                messages: [{ [newMessage.id]: newMessage }], // Initialize with the first message
+                ...updates
             };
+            await set(chatRef, initialChatData);
         } else {
-            // Existing chat thread
-            const currentRecipientUnreadCount = currentChat[recipientUnreadCountKey] || 0;
-            updates[recipientUnreadCountKey] = currentRecipientUnreadCount + 1;
+            // Append new message and update thread metadata
+            const messageListRef = ref(database, `chats/${threadId}/messages`);
+            await push(messageListRef, newMessage);
+            await update(chatRef, updates);
         }
+        
+        const chatInput = document.getElementById(`chat-input-${threadId}`);
+        if(chatInput) chatInput.value = '';
 
-        // 1. Write message to Firebase
-        await updateFirebase(chatRef, updates);
-
-        // 2. Immediately update the local APP_STATE with the new message
-        // This bypasses the slight delay of the onValue listener
-        let localChat = window.APP_STATE.chats.find(c => c.id === userId);
-        if (localChat) {
-            localChat.messages = messages;
-            localChat.lastMessageAt = message.timestamp;
-            localChat.lastMessage = message.message;
-        } else if (isCustomer) {
-            // If it's a new customer chat, push the whole structure to local state
-            window.APP_STATE.chats.push({ id: userId, ...updates, messages: messages });
-        }
-        // IMPORTANT: Re-sort the chats list so the new message is at the top
-        window.APP_STATE.chats.sort((a, b) => new Date(b.lastMessageAt) - new Date(a.lastMessageAt));
-
-
-        // 3. RENDER FIX: Re-render the specific chat UI immediately
-        if (isCustomer) {
-            window.renderCustomerChatModal(); 
-        } else {
-            // Admin is viewing the chat page, re-render the content area
-            renderMain(); 
-        }
-
-        // 4. Clear input and scroll to bottom
-        input.value = '';
-        setTimeout(() => {
-            if (messagesContainer) {
-                 messagesContainer.scrollTop = messagesContainer.scrollHeight;
-            }
-        }, 50);
-
-        // Update admin unread count in the tab if admin is not in the chats view
-        if (isCustomer && (window.APP_STATE.currentUser.role !== 'admin' || window.APP_STATE.adminView !== 'chats')) {
-             updateAdminChatTabBadge(window.APP_STATE.chats.filter(c => c.adminUnreadCount > 0).length);
-        }
+        window.scrollToChatBottom(threadId);
 
     } catch (error) {
-        console.error('Error sending message:', error);
+        console.error('Error sending chat message:', error);
         showModal('Error', 'Failed to send message. Please try again.', `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
     }
 };
@@ -587,36 +521,26 @@ window.renderChatWindowUI = function() {
 };
 
 // Toggle customer chat window
-// File: app.js
-
-// Use the function name that your index.html button is calling
-window.toggleCustomerChat = function(show) {
-    const modal = document.getElementById('customer-chat-modal');
+window.toggleCustomerChat = function(force) {
+    const chatWindow = document.getElementById('customer-chat-window');
+    const bubbleIcon = document.getElementById('chat-bubble-icon');
     
-    if (modal) {
-        // This handles opening and closing the modal
-        if (typeof show === 'boolean') {
-            modal.classList.toggle('hidden', !show);
-        } else {
-            modal.classList.toggle('hidden');
-        }
+    if (chatWindow.classList.contains('hidden') || force === true) {
+        chatWindow.classList.remove('hidden');
+        bubbleIcon.setAttribute('data-lucide', 'x');
+        window.renderChatWindowUI();
+        setTimeout(() => window.scrollToChatBottom(window.getChatThreadId()), 50);
         
-        // **THIS IS THE CRITICAL FIX**: Immediately render and mark as read
-        if (!modal.classList.contains('hidden')) {
-            // These functions must exist and be correct (as per previous steps)
-            window.markChatAsRead(); 
-            window.renderCustomerChatModal(); 
-        }
-        // This updates the red unread count badge
-        window.updateChatUnreadBadge();
+        // Hide the unread indicator
+        const indicator = document.getElementById('chat-unread-indicator');
+        if (indicator) indicator.classList.add('hidden');
+        
     } else {
-        console.error("Chat Modal element with ID 'customer-chat-modal' not found.");
+        chatWindow.classList.add('hidden');
+        bubbleIcon.setAttribute('data-lucide', 'message-circle');
     }
+    lucide.createIcons();
 };
-
-// If your index.html uses window.toggleCustomerChat(), 
-// you can add this line to alias it:
-// window.toggleCustomerChat = window.toggleChatModal;
 
 // Render unread indicator on the customer bubble
 window.renderChatBubbleIndicator = function() {
@@ -740,8 +664,6 @@ window.updateChatVisibility = function() {
         }
     }
 };
-
-
 
 // Render Admin Chat Dropdown Content
 window.renderAdminChatDropdown = function() {
