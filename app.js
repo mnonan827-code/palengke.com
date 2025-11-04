@@ -45,7 +45,9 @@ window.APP_STATE = {
     view: 'shop',
     deliveryFee: 25.00,
     adminView: 'dashboard',
-    searchQuery: ''
+    searchQuery: '',
+    orderSearchQuery: '',        // ✅ Add this
+    preorderSearchQuery: ''      // ✅ Add this
 };
 
 const APP_KEY = 'palengke_cainta_v4';
@@ -90,6 +92,60 @@ window.clearSearch = function() {
     if (searchInput) searchInput.value = '';
     window.APP_STATE.searchQuery = '';
     renderMain();
+};
+
+// Order search functionality
+window.handleOrderSearch = function(query, type = 'regular') {
+    if (type === 'regular') {
+        window.APP_STATE.orderSearchQuery = query.toLowerCase().trim();
+    } else {
+        window.APP_STATE.preorderSearchQuery = query.toLowerCase().trim();
+    }
+    renderMain();
+};
+
+window.clearOrderSearch = function(type = 'regular') {
+    const searchInput = document.getElementById(type === 'regular' ? 'order-search-input' : 'preorder-search-input');
+    if (searchInput) searchInput.value = '';
+    
+    if (type === 'regular') {
+        window.APP_STATE.orderSearchQuery = '';
+    } else {
+        window.APP_STATE.preorderSearchQuery = '';
+    }
+    renderMain();
+};
+
+window.filterOrders = function(orders, searchQuery) {
+    if (!searchQuery) return orders;
+    
+    return orders.filter(o => {
+        const searchLower = searchQuery;
+        return (
+            o.id.toLowerCase().includes(searchLower) ||
+            o.customer.toLowerCase().includes(searchLower) ||
+            o.email.toLowerCase().includes(searchLower) ||
+            o.contact.includes(searchLower) ||
+            o.status.toLowerCase().includes(searchLower)
+        );
+    });
+};
+
+window.updateOrderSearchResultsCount = function(filteredCount, totalCount, type = 'regular') {
+    const countDiv = document.getElementById(type === 'regular' ? 'order-search-results-count' : 'preorder-search-results-count');
+    const clearBtn = document.getElementById(type === 'regular' ? 'clear-order-search-btn' : 'clear-preorder-search-btn');
+    
+    const searchQuery = type === 'regular' ? window.APP_STATE.orderSearchQuery : window.APP_STATE.preorderSearchQuery;
+    
+    if (countDiv) {
+        if (searchQuery) {
+            countDiv.innerHTML = `Showing <strong>${filteredCount}</strong> of <strong>${totalCount}</strong> orders`;
+            if (clearBtn) clearBtn.classList.remove('hidden');
+        } else {
+            countDiv.innerHTML = '';
+            if (clearBtn) clearBtn.classList.add('hidden');
+        }
+    }
 };
 
 window.filterProducts = function(products) {
@@ -2439,6 +2495,19 @@ window.renderMain = async function() {  // ✅ Add async here
     const main = document.getElementById('main-content');
     updateAuthArea();
 
+    const searchSection = document.getElementById('search-section'); // ✅ Add this
+    updateAuthArea();
+
+    // ✅ Add this block to control search visibility
+    if (searchSection) {
+        // Show search only on shop view
+        if (window.APP_STATE.view === 'shop') {
+            searchSection.style.display = 'block';
+        } else {
+            searchSection.style.display = 'none';
+        }
+    }
+
     const viewOrdersBtn = document.getElementById('view-orders');
     if(window.APP_STATE.currentUser && window.APP_STATE.currentUser.role === 'admin') {
         viewOrdersBtn.classList.remove('hidden');
@@ -2721,71 +2790,56 @@ window.renderAdminDashboard = async function() {
     
     const totalSales = window.APP_STATE.orders.filter(o => o.status === 'Delivered').reduce((s,o) => s + Number(o.total), 0);
     const pending = window.APP_STATE.orders.filter(o => o.status !== 'Delivered').length;
-    const stockValue = window.APP_STATE.products.reduce((s,p) => s + (p.price * p.quantity), 0);
 
     const regular = window.APP_STATE.products.filter(p => !p.preorder);
     const preorderList = window.APP_STATE.products.filter(p => p.preorder);
 
-    // 🆕 GET PENDING VERIFICATIONS
     const usersData = await getFromFirebase('users');
-const pendingUsers = usersData ? Object.values(usersData).filter(u =>
-    u.profile &&
-    u.profile.fullName &&
-    !u.profile.verified &&
-    !u.profile.denied
-) : [];
+    const pendingUsers = usersData ? Object.values(usersData).filter(u =>
+        u.profile &&
+        u.profile.fullName &&
+        !u.profile.verified &&
+        !u.profile.denied
+    ) : [];
 
-    // ✅ Add this right after the stats cards in renderAdminDashboard
-const filteredRegular = filterProducts(regular);
-const filteredPreorder = filterProducts(preorderList);
+    const filteredRegular = filterProducts(regular);
+    const filteredPreorder = filterProducts(preorderList);
 
-// Update the regular products table section
-const regularRows = filteredRegular.map(p => `
-    <tr class="hover:bg-gray-50 border-b">
-        <td class="px-3 py-2 text-sm">${p.name}</td>
-        <td class="px-3 py-2 text-sm hidden sm:table-cell">${p.origin}</td>
-        <td class="px-3 py-2 text-sm hidden md:table-cell">${p.farmer.name}</td>
-        <td class="px-3 py-2 text-sm font-semibold">${formatPeso(p.price)}</td>
-        <td class="px-3 py-2 text-sm">${p.quantity} ${p.unit}</td>
-        <td class="px-3 py-2 text-sm hidden lg:table-cell">
-            ${p.freshness ? `<span class="freshness-badge freshness-${p.freshnessIndicator || 'fresh'}">${getFreshnessEmoji(p.freshnessIndicator)} ${p.freshness}%</span>` : '<span class="text-gray-400">N/A</span>'}
-        </td>
-        <td class="px-3 py-2 text-sm text-right">
-            <div class="flex flex-col sm:flex-row gap-1 justify-end">
-                <button onclick="adminEditProduct(${p.id})" class="px-2 py-1 text-xs bg-white border rounded hover:bg-gray-50">Edit</button>
-                <button onclick="adminDeleteProduct(${p.id})" class="px-2 py-1 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100">Delete</button>
-            </div>
-        </td>
-    </tr>
-`).join('');
+    const regularRows = filteredRegular.map(p => `
+        <tr class="hover:bg-gray-50 border-b">
+            <td class="px-3 py-2 text-sm">${p.name}</td>
+            <td class="px-3 py-2 text-sm hidden sm:table-cell">${p.origin}</td>
+            <td class="px-3 py-2 text-sm hidden md:table-cell">${p.farmer.name}</td>
+            <td class="px-3 py-2 text-sm font-semibold">${formatPeso(p.price)}</td>
+            <td class="px-3 py-2 text-sm">${p.quantity} ${p.unit}</td>
+            <td class="px-3 py-2 text-sm hidden lg:table-cell">
+                ${p.freshness ? `<span class="freshness-badge freshness-${p.freshnessIndicator || 'fresh'}">${getFreshnessEmoji(p.freshnessIndicator)} ${p.freshness}%</span>` : '<span class="text-gray-400">N/A</span>'}
+            </td>
+            <td class="px-3 py-2 text-sm text-right">
+                <div class="flex flex-col sm:flex-row gap-1 justify-end">
+                    <button onclick="adminEditProduct(${p.id})" class="px-2 py-1 text-xs bg-white border rounded hover:bg-gray-50">Edit</button>
+                    <button onclick="adminDeleteProduct(${p.id})" class="px-2 py-1 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100">Delete</button>
+                </div>
+            </td>
+        </tr>
+    `).join('');
 
-const preorderRows = filteredPreorder.map(p => {
+    const preorderRows = filteredPreorder.map(p => {
     const rem = computeRemainingDays(p);
     return `
-    <tr class="hover:bg-gray-50 border-b">
-        <td class="px-3 py-2 text-sm">${p.name}</td>
-        <td class="px-3 py-2 text-sm hidden sm:table-cell">${p.origin}</td>
-        <td class="px-3 py-2 text-sm hidden md:table-cell">${p.farmer.name}</td>
-        <td class="px-3 py-2 text-sm font-semibold">${formatPeso(p.price)}</td>
-        <td class="px-3 py-2 text-sm">${p.quantity} ${p.unit}</td>
-        <td class="px-3 py-2 text-sm hidden lg:table-cell">
-            ${p.freshness ? `<span class="freshness-badge freshness-${p.freshnessIndicator || 'fresh'}">${getFreshnessEmoji(p.freshnessIndicator)} ${p.freshness}%</span>` : '<span class="text-gray-400">N/A</span>'}
-        </td>
-        <td class="px-3 py-2 text-sm ${rem <= 3 ? 'text-red-600 font-semibold' : 'text-yellow-600'}">${rem>0? rem + ' days' : 'Ending'}</td>
-        <td class="px-3 py-2 text-sm text-right">
-            <div class="flex flex-col sm:flex-row gap-1 justify-end">
-                <button onclick="adminEditProduct(${p.id})" class="px-2 py-1 text-xs bg-white border rounded hover:bg-gray-50">Edit</button>
-                <button onclick="adminDeleteProduct(${p.id})" class="px-2 py-1 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100">Delete</button>
-            </div>
-        </td>
-    </tr>
-`;
-}).join('');;
+        <tr> ... </tr>
+    `;
+}).join('');
 
+
+    // ✅ FILTER ORDERS
     const regularOrders = window.APP_STATE.orders.filter(o => !o.type || o.type !== 'pre-order');
     const preorderOrders = window.APP_STATE.orders.filter(o => o.type === 'pre-order');
+    
+    const filteredRegularOrders = filterOrders(regularOrders, window.APP_STATE.orderSearchQuery);
+    const filteredPreorderOrders = filterOrders(preorderOrders, window.APP_STATE.preorderSearchQuery);
 
-    const regularOrderRows = regularOrders.map(o => `
+    const regularOrderRows = filteredRegularOrders.map(o => `
         <tr class="hover:bg-gray-50 border-b">
             <td class="px-3 py-2 text-sm font-mono">${o.id}</td>
             <td class="px-3 py-2 text-sm">${o.customer}</td>
@@ -2809,7 +2863,7 @@ const preorderRows = filteredPreorder.map(p => {
         </tr>
     `).join('');
 
-    const preorderOrderRows = preorderOrders.map(o => `
+    const preorderOrderRows = filteredPreorderOrders.map(o => `
         <tr class="hover:bg-gray-50 border-b">
             <td class="px-3 py-2 text-sm font-mono">${o.id}</td>
             <td class="px-3 py-2 text-sm">${o.customer}</td>
@@ -2833,19 +2887,25 @@ const preorderRows = filteredPreorder.map(p => {
         </tr>
     `).join('');
 
+    // ✅ UPDATE SEARCH COUNTS
+    setTimeout(() => {
+        updateOrderSearchResultsCount(filteredRegularOrders.length, regularOrders.length, 'regular');
+        updateOrderSearchResultsCount(filteredPreorderOrders.length, preorderOrders.length, 'preorder');
+    }, 100);
+
     return `
     <section class="px-2 sm:px-4">
       <div class="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-3">
-  <h2 class="text-xl sm:text-2xl font-bold text-gray-800">Admin Dashboard</h2>
-  <div class="flex flex-col sm:flex-row gap-2">
-    <button onclick="switchAdminView('verification')" class="px-3 py-2 bg-purple-600 text-white rounded text-sm sm:text-base hover:bg-purple-700">
-      👤 User Verification
-    </button>
-    <button onclick="adminAddProduct()" class="px-3 py-2 bg-lime-600 text-white rounded text-sm sm:text-base hover:bg-lime-700">Add Product</button>
-    <button onclick="adminUpdateDeliveryFee()" class="px-3 py-2 bg-blue-600 text-white rounded text-sm sm:text-base hover:bg-blue-700">Set Delivery Fee</button>
-    <button onclick="viewDeleteLogs()" class="px-3 py-2 bg-white border text-gray-700 rounded text-sm sm:text-base hover:bg-gray-50">View Deletion Logs</button>
-  </div>
-</div>
+        <h2 class="text-xl sm:text-2xl font-bold text-gray-800">Admin Dashboard</h2>
+        <div class="flex flex-col sm:flex-row gap-2">
+          <button onclick="switchAdminView('verification')" class="px-3 py-2 bg-purple-600 text-white rounded text-sm sm:text-base hover:bg-purple-700">
+            👤 User Verification
+          </button>
+          <button onclick="adminAddProduct()" class="px-3 py-2 bg-lime-600 text-white rounded text-sm sm:text-base hover:bg-lime-700">Add Product</button>
+          <button onclick="adminUpdateDeliveryFee()" class="px-3 py-2 bg-blue-600 text-white rounded text-sm sm:text-base hover:bg-blue-700">Set Delivery Fee</button>
+          <button onclick="viewDeleteLogs()" class="px-3 py-2 bg-white border text-gray-700 rounded text-sm sm:text-base hover:bg-gray-50">View Deletion Logs</button>
+        </div>
+      </div>
 
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-6">
         <div class="bg-white rounded-xl p-4 shadow-sm border">
@@ -2862,33 +2922,31 @@ const preorderRows = filteredPreorder.map(p => {
         </div>
       </div>
 
-      <!-- 🆕 PENDING VERIFICATIONS SECTION -->
-      <!-- 🆕 PENDING VERIFICATIONS ALERT -->
-${pendingUsers.length > 0 ? `
-    <div class="bg-yellow-50 border-l-4 border-yellow-500 p-4 mb-6 rounded-r-lg">
-        <div class="flex items-center justify-between">
-            <div class="flex items-center gap-3">
-                <i data-lucide="alert-circle" class="w-6 h-6 text-yellow-600"></i>
-                <div>
-                    <h3 class="font-semibold text-yellow-800">Pending Profile Verifications</h3>
-                    <p class="text-sm text-yellow-700">${pendingUsers.length} user${pendingUsers.length > 1 ? 's' : ''} waiting for verification</p>
+      ${pendingUsers.length > 0 ? `
+        <div class="bg-yellow-50 border-l-4 border-yellow-500 p-4 mb-6 rounded-r-lg">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <i data-lucide="alert-circle" class="w-6 h-6 text-yellow-600"></i>
+                    <div>
+                        <h3 class="font-semibold text-yellow-800">Pending Profile Verifications</h3>
+                        <p class="text-sm text-yellow-700">${pendingUsers.length} user${pendingUsers.length > 1 ? 's' : ''} waiting for verification</p>
+                    </div>
                 </div>
+                <button onclick="switchAdminView('verification')" class="px-4 py-2 bg-yellow-600 text-white rounded hover:bg-yellow-700 text-sm font-semibold">
+                    View All →
+                </button>
             </div>
-            <button onclick="switchAdminView('verification')" class="px-4 py-2 bg-yellow-600 text-white rounded hover:bg-yellow-700 text-sm font-semibold">
-                View All →
-            </button>
         </div>
-    </div>
-` : ''}
+      ` : ''}
 
       <div class="space-y-6">
         <div class="bg-white rounded-xl border overflow-hidden">
-  <div class="p-4 border-b">
-    <div class="flex items-center justify-between">
-      <h3 class="font-semibold text-lg">Products — Regular</h3>
-      ${window.APP_STATE.searchQuery ? `<span class="text-sm text-gray-600">Showing ${filteredRegular.length} of ${regular.length}</span>` : ''}
-    </div>
-  </div>
+          <div class="p-4 border-b">
+            <div class="flex items-center justify-between">
+              <h3 class="font-semibold text-lg">Products — Regular</h3>
+              ${window.APP_STATE.searchQuery ? `<span class="text-sm text-gray-600">Showing ${filteredRegular.length} of ${regular.length}</span>` : ''}
+            </div>
+          </div>
           <div class="overflow-x-auto">
             <table class="w-full text-sm">
               <thead class="bg-gray-50 text-gray-700">
@@ -2928,15 +2986,47 @@ ${pendingUsers.length > 0 ? `
                 </tr>
               </thead>
               <tbody class="divide-y divide-gray-200">
-                ${preorderRows || '<tr><td class="px-3 py-8 text-center text-gray-500 text-sm" colspan="8">No pre-order products available</td></tr>'}              </tbody>
+                ${preorderRows || '<tr><td class="px-3 py-8 text-center text-gray-500 text-sm" colspan="8">No pre-order products available</td></tr>'}
+              </tbody>
             </table>
           </div>
         </div>
 
+        <!-- ✅ REGULAR ORDERS WITH SEARCH -->
         <div class="bg-white rounded-xl border overflow-hidden">
           <div class="p-4 border-b">
-            <h3 class="font-semibold text-lg">Orders — Regular</h3>
+            <h3 class="font-semibold text-lg mb-3">Orders — Regular</h3>
+            
+            <!-- Search Bar -->
+            <div class="flex items-center gap-3">
+              <div class="flex-1 relative">
+                <i data-lucide="search" class="w-5 h-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
+                <input 
+                  id="order-search-input" 
+                  type="text" 
+                  placeholder="Search by Order ID, Customer, Email, Contact..." 
+                  class="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-lime-500 text-sm"
+                  oninput="handleOrderSearch(this.value, 'regular')"
+                  value="${window.APP_STATE.orderSearchQuery}"
+                />
+                <button 
+                  id="clear-order-search-btn" 
+                  onclick="clearOrderSearch('regular')" 
+                  class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 ${window.APP_STATE.orderSearchQuery ? '' : 'hidden'}"
+                >
+                  <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+              </div>
+              <button 
+                onclick="clearOrderSearch('regular')" 
+                class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm"
+              >
+                Clear
+              </button>
+            </div>
+            <div id="order-search-results-count" class="mt-2 text-sm text-gray-600"></div>
           </div>
+          
           <div class="overflow-x-auto">
             <table class="w-full text-sm">
               <thead class="bg-gray-50 text-gray-700">
@@ -2956,13 +3046,41 @@ ${pendingUsers.length > 0 ? `
           </div>
         </div>
 
+        <!-- ✅ PRE-ORDER ORDERS WITH SEARCH -->
         <div class="bg-white rounded-xl border overflow-hidden">
-  <div class="p-4 border-b">
-    <div class="flex items-center justify-between">
-      <h3 class="font-semibold text-lg">Products — Pre-Order</h3>
-      ${window.APP_STATE.searchQuery ? `<span class="text-sm text-gray-600">Showing ${filteredPreorder.length} of ${preorderList.length}</span>` : ''}
-    </div>
-  </div>
+          <div class="p-4 border-b">
+            <h3 class="font-semibold text-lg mb-3">Orders — Pre-Order</h3>
+            
+            <!-- Search Bar -->
+            <div class="flex items-center gap-3">
+              <div class="flex-1 relative">
+                <i data-lucide="search" class="w-5 h-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
+                <input 
+                  id="preorder-search-input" 
+                  type="text" 
+                  placeholder="Search by Order ID, Customer, Email, Contact..." 
+                  class="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-lime-500 text-sm"
+                  oninput="handleOrderSearch(this.value, 'preorder')"
+                  value="${window.APP_STATE.preorderSearchQuery}"
+                />
+                <button 
+                  id="clear-preorder-search-btn" 
+                  onclick="clearOrderSearch('preorder')" 
+                  class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 ${window.APP_STATE.preorderSearchQuery ? '' : 'hidden'}"
+                >
+                  <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+              </div>
+              <button 
+                onclick="clearOrderSearch('preorder')" 
+                class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm"
+              >
+                Clear
+              </button>
+            </div>
+            <div id="preorder-search-results-count" class="mt-2 text-sm text-gray-600"></div>
+          </div>
+          
           <div class="overflow-x-auto">
             <table class="w-full text-sm">
               <thead class="bg-gray-50 text-gray-700">

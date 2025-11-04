@@ -2456,4 +2456,24 @@ thead.bg-gray-50 th {
     transform: translateY(0);
   }
 }
+
+/* Order Search Styles */
+.order-search-section {
+  transition: all 0.3s ease;
+}
+
+.order-search-section input:focus {
+  box-shadow: 0 0 0 3px rgba(132, 204, 22, 0.1);
+}
+
+@media (max-width: 640px) {
+  .order-search-section .flex {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .order-search-section button {
+    width: 100%;
+  }
+}
   
