@@ -22,174 +22,48 @@
 
 
 <body class="min-h-screen text-gray-800">
-  <div id="app" class="mx-auto p-4 md:p-8 app-max">
-
-    <!-- Header -->
-    <header class="bg-white rounded-2xl shadow-sm p-4 md:p-6 flex items-center justify-between gap-4 sticky top-4 z-30 flex-responsive">
-      <div class="flex items-center gap-4">
-        <div class="flex items-center gap-3">
-          <div class="rounded-lg bg-gradient-to-tr from-lime-200 to-lime-500 p-2 shadow-inner">
-            <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#14532d" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
-              <line x1="3" x2="21" y1="6" y2="6"></line>
-              <path d="M16 10a4 4 0 0 1-8 0"></path>
-            </svg>
-          </div>
-          <div>
-            <h1 class="text-2xl font-extrabold text-lime-700 leading-tight">Palengke.<span class="text-green-600">com</span></h1>
-            <p class="text-xs text-muted-600 text-gray-500">Cainta Farm-to-Table Direct</p>
-          </div>
-        </div>
-        <div class="hidden-mobile items-center space-x-3 ml-6">
-          <div class="text-sm text-gray-600">Fresh picks today</div>
-          <div class="h-6 w-px bg-gray-100"></div>
-          <div class="text-sm text-gray-600">Support local farmers</div>
-        </div>
-      </div>
-
+  <<!-- Chat Modal -->
+<div id="chat-modal" class="fixed inset-0 bg-black bg-opacity-40 hidden items-center justify-center z-60 p-4">
+  <div class="bg-white rounded-xl shadow-xl w-full max-w-md flex flex-col" style="height: 600px; max-height: 90vh;">
+    <!-- Chat Header -->
+    <div class="p-4 border-b flex items-center justify-between bg-lime-600 text-white rounded-t-xl">
       <div class="flex items-center gap-3">
-        <!-- Mobile hamburger menu -->
-        <button id="mobile-menu-btn" class="md:hidden p-2 rounded-lg bg-gray-100">
-          <i data-lucide="menu" class="w-5 h-5 text-gray-700"></i>
-        </button>
-
-        <button id="view-store" class="text-sm px-3 py-2 rounded-lg bg-lime-50 text-lime-700 hover:bg-lime-100">Shop</button>
-        <button id="view-orders" class="hidden text-sm px-3 py-2 rounded-lg bg-white text-gray-700 hover:bg-gray-50">Orders</button>
-
-        <div class="relative">
-          <button id="cart-btn" class="flex items-center gap-2 px-3 py-2 rounded-lg bg-lime-600 text-white hover:bg-lime-700">
-            <i data-lucide="shopping-cart" class="w-4 h-4"></i>
-            <span class="text-sm font-semibold">Cart</span>
-            <span id="cart-badge" class="ml-2 inline-flex items-center justify-center w-5 h-5 text-xs rounded-full bg-red-500 text-white">0</span>
-          </button>
-        </div>
-
-        <div id="auth-area" class="relative"></div>
-        <div id="header-actions" class="header-actions"></div>
-      </div>
-
-      <!-- Mobile menu -->
-      <div id="mobile-menu" class="mobile-menu hidden">
-        <div class="flex flex-col gap-3 p-4 bg-white rounded-lg mt-2 border">
-          <button id="mobile-view-store" class="text-left px-3 py-2 rounded-lg bg-lime-50 text-lime-700">Shop</button>
-          <button id="mobile-view-orders" class="text-left px-3 py-2 rounded-lg bg-white text-gray-700">Orders</button>
-          <div class="border-t pt-3">
-            <div id="mobile-auth-area"></div>
-          </div>
+        <i data-lucide="message-circle" class="w-5 h-5"></i>
+        <div>
+          <h3 class="font-semibold">Customer Support</h3>
+          <p class="text-xs opacity-90">We're here to help</p>
         </div>
       </div>
-    </header>
+      <button onclick="toggleChatModal()" class="text-white hover:bg-lime-700 p-2 rounded-lg">
+        <i data-lucide="x" class="w-5 h-5"></i>
+      </button>
+    </div>
 
-    <!-- Hero Section -->
-    <section class="market-hero mt-6 rounded-2xl p-6 flex flex-col md:flex-row items-center justify-between gap-6">
-      <div class="max-w-xl">
-        <h2 class="text-3xl md:text-4xl font-extrabold text-lime-700">Fresh from Cainta farms to your table</h2>
-        <p class="mt-2 text-gray-600">Order directly from local farmers and fisherfolk. Daily harvests, transparent origin, better prices.</p>
-        <div class="mt-4 flex gap-3 button-group">
-          <button id="browse-products" class="px-4 py-2 bg-lime-600 text-white rounded-lg font-semibold hover:bg-lime-700">Browse Products</button>
-          <button id="how-it-works" class="px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg">How it works</button>
-        </div>
-        <div class="mt-4 text-sm text-gray-500">Delivery: Cash on Delivery (COD) • LGU-managed marketplace demo</div>
-      </div>
+    <!-- Chat Messages -->
+    <div id="chat-messages" class="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50">
+      <!-- Messages will be inserted here -->
+    </div>
 
-      <div class="w-full md:w-1/2 mobile-grid gap-3">
-        <div class="card bg-white rounded-xl p-4 flex items-start gap-3 border">
-          <div class="rounded-lg p-2 bg-lime-50"><i data-lucide="package" class="w-6 h-6 text-lime-600"></i></div>
-          <div>
-            <div class="text-sm font-semibold">Origin Transparency</div>
-            <div class="text-sm text-gray-500">See which farm your produce came from.</div>
-          </div>
-        </div>
-        <div class="card bg-white rounded-xl p-4 flex items-start gap-3 border">
-          <div class="rounded-lg p-2 bg-lime-50"><i data-lucide="clock" class="w-6 h-6 text-lime-600"></i></div>
-          <div>
-            <div class="text-sm font-semibold">Same-day Availability</div>
-            <div class="text-sm text-gray-500">Products listed are available today.</div>
-          </div>
-        </div>
-        <div class="card bg-white rounded-xl p-4 flex items-start gap-3 border">
-          <div class="rounded-lg p-2 bg-lime-50"><i data-lucide="heart" class="w-6 h-6 text-lime-600"></i></div>
-          <div>
-            <div class="text-sm font-semibold">Support Local</div>
-            <div class="text-sm text-gray-500">Direct income for Cainta farmers & fishers.</div>
-          </div>
-        </div>
-        <div class="card bg-white rounded-xl p-4 flex items-start gap-3 border">
-          <div class="rounded-lg p-2 bg-lime-50"><i data-lucide="map-pin" class="w-6 h-6 text-lime-600"></i></div>
-          <div>
-            <div class="text-sm font-semibold">Local Delivery</div>
-            <div class="text-sm text-gray-500">Fast local deliveries within Cainta.</div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <section id="search-section" class="mt-6 bg-white rounded-2xl p-4 shadow-sm border">
-      <div class="flex items-center gap-3">
-        <div class="flex-1 relative">
-          <i data-lucide="search" class="w-5 h-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
-          <input 
-            id="search-input" 
-            type="text" 
-            placeholder="Search products by name, farm, or farmer..." 
-            class="w-full pl-10 pr-10 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-lime-500 focus:border-transparent"
-            oninput="handleSearch(this.value)"
-          />
-          <button 
-            id="clear-search-btn" 
-            onclick="clearSearch()" 
-            class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 hidden"
-          >
-            <i data-lucide="x" class="w-5 h-5"></i>
-          </button>
-        </div>
+    <!-- Chat Input -->
+    <div class="p-4 border-t bg-white rounded-b-xl">
+      <div class="flex gap-2">
+        <input 
+          id="chat-input" 
+          type="text" 
+          placeholder="Type your message..." 
+          class="flex-1 p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-lime-500"
+          onkeypress="if(event.key === 'Enter') sendChatMessage()"
+        />
         <button 
-          onclick="clearSearch()" 
-          class="px-4 py-2.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+          onclick="sendChatMessage()"
+          class="px-4 py-3 bg-lime-600 text-white rounded-lg hover:bg-lime-700 flex items-center gap-2"
         >
-          Clear
+          <i data-lucide="send" class="w-4 h-4"></i>
         </button>
       </div>
-      <div id="search-results-count" class="mt-2 text-sm text-gray-600"></div>
-    </section>
-
-    <main id="main-content" class="mt-6"></main>
-
-    <!-- Cart Drawer -->
-    <aside id="cart-drawer" class="fixed right-4 top-20 w-96 max-w-full bg-white rounded-2xl shadow-2xl border hidden z-50 overflow-hidden">
-      <div class="p-4 border-b flex items-center justify-between">
-        <div class="flex items-center gap-3">
-          <i data-lucide="shopping-cart" class="w-5 h-5 text-lime-600"></i>
-          <div class="font-semibold text-gray-800">Your Cart</div>
-        </div>
-        <button id="close-cart" class="text-gray-500 hover:text-gray-700"><i data-lucide="x" class="w-5 h-5"></i></button>
-      </div>
-      <div id="cart-drawer-body" class="p-4 scrollbar-hide max-h-[60vh] overflow-y-auto"></div>
-      <div class="p-4 border-t">
-  <div class="space-y-2 mb-3">
-    <div class="flex items-center justify-between text-sm">
-      <div class="text-gray-600">Subtotal</div>
-      <div id="cart-subtotal" class="font-semibold text-gray-800">₱0.00</div>
-    </div>
-    <div class="flex items-center justify-between text-sm">
-      <div class="text-gray-600">Delivery Fee</div>
-      <div id="cart-delivery-fee" class="font-semibold text-gray-800">₱0.00</div>
-    </div>
-    <div class="border-t pt-2"></div>
-    <div class="flex items-center justify-between">
-      <div class="text-sm font-semibold text-gray-700">Total</div>
-      <div id="cart-total" class="font-bold text-lg text-lime-700">₱0.00</div>
     </div>
   </div>
-  <button id="checkout-btn" class="w-full py-3 bg-lime-600 text-white rounded-xl font-semibold hover:bg-lime-700">Proceed to Checkout</button>
 </div>
-    </aside>
-
-    <!-- Modal -->
-    <div id="modal-overlay" class="fixed inset-0 bg-black bg-opacity-40 hidden items-center justify-center z-60 p-4">
-      <div id="modal" class="bg-white rounded-xl shadow-xl max-w-xl w-full overflow-hidden"></div>
-    </div>
-  </div>
 
   <script src="email-service.js"></script>
   <script type="module" src="app.js"></script>

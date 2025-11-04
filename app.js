@@ -47,7 +47,10 @@ window.APP_STATE = {
     adminView: 'dashboard',
     searchQuery: '',
     orderSearchQuery: '',        // ✅ Add this
-    preorderSearchQuery: ''      // ✅ Add this
+    preorderSearchQuery: '',      // ✅ Add this
+    messages: [],  // ✅ ADD THIS
+    unreadMessages: 0,  // ✅ ADD THIS
+    currentConversation: null  // ✅ ADD THIS
 };
 
 const APP_KEY = 'palengke_cainta_v4';
@@ -78,7 +81,9 @@ const dbRefs = {
     users: ref(database, 'users'),
     carts: ref(database, 'carts'),
     notifications: ref(database, 'notifications'),
-    deleteLogs: ref(database, 'deleteLogs')
+    deleteLogs: ref(database, 'deleteLogs'),
+    messages: ref(database, 'messages'),  // ✅ ADD THIS
+    conversations: ref(database, 'conversations')  // ✅ ADD THIS
 };
 
 // Debounce utility function
@@ -2702,10 +2707,12 @@ window.renderMain = async function() {
     updatePreorderStatuses();
 
     if(window.APP_STATE.currentUser && window.APP_STATE.currentUser.role === 'admin' && window.APP_STATE.view === 'admin') {
-        if(window.APP_STATE.adminView === 'verification') {
-            main.innerHTML = await renderUserVerificationPage();
-        } else {
-            main.innerHTML = await renderAdminDashboard();
+    if(window.APP_STATE.adminView === 'verification') {
+        main.innerHTML = await renderUserVerificationPage();
+    } else if(window.APP_STATE.adminView === 'chats') {
+        main.innerHTML = await renderAdminChatPage();
+    } else {
+        main.innerHTML = await renderAdminDashboard();
             
             // Re-initialize search listeners after DOM update
             setTimeout(() => {
@@ -2741,6 +2748,10 @@ window.renderMain = async function() {
     if (searchInput && window.APP_STATE.searchQuery) {
         searchInput.value = window.APP_STATE.searchQuery;
     }
+
+    toggleChatBubble();
+    updateChatBadge();
+    setupChatListener();
 };
 
 window.switchTo = function(v) {
@@ -3120,6 +3131,9 @@ window.renderAdminDashboard = async function() {
           <button onclick="switchAdminView('verification')" class="px-3 py-2 bg-purple-600 text-white rounded text-sm sm:text-base hover:bg-purple-700">
             👤 User Verification
           </button>
+          <button onclick="switchAdminView('chats')" class="px-3 py-2 bg-orange-600 text-white rounded text-sm sm:text-base hover:bg-orange-700">
+    💬 Customer Chats
+  </button>
           <button onclick="adminAddProduct()" class="px-3 py-2 bg-lime-600 text-white rounded text-sm sm:text-base hover:bg-lime-700">Add Product</button>
           <button onclick="adminUpdateDeliveryFee()" class="px-3 py-2 bg-blue-600 text-white rounded text-sm sm:text-base hover:bg-blue-700">Set Delivery Fee</button>
           <button onclick="viewDeleteLogs()" class="px-3 py-2 bg-white border text-gray-700 rounded text-sm sm:text-base hover:bg-gray-50">View Deletion Logs</button>
@@ -3642,6 +3656,209 @@ ${deniedUsers.length > 0 ? `
     `;
 };
 
+// ==========================================
+// 💬 ADMIN CHAT MANAGEMENT PAGE
+// ==========================================
+
+window.renderAdminChatPage = async function() {
+    if(!window.APP_STATE.currentUser || window.APP_STATE.currentUser.role !== 'admin') {
+        return `<div class="bg-white rounded-xl p-6 border">Admin access required.</div>`;
+    }
+
+    // Get all chats
+    const chatsData = await getFromFirebase('chats');
+    const chatsList = chatsData ? Object.entries(chatsData).map(([id, data]) => ({
+        id,
+        ...data
+    })) : [];
+
+    // Sort by last message time
+    chatsList.sort((a, b) => (b.lastMessageTime || 0) - (a.lastMessageTime || 0));
+
+    // Count unread chats
+    const unreadCount = chatsList.filter(chat => chat.unreadAdmin).length;
+
+    const chatRows = chatsList.map(chat => {
+        const lastMessageTime = chat.lastMessageTime 
+            ? new Date(chat.lastMessageTime).toLocaleString()
+            : 'No messages yet';
+        
+        return `
+            <tr class="hover:bg-gray-50 border-b cursor-pointer" onclick="openAdminChat('${chat.id}')">
+                <td class="px-3 py-3 text-sm">
+                    <div class="flex items-center gap-2">
+                        ${chat.unreadAdmin ? '<span class="w-2 h-2 bg-red-500 rounded-full"></span>' : ''}
+                        <div>
+                            <div class="font-medium">${chat.customerName || 'Unknown'}</div>
+                            <div class="text-xs text-gray-500">${chat.customerEmail || ''}</div>
+                        </div>
+                    </div>
+                </td>
+                <td class="px-3 py-3 text-sm hidden md:table-cell">
+                    <div class="max-w-xs truncate text-gray-600">${chat.lastMessage || 'No messages'}</div>
+                </td>
+                <td class="px-3 py-3 text-sm hidden lg:table-cell">${lastMessageTime}</td>
+                <td class="px-3 py-3 text-sm text-right">
+                    <button onclick="event.stopPropagation(); openAdminChat('${chat.id}')" class="px-3 py-1 text-xs bg-lime-600 text-white rounded hover:bg-lime-700">
+                        View Chat
+                    </button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+
+    return `
+        <section class="px-2 sm:px-4">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-xl sm:text-2xl font-bold text-gray-800">Customer Support Chats</h2>
+                <button onclick="switchAdminView('dashboard')" class="px-3 py-2 bg-gray-100 text-gray-700 rounded text-sm hover:bg-gray-200">
+                    ← Back to Dashboard
+                </button>
+            </div>
+
+            <!-- Stats Card -->
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
+                <div class="bg-white rounded-xl p-4 shadow-sm border">
+                    <div class="text-sm text-gray-500">Total Conversations</div>
+                    <div class="text-lg sm:text-xl font-bold mt-1">${chatsList.length}</div>
+                </div>
+                <div class="bg-white rounded-xl p-4 shadow-sm border">
+                    <div class="text-sm text-gray-500">Unread Messages</div>
+                    <div class="text-lg sm:text-xl font-bold text-red-600 mt-1">${unreadCount}</div>
+                </div>
+                <div class="bg-white rounded-xl p-4 shadow-sm border">
+                    <div class="text-sm text-gray-500">Active Today</div>
+                    <div class="text-lg sm:text-xl font-bold mt-1">${chatsList.filter(c => c.lastMessageTime && (Date.now() - c.lastMessageTime) < 86400000).length}</div>
+                </div>
+            </div>
+
+            <!-- Chats Table -->
+            <div class="bg-white rounded-xl border overflow-hidden">
+                <div class="p-4 border-b">
+                    <h3 class="font-semibold text-lg">Chat Conversations</h3>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead class="bg-gray-50 text-gray-700">
+                            <tr>
+                                <th class="px-3 py-3 text-left font-medium">Customer</th>
+                                <th class="px-3 py-3 text-left font-medium hidden md:table-cell">Last Message</th>
+                                <th class="px-3 py-3 text-left font-medium hidden lg:table-cell">Time</th>
+                                <th class="px-3 py-3 text-right font-medium">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${chatRows || '<tr><td colspan="4" class="px-3 py-8 text-center text-gray-500">No chat conversations yet</td></tr>'}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+    `;
+};
+
+window.openAdminChat = async function(chatId) {
+    const chatData = await getFromFirebase(`chats/${chatId}`);
+    const messagesData = await getFromFirebase(`chats/${chatId}/messages`);
+    
+    if (!chatData) return;
+    
+    const messages = messagesData ? Object.values(messagesData).sort((a, b) => a.timestamp - b.timestamp) : [];
+    
+    const messagesHtml = messages.map(msg => {
+        const time = new Date(msg.timestamp).toLocaleTimeString('en-US', { 
+            hour: '2-digit', 
+            minute: '2-digit' 
+        });
+        
+        return `
+            <div class="chat-message ${msg.sender}">
+                <div class="chat-message-avatar">
+                    <i data-lucide="${msg.sender === 'admin' ? 'shield-check' : 'user'}" class="w-4 h-4"></i>
+                </div>
+                <div>
+                    <div class="chat-message-bubble">
+                        ${msg.message}
+                    </div>
+                    <div class="chat-message-info ${msg.sender === 'customer' ? 'text-left' : 'text-right'}">
+                        ${time}
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+    
+    showModal(`Chat with ${chatData.customerName || 'Customer'}`, `
+        <div class="flex flex-col" style="height: 500px;">
+            <div class="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50" id="admin-chat-messages">
+                ${messagesHtml || '<div class="text-center text-gray-500 py-8">No messages yet</div>'}
+            </div>
+            <div class="p-4 border-t bg-white">
+                <div class="flex gap-2">
+                    <input 
+                        id="admin-chat-input" 
+                        type="text" 
+                        placeholder="Type your reply..." 
+                        class="flex-1 p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-lime-500"
+                        onkeypress="if(event.key === 'Enter') sendAdminChatMessage('${chatId}')"
+                    />
+                    <button 
+                        onclick="sendAdminChatMessage('${chatId}')"
+                        class="px-4 py-3 bg-lime-600 text-white rounded-lg hover:bg-lime-700 flex items-center gap-2"
+                    >
+                        <i data-lucide="send" class="w-4 h-4"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    `, `<button onclick="hideModal(); renderMain();" class="px-4 py-2 bg-gray-100 rounded">Close</button>`);
+    
+    // Mark as read
+    await updateFirebase(`chats/${chatId}`, { unreadAdmin: false });
+    
+    setTimeout(() => {
+        icons();
+        const container = document.getElementById('admin-chat-messages');
+        if (container) container.scrollTop = container.scrollHeight;
+    }, 100);
+};
+
+window.sendAdminChatMessage = async function(chatId) {
+    const input = document.getElementById('admin-chat-input');
+    const message = input?.value?.trim();
+    
+    if (!message) return;
+    
+    const messageData = {
+        id: 'MSG-' + uid(),
+        message: message,
+        sender: 'admin',
+        senderName: 'Admin Support',
+        timestamp: Date.now(),
+        read: false
+    };
+    
+    try {
+        const chatRef = ref(database, `chats/${chatId}/messages`);
+        await push(chatRef, messageData);
+        
+        await updateFirebase(`chats/${chatId}`, {
+            lastMessage: message,
+            lastMessageTime: messageData.timestamp,
+            unreadCustomer: true,
+            unreadAdmin: false
+        });
+        
+        input.value = '';
+        
+        // Reload chat
+        await openAdminChat(chatId);
+        
+    } catch (error) {
+        console.error('Error sending admin message:', error);
+    }
+};
+
 // NEW FUNCTION: Switch between admin dashboard views
 window.switchAdminView = function(viewName) {
     window.APP_STATE.adminView = viewName;
@@ -3708,6 +3925,10 @@ onAuthStateChanged(auth, async (user) => {
             if (userCart) {
                 window.APP_STATE.cart = Object.values(userCart);
             }
+            
+            // ✅ ADD THESE LINES:
+            setupChatListener();
+            updateChatBadge();
         }
     } else {
         window.APP_STATE.currentUser = null;
@@ -3715,8 +3936,261 @@ onAuthStateChanged(auth, async (user) => {
     }
     updateAuthArea();
     await renderMain();
+    
+    // ✅ ADD THIS LINE:
+    toggleChatBubble();
 });
 
+// ==========================================
+// 💬 CHAT SYSTEM FUNCTIONS
+// ==========================================
+
+// Toggle chat window visibility
+window.toggleChatWindow = function() {
+    const chatWindow = document.getElementById('chat-window');
+    const chatBubble = document.getElementById('chat-bubble');
+    
+    if (!chatWindow || !chatBubble) return;
+    
+    chatWindow.classList.toggle('hidden');
+    
+    // Load messages when opening
+    if (!chatWindow.classList.contains('hidden')) {
+        loadChatMessages();
+        markMessagesAsRead();
+    }
+    
+    setTimeout(() => icons(), 100);
+};
+
+// Send chat message
+window.sendChatMessage = async function() {
+    const input = document.getElementById('chat-input');
+    const message = input?.value?.trim();
+    
+    if (!message) return;
+    
+    if (!window.APP_STATE.currentUser) {
+        return showModal(
+            'Login Required',
+            'Please log in to send messages to customer support.',
+            `<button onclick="hideModal(); openAuth('login')" class="px-4 py-2 bg-lime-600 text-white rounded">Log In</button>
+             <button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">Cancel</button>`
+        );
+    }
+    
+    try {
+        const messageId = 'MSG-' + uid();
+        const conversationId = `conv-${window.APP_STATE.currentUser.uid}`;
+        
+        const messageData = {
+            id: messageId,
+            conversationId: conversationId,
+            senderId: window.APP_STATE.currentUser.uid,
+            senderName: window.APP_STATE.currentUser.name,
+            senderEmail: window.APP_STATE.currentUser.email,
+            message: message,
+            timestamp: Date.now(),
+            read: false,
+            type: 'customer'
+        };
+        
+        // Save message
+        await saveToFirebase(`messages/${messageId}`, messageData);
+        
+        // Update conversation
+        await updateFirebase(`conversations/${conversationId}`, {
+            userId: window.APP_STATE.currentUser.uid,
+            userName: window.APP_STATE.currentUser.name,
+            userEmail: window.APP_STATE.currentUser.email,
+            lastMessage: message,
+            lastMessageTime: Date.now(),
+            unreadByAdmin: true,
+            updatedAt: Date.now()
+        });
+        
+        // Clear input
+        input.value = '';
+        
+        // Reload messages
+        loadChatMessages();
+        
+    } catch (error) {
+        console.error('Error sending message:', error);
+        showModal(
+            'Error',
+            'Failed to send message. Please try again.',
+            `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`
+        );
+    }
+};
+
+// Load chat messages
+window.loadChatMessages = async function() {
+    if (!window.APP_STATE.currentUser) return;
+    
+    const messagesContainer = document.getElementById('chat-messages');
+    if (!messagesContainer) return;
+    
+    try {
+        const conversationId = `conv-${window.APP_STATE.currentUser.uid}`;
+        const messagesData = await getFromFirebase('messages');
+        
+        if (!messagesData) {
+            messagesContainer.innerHTML = `
+                <div class="text-center py-8 text-gray-500">
+                    <i data-lucide="message-circle" class="w-12 h-12 mx-auto mb-2 opacity-30"></i>
+                    <p class="text-sm">Start a conversation with our support team!</p>
+                </div>
+            `;
+            icons();
+            return;
+        }
+        
+        const messages = Object.values(messagesData)
+            .filter(m => m.conversationId === conversationId)
+            .sort((a, b) => a.timestamp - b.timestamp);
+        
+        if (messages.length === 0) {
+            messagesContainer.innerHTML = `
+                <div class="text-center py-8 text-gray-500">
+                    <i data-lucide="message-circle" class="w-12 h-12 mx-auto mb-2 opacity-30"></i>
+                    <p class="text-sm">Start a conversation with our support team!</p>
+                </div>
+            `;
+            icons();
+            return;
+        }
+        
+        const messagesHtml = messages.map(msg => {
+            const isSent = msg.senderId === window.APP_STATE.currentUser.uid;
+            const time = new Date(msg.timestamp).toLocaleTimeString('en-US', {
+                hour: 'numeric',
+                minute: '2-digit'
+            });
+            
+            return `
+                <div class="chat-message ${isSent ? 'sent' : ''}">
+                    <div class="chat-message-avatar">
+                        <i data-lucide="${isSent ? 'user' : 'headphones'}" class="w-4 h-4"></i>
+                    </div>
+                    <div class="chat-message-content">
+                        <div class="chat-message-bubble">
+                            ${msg.message}
+                        </div>
+                        <div class="chat-message-time">${time}</div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+        
+        messagesContainer.innerHTML = messagesHtml;
+        
+        // Scroll to bottom
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        
+        icons();
+        
+    } catch (error) {
+        console.error('Error loading messages:', error);
+    }
+};
+
+// Mark messages as read
+window.markMessagesAsRead = async function() {
+    if (!window.APP_STATE.currentUser) return;
+    
+    try {
+        const conversationId = `conv-${window.APP_STATE.currentUser.uid}`;
+        const messagesData = await getFromFirebase('messages');
+        
+        if (!messagesData) return;
+        
+        const unreadMessages = Object.values(messagesData)
+            .filter(m => 
+                m.conversationId === conversationId && 
+                !m.read && 
+                m.type === 'admin'
+            );
+        
+        for (const msg of unreadMessages) {
+            await updateFirebase(`messages/${msg.id}`, { read: true });
+        }
+        
+        // Update conversation
+        await updateFirebase(`conversations/${conversationId}`, {
+            unreadByCustomer: false
+        });
+        
+        updateChatBadge();
+        
+    } catch (error) {
+        console.error('Error marking messages as read:', error);
+    }
+};
+
+// Update chat badge
+window.updateChatBadge = async function() {
+    if (!window.APP_STATE.currentUser || window.APP_STATE.currentUser.role === 'admin') return;
+    
+    const badge = document.getElementById('chat-badge');
+    if (!badge) return;
+    
+    try {
+        const conversationId = `conv-${window.APP_STATE.currentUser.uid}`;
+        const messagesData = await getFromFirebase('messages');
+        
+        if (!messagesData) {
+            badge.classList.add('hidden');
+            return;
+        }
+        
+        const unreadCount = Object.values(messagesData)
+            .filter(m => 
+                m.conversationId === conversationId && 
+                !m.read && 
+                m.type === 'admin'
+            ).length;
+        
+        if (unreadCount > 0) {
+            badge.textContent = unreadCount;
+            badge.classList.remove('hidden');
+        } else {
+            badge.classList.add('hidden');
+        }
+        
+    } catch (error) {
+        console.error('Error updating chat badge:', error);
+    }
+};
+
+// Show/hide chat bubble based on user role
+window.updateChatBubbleVisibility = function() {
+    const chatBubble = document.getElementById('chat-bubble');
+    if (!chatBubble) return;
+    
+    if (window.APP_STATE.currentUser && window.APP_STATE.currentUser.role === 'customer') {
+        chatBubble.classList.remove('hidden');
+        updateChatBadge();
+    } else {
+        chatBubble.classList.add('hidden');
+    }
+};
+
+// Setup real-time message listener
+window.setupMessageListener = function() {
+    if (!window.APP_STATE.currentUser || window.APP_STATE.currentUser.role === 'admin') return;
+    
+    onValue(dbRefs.messages, (snapshot) => {
+        if (snapshot.exists()) {
+            const chatWindow = document.getElementById('chat-window');
+            if (chatWindow && !chatWindow.classList.contains('hidden')) {
+                loadChatMessages();
+            }
+            updateChatBadge();
+        }
+    });
+};
 // Initialize app
 window.addEventListener('load', () => {
     initializeFirebaseData();
@@ -3724,6 +4198,197 @@ window.addEventListener('load', () => {
     updateAuthArea();
     icons();
 });
+
+// ==========================================
+// 💬 CHAT SYSTEM FUNCTIONS
+// ==========================================
+
+window.toggleChatBubble = function() {
+    const bubble = document.getElementById('chat-bubble');
+    if (!bubble) return;
+    
+    if (window.APP_STATE.currentUser) {
+        bubble.style.display = 'block';
+    } else {
+        bubble.style.display = 'none';
+    }
+};
+
+window.toggleChatModal = function() {
+    const modal = document.getElementById('chat-modal');
+    if (!modal) return;
+    
+    if (!window.APP_STATE.currentUser) {
+        showModal('Login Required', 'Please log in to use the chat support.', 
+            `<button onclick="hideModal(); openAuth('login')" class="px-4 py-2 bg-lime-600 text-white rounded">Log in</button>
+             <button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">Cancel</button>`);
+        return;
+    }
+    
+    modal.classList.toggle('hidden');
+    
+    if (!modal.classList.contains('hidden')) {
+        loadChatMessages();
+        markMessagesAsRead();
+        updateChatBadge();
+    }
+    
+    setTimeout(() => icons(), 100);
+};
+
+window.sendChatMessage = async function() {
+    const input = document.getElementById('chat-input');
+    const message = input?.value?.trim();
+    
+    if (!message || !window.APP_STATE.currentUser) return;
+    
+    const chatId = window.APP_STATE.currentUser.uid;
+    const messageData = {
+        id: 'MSG-' + uid(),
+        message: message,
+        sender: 'customer',
+        senderName: window.APP_STATE.currentUser.name,
+        senderEmail: window.APP_STATE.currentUser.email,
+        timestamp: Date.now(),
+        read: false
+    };
+    
+    try {
+        // Save message to Firebase
+        const chatRef = ref(database, `chats/${chatId}/messages`);
+        await push(chatRef, messageData);
+        
+        // Update chat metadata
+        await updateFirebase(`chats/${chatId}`, {
+            lastMessage: message,
+            lastMessageTime: messageData.timestamp,
+            customerName: window.APP_STATE.currentUser.name,
+            customerEmail: window.APP_STATE.currentUser.email,
+            unreadAdmin: true
+        });
+        
+        // Clear input
+        input.value = '';
+        
+        // Reload messages
+        loadChatMessages();
+        
+    } catch (error) {
+        console.error('Error sending message:', error);
+        showModal('Error', 'Failed to send message. Please try again.', 
+            `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
+    }
+};
+
+window.loadChatMessages = async function() {
+    if (!window.APP_STATE.currentUser) return;
+    
+    const chatId = window.APP_STATE.currentUser.uid;
+    const messagesContainer = document.getElementById('chat-messages');
+    
+    if (!messagesContainer) return;
+    
+    try {
+        const messagesData = await getFromFirebase(`chats/${chatId}/messages`);
+        
+        if (!messagesData) {
+            messagesContainer.innerHTML = `
+                <div class="text-center text-gray-500 py-8">
+                    <i data-lucide="message-circle" class="w-12 h-12 mx-auto mb-2 opacity-50"></i>
+                    <p>No messages yet. Start a conversation!</p>
+                </div>
+            `;
+            setTimeout(() => icons(), 50);
+            return;
+        }
+        
+        const messages = Object.values(messagesData).sort((a, b) => a.timestamp - b.timestamp);
+        
+        messagesContainer.innerHTML = messages.map(msg => {
+            const time = new Date(msg.timestamp).toLocaleTimeString('en-US', { 
+                hour: '2-digit', 
+                minute: '2-digit' 
+            });
+            
+            return `
+                <div class="chat-message ${msg.sender}">
+                    <div class="chat-message-avatar">
+                        <i data-lucide="${msg.sender === 'admin' ? 'shield-check' : 'user'}" class="w-4 h-4"></i>
+                    </div>
+                    <div>
+                        <div class="chat-message-bubble">
+                            ${msg.message}
+                        </div>
+                        <div class="chat-message-info text-right">
+                            ${time}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+        
+        // Scroll to bottom
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        
+        setTimeout(() => icons(), 50);
+        
+    } catch (error) {
+        console.error('Error loading messages:', error);
+    }
+};
+
+window.markMessagesAsRead = async function() {
+    if (!window.APP_STATE.currentUser) return;
+    
+    const chatId = window.APP_STATE.currentUser.uid;
+    
+    try {
+        await updateFirebase(`chats/${chatId}`, {
+            unreadCustomer: false
+        });
+    } catch (error) {
+        console.error('Error marking messages as read:', error);
+    }
+};
+
+window.updateChatBadge = async function() {
+    if (!window.APP_STATE.currentUser) return;
+    
+    const badge = document.getElementById('chat-badge');
+    const chatId = window.APP_STATE.currentUser.uid;
+    
+    if (!badge) return;
+    
+    try {
+        const chatData = await getFromFirebase(`chats/${chatId}`);
+        
+        if (chatData && chatData.unreadCustomer) {
+            badge.style.display = 'flex';
+        } else {
+            badge.style.display = 'none';
+        }
+    } catch (error) {
+        console.error('Error updating chat badge:', error);
+    }
+};
+
+// Setup chat realtime listener
+window.setupChatListener = function() {
+    if (!window.APP_STATE.currentUser) return;
+    
+    const chatId = window.APP_STATE.currentUser.uid;
+    const chatRef = ref(database, `chats/${chatId}`);
+    
+    onValue(chatRef, (snapshot) => {
+        if (snapshot.exists()) {
+            const modal = document.getElementById('chat-modal');
+            if (modal && !modal.classList.contains('hidden')) {
+                loadChatMessages();
+            }
+            updateChatBadge();
+        }
+    });
+};
 
 // Escape key handler
 window.addEventListener('keydown', (e) => {
