@@ -2855,3 +2855,75 @@ body.user-menu-open {
 .bg-blue-50.border-blue-200 {
     animation: slideInLeft 0.4s ease-out;
 }
+
+/* ==========================================
+   🤖 Improved Auto-Response Styling
+   ========================================== */
+
+/* Preserve line breaks and formatting */
+.whitespace-pre-wrap {
+    white-space: pre-line !important;
+    word-wrap: break-word !important;
+    overflow-wrap: break-word !important;
+    line-height: 1.6 !important;
+}
+
+/* Auto-response message bubble - improved */
+.bg-blue-50 {
+    background-color: #eff6ff !important;
+}
+
+.border-blue-200 {
+    border-color: #bfdbfe !important;
+}
+
+.text-blue-600 {
+    color: #2563eb !important;
+}
+
+/* Better spacing for chat messages */
+#customer-chat-window .whitespace-pre-wrap,
+#modal .whitespace-pre-wrap {
+    font-family: inherit;
+    font-size: 0.875rem;
+    line-height: 1.6;
+    padding: 0.125rem 0;
+}
+
+/* Improve chat bubble max-width for better readability */
+#customer-chat-window .max-w-xs {
+    max-width: 22rem !important;
+}
+
+#modal .max-w-xs {
+    max-width: 22rem !important;
+}
+
+/* Better paragraph spacing in chat messages */
+#customer-chat-window p,
+#modal p {
+    margin-bottom: 0.5rem;
+}
+
+/* List styling in chat messages */
+#customer-chat-window ul,
+#modal ul {
+    margin: 0.5rem 0;
+    padding-left: 0;
+}
+
+/* Auto-response animation */
+@keyframes slideInLeft {
+    from {
+        opacity: 0;
+        transform: translateX(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+.bg-blue-50.border-blue-200 {
+    animation: slideInLeft 0.4s ease-out;
+}
