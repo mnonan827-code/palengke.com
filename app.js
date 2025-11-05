@@ -556,11 +556,9 @@ Once we have your details, we'll check right away and get back to you as soon as
         const chatRef = ref(database, `chats/${threadId}`);
         const messageListRef = ref(database, `chats/${threadId}/messages`);
         
-        // Push the auto-response message
         await push(messageListRef, welcomeMessage);
         console.log('✅ Auto-response message saved');
         
-        // Update thread metadata
         const updates = {
             lastMessageAt: timestamp,
             lastMessageBy: 'Admin (Auto)',
@@ -573,13 +571,9 @@ Once we have your details, we'll check right away and get back to you as soon as
         await update(chatRef, updates);
         console.log('✅ Thread metadata updated');
         
-        // ✅ CRITICAL: Force immediate UI update for customer chat window
-        console.log('🔄 Forcing UI update...');
         const chatWindow = document.getElementById('customer-chat-window');
         if (chatWindow && !chatWindow.classList.contains('hidden')) {
-            // Immediate update
             window.renderChatWindowUI();
-            // Scroll to bottom after a short delay
             setTimeout(() => {
                 window.scrollToChatBottom(threadId);
             }, 300);
@@ -634,10 +628,12 @@ window.renderCustomerChatWindow = function() {
         
         const nameText = isCustomer ? senderName : (isAutoResponse ? 'Admin (Auto) 🤖' : 'Admin');
         
-        // ✅ IMPROVED: Better line break handling with proper escaping
-        const formattedText = escapeHtml(msg.text)
-            .replace(/\n\n/g, '<br><br>')  // Double line breaks
-            .replace(/\n/g, '<br>');        // Single line breaks
+        // ✅ FIXED: Remove extra spaces and preserve line breaks properly
+        const lines = msg.text.trim().split('\n');
+        const formattedText = lines
+            .map(line => escapeHtml(line.trim()))
+            .filter(line => line.length > 0)
+            .join('<br>');
         
         return `
             <div class="flex flex-col ${isCustomer ? 'items-end' : 'items-start'} mb-3">
@@ -759,10 +755,12 @@ window.openAdminChatModal = function(threadId) {
         
         const nameText = isAdmin ? (isAutoResponse ? 'Admin (Auto) 🤖' : 'Admin') : thread.customerName;
         
-        // ✅ IMPROVED: Better line break handling with proper escaping
-        const formattedText = escapeHtml(msg.text)
-            .replace(/\n\n/g, '<br><br>')
-            .replace(/\n/g, '<br>');
+        // ✅ FIXED: Remove extra spaces and preserve line breaks properly
+        const lines = msg.text.trim().split('\n');
+        const formattedText = lines
+            .map(line => escapeHtml(line.trim()))
+            .filter(line => line.length > 0)
+            .join('<br>');
         
         return `
             <div class="flex flex-col ${isAdmin ? 'items-end' : 'items-start'} mb-3">
@@ -1115,10 +1113,12 @@ window.updateAdminChatMessages = function(threadId) {
         
         const nameText = isAdmin ? (isAutoResponse ? 'Admin (Auto) 🤖' : 'Admin') : thread.customerName;
         
-        // ✅ IMPROVED: Better line break handling with proper escaping
-        const formattedText = escapeHtml(msg.text)
-            .replace(/\n\n/g, '<br><br>')
-            .replace(/\n/g, '<br>');
+        // ✅ FIXED: Remove extra spaces and preserve line breaks properly
+        const lines = msg.text.trim().split('\n');
+        const formattedText = lines
+            .map(line => escapeHtml(line.trim()))
+            .filter(line => line.length > 0)
+            .join('<br>');
         
         return `
             <div class="flex flex-col ${isAdmin ? 'items-end' : 'items-start'} mb-3">
