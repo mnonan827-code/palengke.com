@@ -373,11 +373,12 @@ async function createDefaultAdmin() {
 const uid = () => 'C' + Date.now().toString(36) + Math.random().toString(36).substring(2);
 
 // Find or create a chat thread ID for the current user (UID for logged in, Session ID for guest)
+// Find or create a chat thread ID for the current user (UID for logged in, Session ID for guest)
 window.getChatThreadId = function() {
     if (!window.APP_STATE.currentUser) {
         let guestId = sessionStorage.getItem('guestChatId');
         if (!guestId) {
-            guestId = uid();
+            guestId = 'GUEST-' + uid();
             sessionStorage.setItem('guestChatId', guestId);
         }
         return guestId;
@@ -386,8 +387,11 @@ window.getChatThreadId = function() {
 };
 
 // Send a chat message (customer or admin)
+// Send a chat message (customer or admin)
 window.sendChatMessage = async function(threadId, sender, messageText, role) {
     if (!messageText.trim()) return;
+
+    console.log('📤 Sending message:', { threadId, sender, role, messageText });
 
     const timestamp = new Date().toISOString();
     const newMessage = {
@@ -403,6 +407,8 @@ window.sendChatMessage = async function(threadId, sender, messageText, role) {
         const chatSnapshot = await get(chatRef);
         const chatData = chatSnapshot.exists() ? chatSnapshot.val() : null;
         
+        console.log('💾 Current chat data:', chatData);
+        
         const updates = {
             lastMessageAt: timestamp,
             lastMessageBy: sender,
@@ -412,10 +418,12 @@ window.sendChatMessage = async function(threadId, sender, messageText, role) {
         };
 
         if (!chatData) {
-            // New thread setup
+            console.log('🆕 Creating new chat thread');
+            // New thread - push message first
             const messageListRef = ref(database, `chats/${threadId}/messages`);
             await push(messageListRef, newMessage);
             
+            // Then create thread metadata
             const initialChatData = {
                 customerName: window.APP_STATE.currentUser ? window.APP_STATE.currentUser.name : 'Guest',
                 customerUid: window.APP_STATE.currentUser ? window.APP_STATE.currentUser.uid : null,
@@ -424,20 +432,23 @@ window.sendChatMessage = async function(threadId, sender, messageText, role) {
             };
             await update(chatRef, initialChatData);
         } else {
-            // Append new message and update thread metadata
+            console.log('📝 Appending to existing thread');
+            // Append new message
             const messageListRef = ref(database, `chats/${threadId}/messages`);
             await push(messageListRef, newMessage);
+            
+            // Update thread metadata
             await update(chatRef, updates);
         }
         
+        console.log('✅ Message sent successfully');
+        
+        // Clear input
         const chatInput = document.getElementById(`chat-input-${threadId}`);
         if(chatInput) chatInput.value = '';
 
-        // Note: No need to manually call scrollToChatBottom here
-        // The real-time listener will trigger updateCustomerChatWindow which handles scrolling
-
     } catch (error) {
-        console.error('Error sending chat message:', error);
+        console.error('❌ Error sending chat message:', error);
         showModal('Error', 'Failed to send message. Please try again.', `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
     }
 };
@@ -606,9 +617,16 @@ window.openAdminChatModal = function(threadId) {
     
     showModal(modalTitle, modalContent, `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">Close</button>`, true); 
 
+    // 🔥 Store chat ID in modal for real-time updates
+    const modalOverlay = document.getElementById('modal-overlay');
+    modalOverlay.setAttribute('data-chat-id', thread.id);
+
     setTimeout(() => {
         lucide.createIcons();
-        window.scrollToChatBottom(thread.id);
+        const messagesContainer = document.getElementById(`chat-messages-${thread.id}`);
+        if (messagesContainer) {
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
         
         const chatInput = document.getElementById(`chat-input-${thread.id}`);
         if(chatInput) {
@@ -619,9 +637,6 @@ window.openAdminChatModal = function(threadId) {
                 }
             });
         }
-        
-        // 🆕 ADD THIS: Set up real-time listener for this specific chat
-        setupAdminChatListener(thread.id);
     }, 100);
 };
 
@@ -761,6 +776,8 @@ window.toggleAdminChatDropdown = function() {
 };
 
 function setupRealtimeListeners() {
+    console.log('🎧 Setting up real-time listeners');
+    
     onValue(dbRefs.products, (snapshot) => {
         if (snapshot.exists()) {
             window.APP_STATE.products = Object.values(snapshot.val());
@@ -779,18 +796,39 @@ function setupRealtimeListeners() {
         }
     });
 
+    // 🔥 IMPROVED CHAT LISTENER
     onValue(dbRefs.chats, (snapshot) => {
+        console.log('💬 Chat data changed');
+        
         if (snapshot.exists()) {
-            window.APP_STATE.chats = Object.keys(snapshot.val()).map(chatId => ({
+            const chatsData = snapshot.val();
+            window.APP_STATE.chats = Object.keys(chatsData).map(chatId => ({
                 id: chatId,
-                ...snapshot.val()[chatId]
+                ...chatsData[chatId]
             })).sort((a, b) => new Date(b.lastMessageAt) - new Date(a.lastMessageAt));
             
+            console.log('📊 Total chats:', window.APP_STATE.chats.length);
+            
+            // Update admin UI
             renderAdminChatDropdown();
             renderChatBubbleIndicator();
             
-            // 🆕 ADD THIS: Update customer chat window if it's open
-            updateCustomerChatWindow();
+            // 🔥 Update customer chat if open
+            const chatWindow = document.getElementById('customer-chat-window');
+            if (chatWindow && !chatWindow.classList.contains('hidden')) {
+                console.log('🔄 Updating customer chat window');
+                updateCustomerChatMessages();
+            }
+            
+            // 🔥 Update admin chat modal if open
+            const modalOverlay = document.getElementById('modal-overlay');
+            if (modalOverlay && !modalOverlay.classList.contains('hidden')) {
+                const openChatId = modalOverlay.getAttribute('data-chat-id');
+                if (openChatId) {
+                    console.log('🔄 Updating admin chat modal:', openChatId);
+                    updateAdminChatMessages(openChatId);
+                }
+            }
         } else {
             window.APP_STATE.chats = [];
             renderAdminChatDropdown();
@@ -2691,8 +2729,10 @@ window.showModal = function(titleHtml, contentHtml, actionsHtml = '') {
 };
 
 window.hideModal = function(){ 
-    document.getElementById('modal-overlay').classList.add('hidden'); 
-    document.getElementById('modal-overlay').style.display = 'none';
+    const modalOverlay = document.getElementById('modal-overlay');
+    modalOverlay.classList.add('hidden'); 
+    modalOverlay.style.display = 'none';
+    modalOverlay.removeAttribute('data-chat-id'); // 🔥 Clean up chat ID
     document.body.classList.remove('modal-open');
 };
 
