@@ -445,13 +445,13 @@ window.sendChatMessage = async function(threadId, sender, messageText, role) {
 
     const timestamp = new Date().toISOString();
     
-    // ✅ NEW: Preserve line breaks by trimming only start/end
+    // ✅ FIXED: Preserve line breaks properly
     const processedText = messageText.trim();
     
     const newMessage = {
         id: uid(),
         sender: sender,
-        text: processedText,  // Keep original line breaks
+        text: processedText,
         role: role,
         timestamp: timestamp
     };
@@ -525,10 +525,8 @@ window.sendChatMessage = async function(threadId, sender, messageText, role) {
 window.sendAutoAdminResponse = async function(threadId) {
     console.log('🤖 Starting auto-response for thread:', threadId);
     
-    const autoMessage = `
-    
-Hi there! 👋
-    
+    const autoMessage = `Hi there! 👋
+
 We'd love to help you with your concern. Could you please share the following details?
 
 📋 Please provide:
@@ -619,7 +617,7 @@ window.renderCustomerChatWindow = function() {
         window.markChatAsRead(threadId, 'customer');
     }
 
-   const messagesHtml = messages.map(msg => {
+const messagesHtml = messages.map(msg => {
     const isCustomer = msg.role === 'customer';
     const isAutoResponse = msg.isAutoResponse || false;
     
@@ -631,8 +629,8 @@ window.renderCustomerChatWindow = function() {
     
     const nameText = isCustomer ? senderName : (isAutoResponse ? 'Admin (Auto) 🤖' : 'Admin');
     
-    // ✅ FIXED: Preserve line breaks and indentation
-    const formattedText = escapeHtml(msg.text.trim())
+    // ✅ FIXED: Remove extra spaces and preserve line breaks properly
+    const formattedText = escapeHtml(msg.text).replace(/\n/g, '<br>')
         .split('\n')
         .map(line => line.replace(/^(\s+)/, match => '&nbsp;'.repeat(match.length)))
         .join('<br>');
@@ -758,7 +756,7 @@ window.openAdminChatModal = function(threadId) {
     const nameText = isAdmin ? (isAutoResponse ? 'Admin (Auto) 🤖' : 'Admin') : thread.customerName;
     
     // ✅ FIXED: Preserve formatting with proper line breaks
-    const formattedText = escapeHtml(msg.text.trim())
+    const formattedText = escapeHtml(msg.text).replace(/\n/g, '<br>')
         .split('\n')
         .map(line => line.replace(/^(\s+)/, match => '&nbsp;'.repeat(match.length)))
         .join('<br>');
@@ -1063,7 +1061,7 @@ window.updateCustomerChatMessages = function() {
     const nameText = isCustomer ? senderName : (isAutoResponse ? 'Admin (Auto) 🤖' : 'Admin');
     
     // ✅ FIXED: Preserve formatting with indentation
-    const formattedText = escapeHtml(msg.text.trim())
+    const formattedText = escapeHtml(msg.text).replace(/\n/g, '<br>')
         .split('\n')
         .map(line => line.replace(/^(\s+)/, match => '&nbsp;'.repeat(match.length)))
         .join('<br>');
@@ -1116,7 +1114,7 @@ window.updateAdminChatMessages = function(threadId) {
     const nameText = isAdmin ? (isAutoResponse ? 'Admin (Auto) 🤖' : 'Admin') : thread.customerName;
     
     // ✅ FIXED: Preserve formatting with indentation
-    const formattedText = escapeHtml(msg.text.trim())
+    const formattedText = escapeHtml(msg.text).replace(/\n/g, '<br>')
         .split('\n')
         .map(line => line.replace(/^(\s+)/, match => '&nbsp;'.repeat(match.length)))
         .join('<br>');
