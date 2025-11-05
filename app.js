@@ -629,17 +629,17 @@ const messagesHtml = messages.map(msg => {
     
     const nameText = isCustomer ? senderName : (isAutoResponse ? 'Admin (Auto) 🤖' : 'Admin');
     
-    // ✅ NEW: Use <pre> tag for auto-responses to preserve formatting
+    // ✅ FIXED: Proper formatting with consistent alignment
     const formattedText = isAutoResponse 
-        ? `<pre style="font-family: inherit; margin: 0; white-space: pre-wrap; word-wrap: break-word;">${escapeHtml(msg.text)}</pre>`
+        ? `<pre style="font-family: inherit; margin: 0; white-space: pre-wrap; word-wrap: break-word; line-height: 1.6;">${escapeHtml(msg.text)}</pre>`
         : escapeHtml(msg.text).replace(/\n/g, '<br>');
     
     return `
-        <div class="flex flex-col ${isCustomer ? 'items-end' : 'items-start'} mb-3">
+        <div class="chat-message-item ${isCustomer ? 'items-end' : 'items-start'} mb-3">
             <div class="text-xs ${isAutoResponse ? 'text-blue-600 font-semibold' : 'text-gray-500'} mb-1">
                 ${nameText} - ${new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </div>
-            <div class="${msgClass} max-w-xs p-3 rounded-xl shadow-sm chat-message-bubble">
+            <div class="${msgClass} chat-message-bubble">
                 ${formattedText}
             </div>
         </div>
@@ -754,17 +754,17 @@ window.openAdminChatModal = function(threadId) {
     
     const nameText = isAdmin ? (isAutoResponse ? 'Admin (Auto) 🤖' : 'Admin') : thread.customerName;
     
-    // ✅ NEW: Use <pre> tag for auto-responses
+    // ✅ FIXED: Consistent formatting
     const formattedText = isAutoResponse 
-        ? `<pre style="font-family: inherit; margin: 0; white-space: pre-wrap; word-wrap: break-word;">${escapeHtml(msg.text)}</pre>`
+        ? `<pre style="font-family: inherit; margin: 0; white-space: pre-wrap; word-wrap: break-word; line-height: 1.6;">${escapeHtml(msg.text)}</pre>`
         : escapeHtml(msg.text).replace(/\n/g, '<br>');
     
     return `
-        <div class="flex flex-col ${isAdmin ? 'items-end' : 'items-start'} mb-3">
+        <div class="chat-message-item ${isAdmin ? 'items-end' : 'items-start'} mb-3">
             <div class="text-xs ${isAutoResponse ? 'text-blue-600 font-semibold' : 'text-gray-500'} mb-1">
                 ${nameText} - ${new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </div>
-            <div class="${msgClass} max-w-xs p-3 rounded-xl shadow-sm chat-message-bubble">
+            <div class="${msgClass} chat-message-bubble">
                 ${formattedText}
             </div>
         </div>
@@ -1058,17 +1058,17 @@ window.updateCustomerChatMessages = function() {
     
     const nameText = isCustomer ? senderName : (isAutoResponse ? 'Admin (Auto) 🤖' : 'Admin');
     
-    // ✅ NEW: Use <pre> tag for auto-responses
+    // ✅ FIXED: Consistent formatting
     const formattedText = isAutoResponse 
-        ? `<pre style="font-family: inherit; margin: 0; white-space: pre-wrap; word-wrap: break-word;">${escapeHtml(msg.text)}</pre>`
+        ? `<pre style="font-family: inherit; margin: 0; white-space: pre-wrap; word-wrap: break-word; line-height: 1.6;">${escapeHtml(msg.text)}</pre>`
         : escapeHtml(msg.text).replace(/\n/g, '<br>');
     
     return `
-        <div class="flex flex-col ${isCustomer ? 'items-end' : 'items-start'} mb-3 chat-message-item">
+        <div class="chat-message-item ${isCustomer ? 'items-end' : 'items-start'} mb-3">
             <div class="text-xs ${isAutoResponse ? 'text-blue-600 font-semibold' : 'text-gray-500'} mb-1">
                 ${nameText} - ${new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </div>
-            <div class="${msgClass} max-w-xs p-3 rounded-xl shadow-sm chat-message-bubble">
+            <div class="${msgClass} chat-message-bubble">
                 ${formattedText}
             </div>
         </div>
@@ -1110,15 +1110,15 @@ window.updateAdminChatMessages = function(threadId) {
     
     const nameText = isAdmin ? (isAutoResponse ? 'Admin (Auto) 🤖' : 'Admin') : thread.customerName;
     
-    // ✅ NEW: Use <pre> tag for auto-responses
+    // ✅ FIXED: Consistent formatting
     const formattedText = isAutoResponse 
-        ? `<pre style="font-family: inherit; margin: 0; white-space: pre-wrap; word-wrap: break-word;">${escapeHtml(msg.text)}</pre>`
+        ? `<pre style="font-family: inherit; margin: 0; white-space: pre-wrap; word-wrap: break-word; line-height: 1.6;">${escapeHtml(msg.text)}</pre>`
         : escapeHtml(msg.text).replace(/\n/g, '<br>');
     
     return `
-        <div class="flex flex-col ${isAdmin ? 'items-end' : 'items-start'} mb-3">
+        <div class="chat-message-item ${isAdmin ? 'items-end' : 'items-start'} mb-3">
             <div class="text-xs ${isAutoResponse ? 'text-blue-600 font-semibold' : 'text-gray-500'} mb-1">${nameText} - ${new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
-            <div class="${msgClass} max-w-xs p-3 rounded-xl shadow-sm chat-message-bubble">
+            <div class="${msgClass} chat-message-bubble">
                 ${formattedText}
             </div>
         </div>

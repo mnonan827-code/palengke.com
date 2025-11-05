@@ -3076,11 +3076,35 @@ body.user-menu-open {
 }
 
 /* ==========================================
-   💬 FINAL FIX: Chat Message Formatting
+   💬 FIXED: Chat Message Alignment
    ========================================== */
 
+/* Ensure consistent message bubble styling */
+.chat-message-bubble {
+    display: block;
+    padding: 0.75rem 1rem !important;
+    border-radius: 1rem;
+    max-width: 20rem;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    hyphens: auto;
+    line-height: 1.5 !important;
+    text-align: left;
+}
+
+/* Customer messages (right-aligned) */
+.self-end .chat-message-bubble {
+    margin-left: auto;
+}
+
+/* Admin messages (left-aligned) */
+.self-start .chat-message-bubble {
+    margin-right: auto;
+}
+
+/* Pre tag formatting fix */
 .chat-message-bubble pre {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+    font-family: inherit !important;
     font-size: inherit !important;
     color: inherit !important;
     background: transparent !important;
@@ -3089,27 +3113,61 @@ body.user-menu-open {
     margin: 0 !important;
     white-space: pre-wrap !important;
     word-wrap: break-word !important;
-    line-height: 1.7 !important;
+    line-height: 1.5 !important;
+    text-align: left !important;
+    display: block;
+}
+
+/* Auto-response specific styling */
+.bg-blue-50.chat-message-bubble {
+    background-color: #eff6ff !important;
+    border: 1px solid #bfdbfe !important;
+    padding: 1rem !important;
 }
 
 .bg-blue-50.chat-message-bubble pre {
-    line-height: 1.8 !important;
+    line-height: 1.6 !important;
 }
 
-/* Ensure proper line break and spacing rendering */
-.chat-message-bubble br {
+/* Regular customer messages */
+.bg-lime-600.chat-message-bubble {
+    background-color: #84cc16 !important;
+    color: white !important;
+}
+
+/* Regular admin messages */
+.bg-gray-200.chat-message-bubble {
+    background-color: #e5e7eb !important;
+    color: #1f2937 !important;
+}
+
+/* Message container alignment */
+.chat-message-item {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 0.75rem;
+    animation: slideInMessage 0.3s ease-out;
+}
+
+.chat-message-item.items-end {
+    align-items: flex-end;
+}
+
+.chat-message-item.items-start {
+    align-items: flex-start;
+}
+
+/* Timestamp alignment */
+.chat-message-item .text-xs {
+    margin-bottom: 0.25rem;
     display: block;
-    content: "";
-    line-height: 1.5;
 }
 
-/* Preserve indentation for bullet lists */
-.chat-message-bubble {
-    tab-size: 2;
-}
-
+/* Mobile adjustments */
 @media (max-width: 640px) {
     .chat-message-bubble {
+        max-width: 16rem;
         font-size: 0.875rem;
+        padding: 0.625rem 0.875rem !important;
     }
 }
