@@ -333,6 +333,8 @@ window.closeMobileMenu = function() {
   
 
 async function initializeFirebaseData() {
+    console.log('🚀 Initializing Firebase data...');
+    
     try {
         const productsData = await getFromFirebase('products');
         if (productsData) {
@@ -346,18 +348,24 @@ async function initializeFirebaseData() {
             window.APP_STATE.orders = Object.values(ordersData);
         }
 
-        // Load delivery fee
         const deliveryFee = await getFromFirebase('settings/deliveryFee');
         if (deliveryFee !== null) {
             window.APP_STATE.deliveryFee = deliveryFee;
         }
+
+        // 🔥 CHECK IF FUNCTIONS EXIST
+        console.log('🔍 Checking functions...');
+        console.log('updateCustomerChatMessages exists:', typeof window.updateCustomerChatMessages);
+        console.log('updateAdminChatMessages exists:', typeof window.updateAdminChatMessages);
+        console.log('renderAdminChatDropdown exists:', typeof window.renderAdminChatDropdown);
+        console.log('renderChatBubbleIndicator exists:', typeof window.renderChatBubbleIndicator);
 
         setupRealtimeListeners();
         
         updatePreorderStatuses();
         await renderMain();
     } catch (error) {
-        console.error('Error initializing Firebase data:', error);
+        console.error('❌ Error initializing Firebase data:', error);
     }
 }
 
@@ -817,64 +825,109 @@ window.toggleAdminChatDropdown = function() {
 
 function setupRealtimeListeners() {
     console.log('🎧 Setting up real-time listeners');
+    console.log('📊 Database refs:', dbRefs);
     
+    // Products listener
     onValue(dbRefs.products, (snapshot) => {
+        console.log('📦 Products updated');
         if (snapshot.exists()) {
             window.APP_STATE.products = Object.values(snapshot.val());
             if (window.APP_STATE.view === 'shop' || (window.APP_STATE.currentUser && window.APP_STATE.currentUser.role === 'admin' && window.APP_STATE.view === 'admin')) {
                 renderMain();
             }
         }
+    }, (error) => {
+        console.error('❌ Products listener error:', error);
     });
 
+    // Orders listener
     onValue(dbRefs.orders, (snapshot) => {
+        console.log('📋 Orders updated');
         if (snapshot.exists()) {
             window.APP_STATE.orders = Object.values(snapshot.val());
             if (window.APP_STATE.view === 'orders' || (window.APP_STATE.currentUser && window.APP_STATE.currentUser.role === 'admin' && window.APP_STATE.view === 'admin')) {
                 renderMain();
             }
         }
+    }, (error) => {
+        console.error('❌ Orders listener error:', error);
     });
 
-    // 🔥 IMPROVED CHAT LISTENER
+    // 🔥 CHATS LISTENER - WITH ERROR HANDLING
+    console.log('🎧 Setting up chats listener...');
+    
     onValue(dbRefs.chats, (snapshot) => {
-        console.log('💬 Chat data changed');
+        console.log('💬 CHAT LISTENER TRIGGERED!');
+        console.log('📊 Snapshot exists:', snapshot.exists());
         
         if (snapshot.exists()) {
             const chatsData = snapshot.val();
+            console.log('📊 Raw chats data:', chatsData);
+            
             window.APP_STATE.chats = Object.keys(chatsData).map(chatId => ({
                 id: chatId,
                 ...chatsData[chatId]
             })).sort((a, b) => new Date(b.lastMessageAt) - new Date(a.lastMessageAt));
             
+            console.log('💬 Processed chats:', window.APP_STATE.chats);
             console.log('📊 Total chats:', window.APP_STATE.chats.length);
             
             // Update admin UI
-            renderAdminChatDropdown();
-            renderChatBubbleIndicator();
-            
-            // 🔥 Update customer chat if open
-            const chatWindow = document.getElementById('customer-chat-window');
-            if (chatWindow && !chatWindow.classList.contains('hidden')) {
-                console.log('🔄 Updating customer chat window');
-                updateCustomerChatMessages();
+            if (typeof renderAdminChatDropdown === 'function') {
+                renderAdminChatDropdown();
+            }
+            if (typeof renderChatBubbleIndicator === 'function') {
+                renderChatBubbleIndicator();
             }
             
-            // 🔥 Update admin chat modal if open
+            // Update customer chat if open
+            const chatWindow = document.getElementById('customer-chat-window');
+            console.log('🪟 Customer chat window:', chatWindow);
+            console.log('🪟 Is hidden:', chatWindow?.classList.contains('hidden'));
+            
+            if (chatWindow && !chatWindow.classList.contains('hidden')) {
+                console.log('🔄 Updating customer chat window');
+                if (typeof updateCustomerChatMessages === 'function') {
+                    updateCustomerChatMessages();
+                } else {
+                    console.error('❌ updateCustomerChatMessages function not found');
+                }
+            }
+            
+            // Update admin chat modal if open
             const modalOverlay = document.getElementById('modal-overlay');
+            console.log('🪟 Modal overlay:', modalOverlay);
+            
             if (modalOverlay && !modalOverlay.classList.contains('hidden')) {
                 const openChatId = modalOverlay.getAttribute('data-chat-id');
+                console.log('🪟 Open chat ID:', openChatId);
+                
                 if (openChatId) {
                     console.log('🔄 Updating admin chat modal:', openChatId);
-                    updateAdminChatMessages(openChatId);
+                    if (typeof updateAdminChatMessages === 'function') {
+                        updateAdminChatMessages(openChatId);
+                    } else {
+                        console.error('❌ updateAdminChatMessages function not found');
+                    }
                 }
             }
         } else {
+            console.log('⚠️ No chats data exists');
             window.APP_STATE.chats = [];
-            renderAdminChatDropdown();
-            renderChatBubbleIndicator();
+            if (typeof renderAdminChatDropdown === 'function') {
+                renderAdminChatDropdown();
+            }
+            if (typeof renderChatBubbleIndicator === 'function') {
+                renderChatBubbleIndicator();
+            }
         }
+    }, (error) => {
+        console.error('❌ Chats listener error:', error);
+        console.error('❌ Error code:', error.code);
+        console.error('❌ Error message:', error.message);
     });
+    
+    console.log('✅ All listeners set up');
 }
 
 // 🆕 NEW FUNCTION: Update customer chat window in real-time
