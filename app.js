@@ -149,13 +149,6 @@ window.clearSearch = function() {
     renderMain();
 };
 
-// Order search functionality
-// Create debounced version of the search handler
-const debouncedOrderSearch = debounce((query, type) => {
-    console.log(`🔍 Debounced order search: "${query}" [${type}]`);
-    renderMain();
-}, 300); // 300ms delay
-
 window.handleOrderSearch = function(query, type = 'regular') {
     console.log(`🔍 handleOrderSearch called: "${query}" [${type}]`);
     
@@ -187,8 +180,52 @@ window.handleOrderSearch = function(query, type = 'regular') {
         }
     }
     
-    // Debounce the actual table re-render
-    debouncedOrderSearch(query, type);
+    // ✅ NEW: Directly update table rows without full re-render
+    updateOrderTableRows(filteredOrders, type);
+};
+
+// ✅ NEW: Update table rows without full page re-render
+window.updateOrderTableRows = function(filteredOrders, type = 'regular') {
+    const tableId = type === 'regular' ? 'regular-orders-tbody' : 'preorder-orders-tbody';
+    const tbody = document.getElementById(tableId);
+    
+    if (!tbody) {
+        console.log('⚠️ Table body not found:', tableId);
+        return;
+    }
+    
+    // Generate new rows HTML
+    const rowsHtml = filteredOrders.length > 0 ? filteredOrders.map(o => `
+        <tr class="hover:bg-gray-50 border-b">
+            <td class="px-3 py-2 text-sm font-mono">${o.id}</td>
+            <td class="px-3 py-2 text-sm">${o.customer}</td>
+            <td class="px-3 py-2 text-sm font-semibold">${formatPeso(o.total)}</td>
+            <td class="px-3 py-2 text-sm">
+                <span class="inline-flex items-center px-2 py-1 rounded-full text-xs ${
+                    o.status === 'Delivered' ? 'bg-green-100 text-green-800' :
+                    o.status === 'Out for Delivery' ? 'bg-blue-100 text-blue-800' :
+                    o.status === 'Ready to Deliver' ? 'bg-yellow-100 text-yellow-800' :
+                    type === 'regular' ? 'bg-gray-100 text-gray-800' : 'bg-orange-100 text-orange-800'
+                }">${o.status}</span>
+            </td>
+            <td class="px-3 py-2 text-sm hidden lg:table-cell">${o.date}</td>
+            <td class="px-3 py-2 text-sm text-right">
+                <div class="flex flex-col sm:flex-row gap-1 justify-end">
+                    <button onclick="adminViewOrder('${o.id}')" class="px-2 py-1 text-xs bg-white border rounded hover:bg-gray-50">View</button>
+                    <button onclick="adminEditOrder('${o.id}')" class="px-2 py-1 text-xs bg-lime-600 text-white rounded hover:bg-lime-700">Update</button>
+                    <button onclick="adminDeleteOrder('${o.id}')" class="px-2 py-1 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100">Delete</button>
+                </div>
+            </td>
+        </tr>
+    `).join('') : `<tr><td class="px-3 py-8 text-center text-gray-500 text-sm" colspan="6">No ${type} orders found</td></tr>`;
+    
+    // Update table content
+    tbody.innerHTML = rowsHtml;
+    
+    // Reinitialize icons
+    if (window.lucide) {
+        lucide.createIcons();
+    }
 };
 
 window.clearOrderSearch = function(type = 'regular') {
@@ -3451,14 +3488,6 @@ window.updatePreorderStatuses = function() {
 };
 
 window.renderMain = async function() {
-    // Store current search input values and cursor positions before re-render
-    const orderSearchInput = document.getElementById('order-search-input');
-    const preorderSearchInput = document.getElementById('preorder-search-input');
-    
-    const orderSearchValue = orderSearchInput?.value || '';
-    const orderSearchCursor = orderSearchInput?.selectionStart || 0;
-    const preorderSearchValue = preorderSearchInput?.value || '';
-    const preorderSearchCursor = preorderSearchInput?.selectionStart || 0;
     
     const main = document.getElementById('main-content');
 
@@ -3951,23 +3980,22 @@ window.renderAdminDashboard = async function() {
             </div>
           </div>
           <div class="overflow-x-auto">
-            <table class="w-full text-sm">
-              <thead class="bg-gray-50 text-gray-700">
-                <tr>
-                    <th class="px-3 py-3 text-left font-medium">Name</th>
-                    <th class="px-3 py-3 text-left font-medium hidden sm:table-cell">Origin</th>
-                    <th class="px-3 py-3 text-left font-medium hidden md:table-cell">Farmer</th>
-                    <th class="px-3 py-3 text-left font-medium">Price</th>
-                    <th class="px-3 py-3 text-left font-medium">Stock</th>
-                    <th class="px-3 py-3 text-left font-medium hidden lg:table-cell">Freshness</th>
-                    <th class="px-3 py-3 text-right font-medium">Actions</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-gray-200">
-                ${regularRows || '<tr><td class="px-3 py-8 text-center text-gray-500 text-sm" colspan="7">No regular products available</td></tr>'}
-              </tbody>
-            </table>
-          </div>
+    <table class="w-full text-sm">
+        <thead class="bg-gray-50 text-gray-700">
+            <tr>
+                <th class="px-3 py-3 text-left font-medium">Order ID</th>
+                <th class="px-3 py-3 text-left font-medium">Customer</th>
+                <th class="px-3 py-3 text-left font-medium">Total</th>
+                <th class="px-3 py-3 text-left font-medium">Status</th>
+                <th class="px-3 py-3 text-left font-medium hidden lg:table-cell">Date</th>
+                <th class="px-3 py-3 text-right font-medium">Actions</th>
+            </tr>
+        </thead>
+        <tbody id="regular-orders-tbody" class="divide-y divide-gray-200">
+            ${regularOrderRows || '<tr><td class="px-3 py-8 text-center text-gray-500 text-sm" colspan="6">No regular orders</td></tr>'}
+        </tbody>
+    </table>
+</div>
         </div>
 
         <div class="bg-white rounded-xl border overflow-hidden">
@@ -3975,24 +4003,22 @@ window.renderAdminDashboard = async function() {
             <h3 class="font-semibold text-lg">Products — Pre-Order</h3>
           </div>
           <div class="overflow-x-auto">
-            <table class="w-full text-sm">
-              <thead class="bg-gray-50 text-gray-700">
-                <tr>
-                  <th class="px-3 py-3 text-left font-medium">Name</th>
-                  <th class="px-3 py-3 text-left font-medium hidden sm:table-cell">Origin</th>
-                  <th class="px-3 py-3 text-left font-medium hidden md:table-cell">Farmer</th>
-                  <th class="px-3 py-3 text-left font-medium">Price</th>
-                  <th class="px-3 py-3 text-left font-medium">Stock</th>
-                  <th class="px-3 py-3 text-left font-medium hidden lg:table-cell">Freshness</th>
-                  <th class="px-3 py-3 text-left font-medium">Remaining</th>
-                  <th class="px-3 py-3 text-right font-medium">Actions</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-gray-200">
-                ${preorderRows || '<tr><td class="px-3 py-8 text-center text-gray-500 text-sm" colspan="8">No pre-order products available</td></tr>'}
-              </tbody>
-            </table>
-          </div>
+    <table class="w-full text-sm">
+        <thead class="bg-gray-50 text-gray-700">
+            <tr>
+                <th class="px-3 py-3 text-left font-medium">Order ID</th>
+                <th class="px-3 py-3 text-left font-medium">Customer</th>
+                <th class="px-3 py-3 text-left font-medium">Total</th>
+                <th class="px-3 py-3 text-left font-medium">Status</th>
+                <th class="px-3 py-3 text-left font-medium hidden lg:table-cell">Date</th>
+                <th class="px-3 py-3 text-right font-medium">Actions</th>
+            </tr>
+        </thead>
+        <tbody id="preorder-orders-tbody" class="divide-y divide-gray-200">
+            ${preorderOrderRows || '<tr><td class="px-3 py-8 text-center text-gray-500 text-sm" colspan="6">No pre-order orders</td></tr>'}
+        </tbody>
+    </table>
+</div>
         </div>
 
         <!-- ✅ REGULAR ORDERS WITH SEARCH -->
@@ -4124,12 +4150,12 @@ window.initializeOrderSearchListeners = function() {
         newOrderInput.value = window.APP_STATE.orderSearchQuery || '';
         
         // Add input event listener with NO re-rendering on every keystroke
-        newOrderInput.addEventListener('input', function(e) {
-            const query = e.target.value;
-            console.log('🔍 Order search input:', query);
-            handleOrderSearch(query, 'regular'); // This now uses debounce internally
-        });
-        
+        // ✅ FIXED: Add input event listener with immediate table update (no debounce needed)
+newOrderInput.addEventListener('input', function(e) {
+    const query = e.target.value;
+    console.log('🔍 Order search input:', query);
+    handleOrderSearch(query, 'regular'); // Now updates only the table rows
+});
         // Prevent form submission on Enter
         newOrderInput.addEventListener('keydown', function(e) {
             if (e.key === 'Enter') {
@@ -4183,11 +4209,12 @@ window.initializeOrderSearchListeners = function() {
         newPreorderInput.value = window.APP_STATE.preorderSearchQuery || '';
         
         // Add input event listener with NO re-rendering on every keystroke
-        newPreorderInput.addEventListener('input', function(e) {
-            const query = e.target.value;
-            console.log('🔍 Preorder search input:', query);
-            handleOrderSearch(query, 'preorder'); // This now uses debounce internally
-        });
+        // ✅ FIXED: Add input event listener with immediate table update (no debounce needed)
+newPreorderInput.addEventListener('input', function(e) {
+    const query = e.target.value;
+    console.log('🔍 Preorder search input:', query);
+    handleOrderSearch(query, 'preorder'); // Now updates only the table rows
+});
         
         // Prevent form submission on Enter
         newPreorderInput.addEventListener('keydown', function(e) {
