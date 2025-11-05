@@ -1311,25 +1311,29 @@ window.loginUser = async function() {
             );
         }
 
-        // ✅ Get user details from Realtime DB (optional)
-        const userDataFromDB = await getFromFirebase(`users/${user.uid}`);
-        if (!userDataFromDB) {
-            // Auto-create the user entry if missing (to prevent “User data not found”)
-            await updateFirebase(`users/${user.uid}`, {
+        // ✅ Sync user details in Realtime DB (auto-create if missing)
+        const userRef = ref(database, `users/${user.uid}`);
+        const snapshot = await get(userRef);
+
+        let finalUserData;
+
+        if (!snapshot.exists()) {
+            console.warn('⚠️ User missing in database, creating new record...');
+            const newUserData = {
+                uid: user.uid,
                 email: user.email,
                 name: user.displayName || "User",
                 role: "customer",
-                createdAt: Date.now(),
-            });
+                createdAt: new Date().toISOString(),
+            };
+            await set(userRef, newUserData);
+            finalUserData = newUserData;
+        } else {
+            finalUserData = snapshot.val();
         }
 
         // ✅ Update local app state
-        window.APP_STATE.currentUser = {
-            uid: user.uid,
-            email: user.email,
-            name: userDataFromDB?.name || user.displayName || "User",
-            role: userDataFromDB?.role || "customer",
-        };
+        window.APP_STATE.currentUser = finalUserData;
 
         // ✅ Load cart if exists
         const userCart = await getFromFirebase(`carts/${user.uid}`);
@@ -1371,6 +1375,7 @@ window.loginUser = async function() {
         );
     }
 };
+
 
 // ✅ Optional resend verification helper
 window.resendVerificationCode = async function(email, password) {
