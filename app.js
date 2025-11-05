@@ -15,8 +15,7 @@ import {
     onValue, 
     push,
     cloudinaryConfig,
-    sendEmailVerification,
-    sendPasswordResetEmail 
+    sendEmailVerification 
 } from './firebase-config.js';
 
 console.log("DOM loaded, main container:", document.getElementById("main"));
@@ -1239,95 +1238,6 @@ showVerificationModal(email, password);
     }
 };
 
-// ... (Your existing modal functions like hideModal, showModal, etc.)
-
-/**
- * Renders the Forgot Password modal content and sets up the form listener.
- */
-window.showForgotPasswordModal = function() {
-    const modalContent = document.getElementById('modal');
-    const template = document.getElementById('forgot-password-modal-content');
-    
-    // Clear existing content and append new template content
-    modalContent.innerHTML = '';
-    modalContent.appendChild(template.content.cloneNode(true));
-    
-    // Show the modal overlay
-    document.getElementById('modal-overlay').classList.remove('hidden');
-    document.getElementById('modal-overlay').classList.add('flex');
-    
-    // Set up form submission handler
-    const form = document.getElementById('forgot-password-form');
-    form.addEventListener('submit', handleForgotPassword);
-};
-
-/**
- * Handles the submission of the forgot password form.
- * Calls Firebase's sendPasswordResetEmail.
- */
-async function handleForgotPassword(e) {
-    e.preventDefault();
-    const form = e.target;
-    const email = form.elements['reset-email'].value;
-    const submitButton = form.querySelector('button[type="submit"]');
-    const messageDisplay = document.getElementById('forgot-password-message');
-
-    // Reset UI
-    messageDisplay.textContent = '';
-    messageDisplay.classList.add('hidden');
-    messageDisplay.classList.remove('text-red-500', 'text-green-500');
-    submitButton.disabled = true;
-    submitButton.textContent = 'Sending...';
-
-    try {
-        // 1. Call the Firebase function
-        await sendPasswordResetEmail(auth, email);
-
-        // 2. Success feedback
-        messageDisplay.textContent = `A password reset link has been sent to ${email}. Check your inbox.`;
-        messageDisplay.classList.remove('hidden');
-        messageDisplay.classList.add('text-green-500');
-
-        // Optional: Call the new function in email-service.js (if needed for custom template/confirmation)
-        // Note: The Firebase function above already sends an email, but if you want 
-        // a custom email confirmation, you could call it here.
-        // await window.sendPasswordResetEmail(email, "User", "N/A"); // Example
-
-    } catch (error) {
-        console.error("Password Reset Error:", error.code, error.message);
-        
-        let errorMessage = "Failed to send reset email. Please try again.";
-
-        // Handle common Firebase errors
-        if (error.code === 'auth/user-not-found') {
-            errorMessage = "No account found for that email address.";
-        } else if (error.code === 'auth/invalid-email') {
-            errorMessage = "The email address is not valid.";
-        }
-        // The error you were likely seeing, "auth/email-already-in-use", only occurs 
-        // during *registration*, so it shouldn't happen here.
-
-        messageDisplay.textContent = errorMessage;
-        messageDisplay.classList.remove('hidden');
-        messageDisplay.classList.add('text-red-500');
-    } finally {
-        submitButton.disabled = false;
-        submitButton.textContent = 'Send Reset Link';
-    }
-}
-// ... (Your existing showModal function needs a small update to call this)
-window.showModal = function(type) {
-    // ... existing logic
-    switch (type) {
-        // ... existing cases (login, signup, etc.)
-        case 'forgot-password':
-            window.showForgotPasswordModal(); // <-- **CALL THE NEW FUNCTION**
-            break;
-        // ...
-    }
-    // ... existing logic
-};
-
 window.loginUser = async function() {
     const email = document.getElementById('login-email')?.value?.trim()?.toLowerCase();
     const password = document.getElementById('login-password')?.value;
@@ -1472,6 +1382,8 @@ window.showForgotPasswordModal = function() {
                 />
             </div>
             
+            <div id="forgot-error" class="text-red-600 text-sm hidden"></div>
+        </div>
     `, `
         <button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded-lg">Cancel</button>
         <button onclick="sendPasswordResetCode()" class="px-4 py-2 bg-lime-600 text-white rounded-lg hover:bg-lime-700">Send Reset Code</button>
