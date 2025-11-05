@@ -51,6 +51,11 @@ window.APP_STATE = {
     chats: [], // 🟢 ADD THIS LINE
 };
 
+let orderSearchValue = '';
+let orderSearchCursor = 0;
+let preorderSearchValue = '';
+let preorderSearchCursor = 0;
+
 const APP_KEY = 'palengke_cainta_v4';
 
 const CAINTA_BARANGAYS = [
@@ -184,6 +189,18 @@ window.handleOrderSearch = function(query, type = 'regular') {
     updateOrderTableRows(filteredOrders, type);
 };
 
+window.clearOrderSearch = function(type = 'regular') {
+    const searchInput = document.getElementById(type === 'regular' ? 'order-search-input' : 'preorder-search-input');
+    if (searchInput) searchInput.value = '';
+    
+    if (type === 'regular') {
+        window.APP_STATE.orderSearchQuery = '';
+    } else {
+        window.APP_STATE.preorderSearchQuery = '';
+    }
+    renderMain();
+};
+
 // ✅ NEW: Update table rows without full page re-render
 window.updateOrderTableRows = function(filteredOrders, type = 'regular') {
     const tableId = type === 'regular' ? 'regular-orders-tbody' : 'preorder-orders-tbody';
@@ -226,18 +243,6 @@ window.updateOrderTableRows = function(filteredOrders, type = 'regular') {
     if (window.lucide) {
         lucide.createIcons();
     }
-};
-
-window.clearOrderSearch = function(type = 'regular') {
-    const searchInput = document.getElementById(type === 'regular' ? 'order-search-input' : 'preorder-search-input');
-    if (searchInput) searchInput.value = '';
-    
-    if (type === 'regular') {
-        window.APP_STATE.orderSearchQuery = '';
-    } else {
-        window.APP_STATE.preorderSearchQuery = '';
-    }
-    renderMain();
 };
 
 window.filterOrders = function(orders, searchQuery) {
@@ -4022,108 +4027,112 @@ window.renderAdminDashboard = async function() {
         </div>
 
         <!-- ✅ REGULAR ORDERS WITH SEARCH -->
-        <div class="bg-white rounded-xl border overflow-hidden">
-  <div class="p-4 border-b">
-    <h3 class="font-semibold text-lg mb-3">Orders — Regular</h3>
-    
-    <!-- Search Bar -->
-    <div class="order-search-section flex items-center gap-3">
-      <div class="flex-1 relative">
-        <i data-lucide="search" class="w-5 h-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
-        <input 
-          id="order-search-input" 
-          type="text" 
-          placeholder="Search by Order ID, Customer, Email, Contact, Status..." 
-          class="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-lime-500 text-sm"
-          value=""
-        />
-        <button 
-          id="clear-order-search-btn" 
-          class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 hidden"
-        >
-          <i data-lucide="x" class="w-5 h-5"></i>
-        </button>
-      </div>
-      <button 
-        id="clear-order-search-button"
-        class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm"
-      >
-        Clear
-      </button>
+<div class="bg-white rounded-xl border overflow-hidden">
+    <div class="p-4 border-b">
+        <h3 class="font-semibold text-lg mb-3">Orders – Regular</h3>
+        
+        <!-- Search Bar -->
+        <div class="order-search-section flex items-center gap-3">
+            <div class="flex-1 relative">
+                <i data-lucide="search" class="w-5 h-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
+                <input 
+                    id="order-search-input" 
+                    type="text" 
+                    placeholder="Search by Order ID, Customer, Email, Contact, Status..." 
+                    class="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-lime-500 text-sm"
+                    value=""
+                />
+                <button 
+                    id="clear-order-search-btn" 
+                    class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 hidden"
+                    onclick="clearOrderSearch('regular')"
+                >
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <button 
+                id="clear-order-search-button"
+                onclick="clearOrderSearch('regular')"
+                class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm"
+            >
+                Clear
+            </button>
+        </div>
+        <div id="order-search-results-count" class="mt-2 text-sm text-gray-600"></div>
     </div>
-    <div id="order-search-results-count" class="mt-2 text-sm text-gray-600"></div>
-  </div>
-          
-          <div class="overflow-x-auto">
-            <table class="w-full text-sm">
-              <thead class="bg-gray-50 text-gray-700">
+    
+    <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+            <thead class="bg-gray-50 text-gray-700">
                 <tr>
-                  <th class="px-3 py-3 text-left font-medium">Order ID</th>
-                  <th class="px-3 py-3 text-left font-medium">Customer</th>
-                  <th class="px-3 py-3 text-left font-medium">Total</th>
-                  <th class="px-3 py-3 text-left font-medium">Status</th>
-                  <th class="px-3 py-3 text-left font-medium hidden lg:table-cell">Date</th>
-                  <th class="px-3 py-3 text-right font-medium">Actions</th>
+                    <th class="px-3 py-3 text-left font-medium">Order ID</th>
+                    <th class="px-3 py-3 text-left font-medium">Customer</th>
+                    <th class="px-3 py-3 text-left font-medium">Total</th>
+                    <th class="px-3 py-3 text-left font-medium">Status</th>
+                    <th class="px-3 py-3 text-left font-medium hidden lg:table-cell">Date</th>
+                    <th class="px-3 py-3 text-right font-medium">Actions</th>
                 </tr>
-              </thead>
-              <tbody class="divide-y divide-gray-200">
+            </thead>
+            <tbody id="regular-orders-tbody" class="divide-y divide-gray-200">
                 ${regularOrderRows || '<tr><td class="px-3 py-8 text-center text-gray-500 text-sm" colspan="6">No regular orders</td></tr>'}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <!-- ✅ PRE-ORDER ORDERS WITH SEARCH -->
-        <div class="bg-white rounded-xl border overflow-hidden">
-  <div class="p-4 border-b">
-    <h3 class="font-semibold text-lg mb-3">Orders — Pre-Order</h3>
-    
-    <!-- Search Bar -->
-    <div class="order-search-section flex items-center gap-3">
-      <div class="flex-1 relative">
-        <i data-lucide="search" class="w-5 h-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
-        <input 
-          id="preorder-search-input" 
-          type="text" 
-          placeholder="Search by Order ID, Customer, Email, Contact, Status..." 
-          class="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-lime-500 text-sm"
-          value=""
-        />
-        <button 
-          id="clear-preorder-search-btn" 
-          class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 hidden"
-        >
-          <i data-lucide="x" class="w-5 h-5"></i>
-        </button>
-      </div>
-      <button 
-        id="clear-preorder-search-button"
-        class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm"
-      >
-        Clear
-      </button>
+            </tbody>
+        </table>
     </div>
-    <div id="preorder-search-results-count" class="mt-2 text-sm text-gray-600"></div>
-  </div>
-          
-          <div class="overflow-x-auto">
-            <table class="w-full text-sm">
-              <thead class="bg-gray-50 text-gray-700">
-                <tr>
-                  <th class="px-3 py-3 text-left font-medium">Order ID</th>
-                  <th class="px-3 py-3 text-left font-medium">Customer</th>
-                  <th class="px-3 py-3 text-left font-medium">Total</th>
-                  <th class="px-3 py-3 text-left font-medium">Status</th>
-                  <th class="px-3 py-3 text-left font-medium hidden lg:table-cell">Date</th>
-                  <th class="px-3 py-3 text-right font-medium">Actions</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-gray-200">
-                ${preorderOrderRows || '<tr><td class="px-3 py-8 text-center text-gray-500 text-sm" colspan="6">No pre-order orders</td></tr>'}
-              </tbody>
-            </table>
-          </div>
+</div>
+
+<!-- ✅ PRE-ORDER ORDERS WITH SEARCH -->
+<div class="bg-white rounded-xl border overflow-hidden">
+    <div class="p-4 border-b">
+        <h3 class="font-semibold text-lg mb-3">Orders – Pre-Order</h3>
+        
+        <!-- Search Bar -->
+        <div class="order-search-section flex items-center gap-3">
+            <div class="flex-1 relative">
+                <i data-lucide="search" class="w-5 h-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
+                <input 
+                    id="preorder-search-input" 
+                    type="text" 
+                    placeholder="Search by Order ID, Customer, Email, Contact, Status..." 
+                    class="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-lime-500 text-sm"
+                    value=""
+                />
+                <button 
+                    id="clear-preorder-search-btn" 
+                    class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 hidden"
+                    onclick="clearOrderSearch('preorder')"
+                >
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <button 
+                id="clear-preorder-search-button"
+                onclick="clearOrderSearch('preorder')"
+                class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm"
+            >
+                Clear
+            </button>
         </div>
+        <div id="preorder-search-results-count" class="mt-2 text-sm text-gray-600"></div>
+    </div>
+    
+    <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+            <thead class="bg-gray-50 text-gray-700">
+                <tr>
+                    <th class="px-3 py-3 text-left font-medium">Order ID</th>
+                    <th class="px-3 py-3 text-left font-medium">Customer</th>
+                    <th class="px-3 py-3 text-left font-medium">Total</th>
+                    <th class="px-3 py-3 text-left font-medium">Status</th>
+                    <th class="px-3 py-3 text-left font-medium hidden lg:table-cell">Date</th>
+                    <th class="px-3 py-3 text-right font-medium">Actions</th>
+                </tr>
+            </thead>
+            <tbody id="preorder-orders-tbody" class="divide-y divide-gray-200">
+                ${preorderOrderRows || '<tr><td class="px-3 py-8 text-center text-gray-500 text-sm" colspan="6">No pre-order orders</td></tr>'}
+            </tbody>
+        </table>
+    </div>
+</div>
       </div>
     </section>
  
@@ -4136,8 +4145,6 @@ window.initializeOrderSearchListeners = function() {
     
     // Regular orders search
     const orderSearchInput = document.getElementById('order-search-input');
-    const orderClearBtn = document.getElementById('clear-order-search-btn');
-    const orderClearButton = document.getElementById('clear-order-search-button');
     
     if (orderSearchInput) {
         console.log('✅ Found order search input');
@@ -4149,54 +4156,27 @@ window.initializeOrderSearchListeners = function() {
         // Set initial value
         newOrderInput.value = window.APP_STATE.orderSearchQuery || '';
         
-        // Add input event listener with NO re-rendering on every keystroke
-        // ✅ FIXED: Add input event listener with immediate table update (no debounce needed)
-newOrderInput.addEventListener('input', function(e) {
-    const query = e.target.value;
-    console.log('🔍 Order search input:', query);
-    handleOrderSearch(query, 'regular'); // Now updates only the table rows
-});
+        // Add input event listener - direct table update, no debounce
+        newOrderInput.addEventListener('input', function(e) {
+            const query = e.target.value;
+            
+            // Save cursor position before update
+            orderSearchValue = query;
+            orderSearchCursor = e.target.selectionStart;
+            
+            handleOrderSearch(query, 'regular');
+        });
+        
         // Prevent form submission on Enter
         newOrderInput.addEventListener('keydown', function(e) {
             if (e.key === 'Enter') {
                 e.preventDefault();
             }
         });
-        
-        // Clear button in input (X icon)
-        if (orderClearBtn) {
-            const newOrderClearBtn = orderClearBtn.cloneNode(true);
-            orderClearBtn.parentNode.replaceChild(newOrderClearBtn, orderClearBtn);
-            
-            newOrderClearBtn.addEventListener('click', function(e) {
-                e.preventDefault();
-                console.log('🧹 Clear order search clicked (X button)');
-                clearOrderSearch('regular');
-            });
-        }
-        
-        // Clear button outside input
-        if (orderClearButton) {
-            const newOrderClearButton = orderClearButton.cloneNode(true);
-            orderClearButton.parentNode.replaceChild(newOrderClearButton, orderClearButton);
-            
-            newOrderClearButton.addEventListener('click', function(e) {
-                e.preventDefault();
-                console.log('🧹 Clear order search clicked (Clear button)');
-                clearOrderSearch('regular');
-            });
-        }
-        
-        // Update counts immediately
-        const regularOrders = window.APP_STATE.orders.filter(o => !o.type || o.type !== 'pre-order');
-        const filtered = filterOrders(regularOrders, window.APP_STATE.orderSearchQuery);
-        updateOrderSearchResultsCount(filtered.length, regularOrders.length, 'regular');
     }
     
     // Pre-order orders search
     const preorderSearchInput = document.getElementById('preorder-search-input');
-    const preorderClearBtn = document.getElementById('clear-preorder-search-btn');
-    const preorderClearButton = document.getElementById('clear-preorder-search-button');
     
     if (preorderSearchInput) {
         console.log('✅ Found preorder search input');
@@ -4208,13 +4188,16 @@ newOrderInput.addEventListener('input', function(e) {
         // Set initial value
         newPreorderInput.value = window.APP_STATE.preorderSearchQuery || '';
         
-        // Add input event listener with NO re-rendering on every keystroke
-        // ✅ FIXED: Add input event listener with immediate table update (no debounce needed)
-newPreorderInput.addEventListener('input', function(e) {
-    const query = e.target.value;
-    console.log('🔍 Preorder search input:', query);
-    handleOrderSearch(query, 'preorder'); // Now updates only the table rows
-});
+        // Add input event listener - direct table update, no debounce
+        newPreorderInput.addEventListener('input', function(e) {
+            const query = e.target.value;
+            
+            // Save cursor position before update
+            preorderSearchValue = query;
+            preorderSearchCursor = e.target.selectionStart;
+            
+            handleOrderSearch(query, 'preorder');
+        });
         
         // Prevent form submission on Enter
         newPreorderInput.addEventListener('keydown', function(e) {
@@ -4222,41 +4205,11 @@ newPreorderInput.addEventListener('input', function(e) {
                 e.preventDefault();
             }
         });
-        
-        // Clear button in input (X icon)
-        if (preorderClearBtn) {
-            const newPreorderClearBtn = preorderClearBtn.cloneNode(true);
-            preorderClearBtn.parentNode.replaceChild(newPreorderClearBtn, preorderClearBtn);
-            
-            newPreorderClearBtn.addEventListener('click', function(e) {
-                e.preventDefault();
-                console.log('🧹 Clear preorder search clicked (X button)');
-                clearOrderSearch('preorder');
-            });
-        }
-        
-        // Clear button outside input
-        if (preorderClearButton) {
-            const newPreorderClearButton = preorderClearButton.cloneNode(true);
-            preorderClearButton.parentNode.replaceChild(newPreorderClearButton, preorderClearButton);
-            
-            newPreorderClearButton.addEventListener('click', function(e) {
-                e.preventDefault();
-                console.log('🧹 Clear preorder search clicked (Clear button)');
-                clearOrderSearch('preorder');
-            });
-        }
-        
-        // Update counts immediately
-        const preorderOrders = window.APP_STATE.orders.filter(o => o.type === 'pre-order');
-        const filtered = filterOrders(preorderOrders, window.APP_STATE.preorderSearchQuery);
-        updateOrderSearchResultsCount(filtered.length, preorderOrders.length, 'preorder');
     }
     
     // Reinitialize icons
     setTimeout(() => icons(), 50);
 };
-
 
 
 // NEW FUNCTION: Render User Verification Page
