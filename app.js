@@ -445,8 +445,12 @@ window.sendChatMessage = async function(threadId, sender, messageText, role) {
 
     const timestamp = new Date().toISOString();
     
-    // ✅ FIXED: Preserve line breaks properly
-    const processedText = messageText.trim();
+    // ✅ NEW FIX: Remove multiple consecutive spaces but preserve single line breaks
+    const processedText = messageText
+        .split('\n')
+        .map(line => line.trim())
+        .filter(line => line.length > 0)
+        .join('\n');
     
     const newMessage = {
         id: uid(),
@@ -629,10 +633,10 @@ const messagesHtml = messages.map(msg => {
     
     const nameText = isCustomer ? senderName : (isAutoResponse ? 'Admin (Auto) 🤖' : 'Admin');
     
-    // ✅ FIXED: Proper formatting with consistent alignment
+    // ✅ FIXED: Proper line break handling for all messages
     const formattedText = isAutoResponse 
-        ? `<pre style="font-family: inherit; margin: 0; white-space: pre-wrap; word-wrap: break-word; line-height: 1.6;">${escapeHtml(msg.text)}</pre>`
-        : escapeHtml(msg.text).replace(/\n/g, '<br>');
+        ? `<pre class="chat-message-text">${escapeHtml(msg.text)}</pre>`
+        : `<div class="chat-message-text">${escapeHtml(msg.text).replace(/\n/g, '<br>')}</div>`;
     
     return `
         <div class="chat-message-item ${isCustomer ? 'items-end' : 'items-start'} mb-3">
@@ -754,10 +758,10 @@ window.openAdminChatModal = function(threadId) {
     
     const nameText = isAdmin ? (isAutoResponse ? 'Admin (Auto) 🤖' : 'Admin') : thread.customerName;
     
-    // ✅ FIXED: Consistent formatting
+    // ✅ FIXED: Proper line break handling for all messages
     const formattedText = isAutoResponse 
-        ? `<pre style="font-family: inherit; margin: 0; white-space: pre-wrap; word-wrap: break-word; line-height: 1.6;">${escapeHtml(msg.text)}</pre>`
-        : escapeHtml(msg.text).replace(/\n/g, '<br>');
+        ? `<pre class="chat-message-text">${escapeHtml(msg.text)}</pre>`
+        : `<div class="chat-message-text">${escapeHtml(msg.text).replace(/\n/g, '<br>')}</div>`;
     
     return `
         <div class="chat-message-item ${isAdmin ? 'items-end' : 'items-start'} mb-3">
@@ -1058,10 +1062,10 @@ window.updateCustomerChatMessages = function() {
     
     const nameText = isCustomer ? senderName : (isAutoResponse ? 'Admin (Auto) 🤖' : 'Admin');
     
-    // ✅ FIXED: Consistent formatting
+    // ✅ FIXED: Proper line break handling for all messages
     const formattedText = isAutoResponse 
-        ? `<pre style="font-family: inherit; margin: 0; white-space: pre-wrap; word-wrap: break-word; line-height: 1.6;">${escapeHtml(msg.text)}</pre>`
-        : escapeHtml(msg.text).replace(/\n/g, '<br>');
+        ? `<pre class="chat-message-text">${escapeHtml(msg.text)}</pre>`
+        : `<div class="chat-message-text">${escapeHtml(msg.text).replace(/\n/g, '<br>')}</div>`;
     
     return `
         <div class="chat-message-item ${isCustomer ? 'items-end' : 'items-start'} mb-3">
@@ -1110,10 +1114,10 @@ window.updateAdminChatMessages = function(threadId) {
     
     const nameText = isAdmin ? (isAutoResponse ? 'Admin (Auto) 🤖' : 'Admin') : thread.customerName;
     
-    // ✅ FIXED: Consistent formatting
+    // ✅ FIXED: Proper line break handling for all messages
     const formattedText = isAutoResponse 
-        ? `<pre style="font-family: inherit; margin: 0; white-space: pre-wrap; word-wrap: break-word; line-height: 1.6;">${escapeHtml(msg.text)}</pre>`
-        : escapeHtml(msg.text).replace(/\n/g, '<br>');
+        ? `<pre class="chat-message-text">${escapeHtml(msg.text)}</pre>`
+        : `<div class="chat-message-text">${escapeHtml(msg.text).replace(/\n/g, '<br>')}</div>`;
     
     return `
         <div class="chat-message-item ${isAdmin ? 'items-end' : 'items-start'} mb-3">
