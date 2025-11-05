@@ -3520,28 +3520,39 @@ window.renderMain = async function() {
     updatePreorderStatuses();
 
     if(window.APP_STATE.currentUser && window.APP_STATE.currentUser.role === 'admin' && window.APP_STATE.view === 'admin') {
-        if(window.APP_STATE.adminView === 'verification') {
-            main.innerHTML = await renderUserVerificationPage();
-        } else {
-            main.innerHTML = await renderAdminDashboard();
+    if(window.APP_STATE.adminView === 'verification') {
+        main.innerHTML = await renderUserVerificationPage();
+    } else {
+        // ✅ Clear search state when entering admin dashboard
+        window.APP_STATE.orderSearchQuery = '';
+        window.APP_STATE.preorderSearchQuery = '';
+        
+        main.innerHTML = await renderAdminDashboard();
             
             // Re-initialize search listeners after DOM update
-            setTimeout(() => {
-                initializeOrderSearchListeners();
-                
-                // Restore search values AND cursor positions
-                const newOrderInput = document.getElementById('order-search-input');
-                const newPreorderInput = document.getElementById('preorder-search-input');
-                
-                if (newOrderInput) {
-                    newOrderInput.value = orderSearchValue;
-                    newOrderInput.setSelectionRange(orderSearchCursor, orderSearchCursor);
-                }
-                if (newPreorderInput) {
-                    newPreorderInput.value = preorderSearchValue;
-                    newPreorderInput.setSelectionRange(preorderSearchCursor, preorderSearchCursor);
-                }
-            }, 50);
+            main.innerHTML = await renderAdminDashboard();
+
+// Re-initialize search listeners after DOM update
+setTimeout(() => {
+    initializeOrderSearchListeners();
+    
+    // ✅ IMPORTANT: Clear the saved search values too
+    orderSearchValue = '';
+    orderSearchCursor = 0;
+    preorderSearchValue = '';
+    preorderSearchCursor = 0;
+    
+    // Make sure inputs are empty
+    const newOrderInput = document.getElementById('order-search-input');
+    const newPreorderInput = document.getElementById('preorder-search-input');
+    
+    if (newOrderInput) {
+        newOrderInput.value = '';
+    }
+    if (newPreorderInput) {
+        newPreorderInput.value = '';
+    }
+}, 50);
         }
     }
     
@@ -3871,11 +3882,13 @@ window.renderAdminDashboard = async function() {
 
 
     // ✅ FILTER ORDERS
-    const regularOrders = window.APP_STATE.orders.filter(o => !o.type || o.type !== 'pre-order');
-    const preorderOrders = window.APP_STATE.orders.filter(o => o.type === 'pre-order');
-    
-    const filteredRegularOrders = filterOrders(regularOrders, window.APP_STATE.orderSearchQuery);
-    const filteredPreorderOrders = filterOrders(preorderOrders, window.APP_STATE.preorderSearchQuery);
+    // ✅ FILTER ORDERS - Reset search state when rendering dashboard
+const regularOrders = window.APP_STATE.orders.filter(o => !o.type || o.type !== 'pre-order');
+const preorderOrders = window.APP_STATE.orders.filter(o => o.type === 'pre-order');
+
+// Show ALL orders by default when rendering
+const filteredRegularOrders = regularOrders;
+const filteredPreorderOrders = preorderOrders;
 
     const regularOrderRows = filteredRegularOrders.map(o => `
         <tr class="hover:bg-gray-50 border-b">
@@ -4143,71 +4156,116 @@ window.renderAdminDashboard = async function() {
 window.initializeOrderSearchListeners = function() {
     console.log('🔍 Initializing order search listeners...');
     
-    // Regular orders search
+    // ===== REGULAR ORDERS SEARCH =====
     const orderSearchInput = document.getElementById('order-search-input');
+    const orderClearBtn = document.getElementById('clear-order-search-btn');
+    const orderClearButton = document.getElementById('clear-order-search-button');
     
     if (orderSearchInput) {
         console.log('✅ Found order search input');
         
-        // Remove existing event listeners by replacing the element
+        // Remove existing listeners
         const newOrderInput = orderSearchInput.cloneNode(true);
         orderSearchInput.parentNode.replaceChild(newOrderInput, orderSearchInput);
         
-        // Set initial value
-        newOrderInput.value = window.APP_STATE.orderSearchQuery || '';
+        // Set to empty initially
+        newOrderInput.value = '';
         
-        // Add input event listener - direct table update, no debounce
+        // Add input listener
         newOrderInput.addEventListener('input', function(e) {
             const query = e.target.value;
-            
-            // Save cursor position before update
             orderSearchValue = query;
             orderSearchCursor = e.target.selectionStart;
-            
             handleOrderSearch(query, 'regular');
         });
         
-        // Prevent form submission on Enter
+        // Prevent Enter key
         newOrderInput.addEventListener('keydown', function(e) {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-            }
+            if (e.key === 'Enter') e.preventDefault();
         });
+        
+        // Clear button (X icon)
+        if (orderClearBtn) {
+            const newOrderClearBtn = orderClearBtn.cloneNode(true);
+            orderClearBtn.parentNode.replaceChild(newOrderClearBtn, orderClearBtn);
+            
+            newOrderClearBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                clearOrderSearch('regular');
+            });
+        }
+        
+        // Clear button (outside)
+        if (orderClearButton) {
+            const newOrderClearButton = orderClearButton.cloneNode(true);
+            orderClearButton.parentNode.replaceChild(newOrderClearButton, orderClearButton);
+            
+            newOrderClearButton.addEventListener('click', function(e) {
+                e.preventDefault();
+                clearOrderSearch('regular');
+            });
+        }
+        
+        // Initialize counts
+        const regularOrders = window.APP_STATE.orders.filter(o => !o.type || o.type !== 'pre-order');
+        updateOrderSearchResultsCount(regularOrders.length, regularOrders.length, 'regular');
     }
     
-    // Pre-order orders search
+    // ===== PRE-ORDER ORDERS SEARCH =====
     const preorderSearchInput = document.getElementById('preorder-search-input');
+    const preorderClearBtn = document.getElementById('clear-preorder-search-btn');
+    const preorderClearButton = document.getElementById('clear-preorder-search-button');
     
     if (preorderSearchInput) {
         console.log('✅ Found preorder search input');
         
-        // Remove existing event listeners by replacing the element
+        // Remove existing listeners
         const newPreorderInput = preorderSearchInput.cloneNode(true);
         preorderSearchInput.parentNode.replaceChild(newPreorderInput, preorderSearchInput);
         
-        // Set initial value
-        newPreorderInput.value = window.APP_STATE.preorderSearchQuery || '';
+        // Set to empty initially
+        newPreorderInput.value = '';
         
-        // Add input event listener - direct table update, no debounce
+        // Add input listener
         newPreorderInput.addEventListener('input', function(e) {
             const query = e.target.value;
-            
-            // Save cursor position before update
             preorderSearchValue = query;
             preorderSearchCursor = e.target.selectionStart;
-            
             handleOrderSearch(query, 'preorder');
         });
         
-        // Prevent form submission on Enter
+        // Prevent Enter key
         newPreorderInput.addEventListener('keydown', function(e) {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-            }
+            if (e.key === 'Enter') e.preventDefault();
         });
+        
+        // Clear button (X icon)
+        if (preorderClearBtn) {
+            const newPreorderClearBtn = preorderClearBtn.cloneNode(true);
+            preorderClearBtn.parentNode.replaceChild(newPreorderClearBtn, preorderClearBtn);
+            
+            newPreorderClearBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                clearOrderSearch('preorder');
+            });
+        }
+        
+        // Clear button (outside)
+        if (preorderClearButton) {
+            const newPreorderClearButton = preorderClearButton.cloneNode(true);
+            preorderClearButton.parentNode.replaceChild(newPreorderClearButton, preorderClearButton);
+            
+            newPreorderClearButton.addEventListener('click', function(e) {
+                e.preventDefault();
+                clearOrderSearch('preorder');
+            });
+        }
+        
+        // Initialize counts
+        const preorderOrders = window.APP_STATE.orders.filter(o => o.type === 'pre-order');
+        updateOrderSearchResultsCount(preorderOrders.length, preorderOrders.length, 'preorder');
     }
     
-    // Reinitialize icons
     setTimeout(() => icons(), 50);
 };
 
