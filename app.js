@@ -4473,9 +4473,13 @@ window.switchAdminView = function(viewName) {
 window.toggleHowItWorks = function() {
     showModal('How Palengke.com Works', `
     <ol class="list-decimal pl-5 text-gray-700">
-        <li>Browse fresh products from local farmers & fisherfolk.</li>
-        <li>Add items to cart and proceed to checkout (COD).</li>
-        <li>LGU Admin manages product listings and order statuses.</li>
+        <li>Sign in and enter your details to User Profile</li>
+        <li>Wait for the verification of your profile.</li>
+        <li>Add items to cart and proceed to checkout (COD). NOTE: NO CANCELATION</li>
+        <li>Admin processes your order and prepares it for delivery.</li>
+        <li>Delivery Rider delivers your order to your specified address.</li>
+        <li>Receive your order and pay the rider in cash.</li>
+        <li>Enjoy your fresh market goods!</li>
     </ol>
 `, `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">Close</button>`);
 };
