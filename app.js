@@ -413,14 +413,16 @@ window.sendChatMessage = async function(threadId, sender, messageText, role) {
 
         if (!chatData) {
             // New thread setup
+            const messageListRef = ref(database, `chats/${threadId}/messages`);
+            await push(messageListRef, newMessage);
+            
             const initialChatData = {
                 customerName: window.APP_STATE.currentUser ? window.APP_STATE.currentUser.name : 'Guest',
                 customerUid: window.APP_STATE.currentUser ? window.APP_STATE.currentUser.uid : null,
                 status: 'open',
-                messages: [{ [newMessage.id]: newMessage }], // Initialize with the first message
                 ...updates
             };
-            await set(chatRef, initialChatData);
+            await update(chatRef, initialChatData);
         } else {
             // Append new message and update thread metadata
             const messageListRef = ref(database, `chats/${threadId}/messages`);
@@ -431,7 +433,8 @@ window.sendChatMessage = async function(threadId, sender, messageText, role) {
         const chatInput = document.getElementById(`chat-input-${threadId}`);
         if(chatInput) chatInput.value = '';
 
-        window.scrollToChatBottom(threadId);
+        // Note: No need to manually call scrollToChatBottom here
+        // The real-time listener will trigger updateCustomerChatWindow which handles scrolling
 
     } catch (error) {
         console.error('Error sending chat message:', error);
@@ -461,10 +464,8 @@ window.scrollToChatBottom = function(threadId) {
 window.renderCustomerChatWindow = function() {
     const threadId = window.getChatThreadId();
     const thread = window.APP_STATE.chats.find(c => c.id === threadId || c.customerUid === threadId);
-    // Convert messages from object to array
     const messages = thread?.messages ? Object.values(thread.messages) : [];
     
-    // Determine sender info
     const senderName = window.APP_STATE.currentUser ? window.APP_STATE.currentUser.name : 'Guest';
     const senderRole = 'customer';
 
@@ -474,7 +475,6 @@ window.renderCustomerChatWindow = function() {
 
     const messagesHtml = messages.map(msg => {
         const isCustomer = msg.role === 'customer';
-        // Tailwind classes for message bubbles
         const msgClass = isCustomer ? 'bg-lime-600 text-white self-end rounded-br-none' : 'bg-gray-200 text-gray-800 self-start rounded-tl-none';
         const nameText = isCustomer ? senderName : 'Admin';
         
@@ -499,7 +499,7 @@ window.renderCustomerChatWindow = function() {
             </div>
             <div class="p-4 border-t border-gray-200 flex-shrink-0">
                 <div class="flex gap-2">
-                    <input type="text" id="chat-input-${threadId}" class="flex-grow p-3 border rounded-lg focus:ring-2 focus:ring-lime-500 focus:border-lime-500 text-sm" placeholder="Type your message..." onkeydown="if(event.key === 'Enter') document.getElementById('chat-send-btn-${threadId}').click()">
+                    <input type="text" id="chat-input-${threadId}" class="flex-grow p-3 border rounded-lg focus:ring-2 focus:ring-lime-500 focus:border-lime-500 text-sm" placeholder="Type your message..." onkeydown="if(event.key === 'Enter') { event.preventDefault(); document.getElementById('chat-send-btn-${threadId}').click(); }">
                     <button id="chat-send-btn-${threadId}" 
                             onclick="window.sendChatMessage('${threadId}', '${senderName}', document.getElementById('chat-input-${threadId}').value, '${senderRole}')"
                             class="p-3 bg-lime-600 text-white rounded-lg hover:bg-lime-700 transition">
@@ -574,7 +574,6 @@ window.openAdminChatModal = function(threadId) {
     
     const messagesHtml = messages.map(msg => {
         const isAdmin = msg.role === 'admin';
-        // Tailwind classes for message bubbles
         const msgClass = isAdmin ? 'bg-lime-600 text-white self-end rounded-br-none' : 'bg-gray-200 text-gray-800 self-start rounded-tl-none';
         const nameText = isAdmin ? 'Admin' : thread.customerName;
         
@@ -604,14 +603,13 @@ window.openAdminChatModal = function(threadId) {
             </div>
         </div>
     `;
-    // Use true to open the modal wider for the chat interface
+    
     showModal(modalTitle, modalContent, `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">Close</button>`, true); 
 
     setTimeout(() => {
         lucide.createIcons();
         window.scrollToChatBottom(thread.id);
         
-        // Add Enter key listener
         const chatInput = document.getElementById(`chat-input-${thread.id}`);
         if(chatInput) {
              chatInput.addEventListener('keydown', function(e) { 
@@ -621,8 +619,49 @@ window.openAdminChatModal = function(threadId) {
                 }
             });
         }
+        
+        // 🆕 ADD THIS: Set up real-time listener for this specific chat
+        setupAdminChatListener(thread.id);
     }, 100);
 };
+
+// 🆕 NEW FUNCTION: Real-time listener for admin chat modal
+window.setupAdminChatListener = function(threadId) {
+    const chatRef = ref(database, `chats/${threadId}`);
+    
+    onValue(chatRef, (snapshot) => {
+        if (snapshot.exists()) {
+            const thread = { id: threadId, ...snapshot.val() };
+            const messages = thread.messages ? Object.values(thread.messages) : [];
+            
+            const messagesContainer = document.getElementById(`chat-messages-${threadId}`);
+            if (!messagesContainer) return; // Modal is closed
+            
+            const isScrolledToBottom = messagesContainer.scrollHeight - messagesContainer.scrollTop <= messagesContainer.clientHeight + 50;
+            
+            const messagesHtml = messages.map(msg => {
+                const isAdmin = msg.role === 'admin';
+                const msgClass = isAdmin ? 'bg-lime-600 text-white self-end rounded-br-none' : 'bg-gray-200 text-gray-800 self-start rounded-tl-none';
+                const nameText = isAdmin ? 'Admin' : thread.customerName;
+                
+                return `
+                    <div class="flex flex-col ${isAdmin ? 'items-end' : 'items-start'} mb-3">
+                        <div class="text-xs text-gray-500 mb-1">${nameText} - ${new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                        <div class="${msgClass} max-w-xs p-3 rounded-xl shadow-sm">
+                            ${msg.text}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            
+            messagesContainer.innerHTML = messagesHtml.length > 0 ? messagesHtml : '<div class="text-center text-gray-500 p-5">Start a conversation!</div>';
+            
+            if (isScrolledToBottom) {
+                setTimeout(() => window.scrollToChatBottom(threadId), 50);
+            }
+        }
+    });
+};;
 
 // In app.js (Add this function)
 
@@ -740,17 +779,18 @@ function setupRealtimeListeners() {
         }
     });
 
-onValue(dbRefs.chats, (snapshot) => {
+    onValue(dbRefs.chats, (snapshot) => {
         if (snapshot.exists()) {
-            // Convert Firebase object of chat threads to an array and sort by last message time
             window.APP_STATE.chats = Object.keys(snapshot.val()).map(chatId => ({
                 id: chatId,
                 ...snapshot.val()[chatId]
             })).sort((a, b) => new Date(b.lastMessageAt) - new Date(a.lastMessageAt));
             
-            // Re-render UI components that rely on chat data
             renderAdminChatDropdown();
             renderChatBubbleIndicator();
+            
+            // 🆕 ADD THIS: Update customer chat window if it's open
+            updateCustomerChatWindow();
         } else {
             window.APP_STATE.chats = [];
             renderAdminChatDropdown();
@@ -758,6 +798,61 @@ onValue(dbRefs.chats, (snapshot) => {
         }
     });
 }
+
+// 🆕 NEW FUNCTION: Update customer chat window in real-time
+window.updateCustomerChatWindow = function() {
+    const chatWindow = document.getElementById('customer-chat-window');
+    
+    // Only update if chat window is open
+    if (!chatWindow || chatWindow.classList.contains('hidden')) {
+        return;
+    }
+    
+    const threadId = window.getChatThreadId();
+    const thread = window.APP_STATE.chats.find(c => c.id === threadId || c.customerUid === threadId);
+    
+    if (!thread) return;
+    
+    const messagesContainer = document.getElementById(`chat-messages-${threadId}`);
+    if (!messagesContainer) return;
+    
+    // Convert messages from object to array
+    const messages = thread.messages ? Object.values(thread.messages) : [];
+    
+    // Determine sender info
+    const senderName = window.APP_STATE.currentUser ? window.APP_STATE.currentUser.name : 'Guest';
+    
+    // Store current scroll position
+    const isScrolledToBottom = messagesContainer.scrollHeight - messagesContainer.scrollTop <= messagesContainer.clientHeight + 50;
+    
+    // Render messages
+    const messagesHtml = messages.map(msg => {
+        const isCustomer = msg.role === 'customer';
+        const msgClass = isCustomer ? 'bg-lime-600 text-white self-end rounded-br-none' : 'bg-gray-200 text-gray-800 self-start rounded-tl-none';
+        const nameText = isCustomer ? senderName : 'Admin';
+        
+        return `
+            <div class="flex flex-col ${isCustomer ? 'items-end' : 'items-start'} mb-3">
+                <div class="text-xs text-gray-500 mb-1">${nameText} - ${new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                <div class="${msgClass} max-w-xs p-3 rounded-xl shadow-sm">
+                    ${msg.text}
+                </div>
+            </div>
+        `;
+    }).join('');
+    
+    messagesContainer.innerHTML = messagesHtml.length > 0 ? messagesHtml : '<div class="text-center text-gray-500 p-5">Start a conversation!</div>';
+    
+    // Auto-scroll to bottom if user was already at bottom
+    if (isScrolledToBottom) {
+        setTimeout(() => window.scrollToChatBottom(threadId), 50);
+    }
+    
+    // Mark as read if needed
+    if (thread.unreadCustomer) {
+        window.markChatAsRead(threadId, 'customer');
+    }
+};
 
 // Global function declarations
 window.signupUser = async function() {
