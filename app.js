@@ -520,17 +520,22 @@ window.sendChatMessage = async function(threadId, sender, messageText, role) {
 
 // ✅ NEW: Send automatic admin welcome message
 window.sendAutoAdminResponse = async function(threadId) {
-    const autoMessage = 
-                        "Hi there! 👋\n\n" +
-                       "We'd love to help you with your concern. Could you please share the following details?\n\n" +
-                       "📝 Please provide:\n" +
-                       "• Name:\n" +
-                       "• Order ID:\n" +
-                       "• Is the product on Pre-Order? (Yes or No)\n" +
-                       "• Concern:\n\n" +
-                       "Once we have your details, we'll check right away and get back to you as soon as possible.\n\n" +
-                       "💌 You can also reach us at lgucainta@gmail.com.\n\n" +
-                       "— Admin Team, LGU Cainta";
+    const autoMessage = `Hi there! 👋
+
+We'd love to help you with your concern. Could you please share the following details?
+
+📝 Please provide:
+
+- Name:
+- Order ID:
+- Is the product on Pre-Order? (Yes or No)
+- Concern:
+
+Once we have your details, we'll check right away and get back to you as soon as possible.
+
+💌 You can also reach us at lgucainta@gmail.com.
+
+— Admin Team, LGU Cainta`;
 
     const timestamp = new Date().toISOString();
     const welcomeMessage = {
@@ -544,12 +549,9 @@ window.sendAutoAdminResponse = async function(threadId) {
     
     try {
         const chatRef = ref(database, `chats/${threadId}`);
-        
-        // Push the auto-response message
         const messageListRef = ref(database, `chats/${threadId}/messages`);
         await push(messageListRef, welcomeMessage);
         
-        // Update thread metadata
         const updates = {
             lastMessageAt: timestamp,
             lastMessageBy: 'Admin (Auto)',
@@ -560,7 +562,6 @@ window.sendAutoAdminResponse = async function(threadId) {
         };
         
         await update(chatRef, updates);
-        
         console.log('✅ Auto-response sent successfully');
     } catch (error) {
         console.error('❌ Error sending auto-response:', error);
@@ -600,7 +601,7 @@ window.renderCustomerChatWindow = function() {
 
     const messagesHtml = messages.map(msg => {
         const isCustomer = msg.role === 'customer';
-        const isAutoResponse = msg.isAutoResponse || false; // ✅ Check if it's an auto-response
+        const isAutoResponse = msg.isAutoResponse || false;
         
         const msgClass = isCustomer 
             ? 'bg-lime-600 text-white self-end rounded-br-none' 
@@ -610,13 +611,16 @@ window.renderCustomerChatWindow = function() {
         
         const nameText = isCustomer ? senderName : (isAutoResponse ? 'Admin (Auto) 🤖' : 'Admin');
         
+        // Format message text with proper line breaks
+        const formattedText = msg.text.replace(/\n/g, '<br>');
+        
         return `
             <div class="flex flex-col ${isCustomer ? 'items-end' : 'items-start'} mb-3">
                 <div class="text-xs ${isAutoResponse ? 'text-blue-600 font-semibold' : 'text-gray-500'} mb-1">
                     ${nameText} - ${new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </div>
-                <div class="${msgClass} max-w-xs p-3 rounded-xl shadow-sm whitespace-pre-wrap">
-                    ${msg.text}
+                <div class="${msgClass} max-w-xs p-3 rounded-xl shadow-sm" style="white-space: pre-line; line-height: 1.6;">
+                    ${formattedText}
                 </div>
             </div>
         `;
@@ -708,7 +712,7 @@ window.openAdminChatModal = function(threadId) {
     
     const messagesHtml = messages.map(msg => {
         const isAdmin = msg.role === 'admin';
-        const isAutoResponse = msg.isAutoResponse || false; // ✅ Check if it's an auto-response
+        const isAutoResponse = msg.isAutoResponse || false;
         
         const msgClass = isAdmin 
             ? (isAutoResponse 
@@ -718,13 +722,16 @@ window.openAdminChatModal = function(threadId) {
         
         const nameText = isAdmin ? (isAutoResponse ? 'Admin (Auto) 🤖' : 'Admin') : thread.customerName;
         
+        // Format message text with proper line breaks
+        const formattedText = msg.text.replace(/\n/g, '<br>');
+        
         return `
             <div class="flex flex-col ${isAdmin ? 'items-end' : 'items-start'} mb-3">
                 <div class="text-xs ${isAutoResponse ? 'text-blue-600 font-semibold' : 'text-gray-500'} mb-1">
                     ${nameText} - ${new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </div>
-                <div class="${msgClass} max-w-xs p-3 rounded-xl shadow-sm whitespace-pre-wrap">
-                    ${msg.text}
+                <div class="${msgClass} max-w-xs p-3 rounded-xl shadow-sm" style="white-space: pre-line; line-height: 1.6;">
+                    ${formattedText}
                 </div>
             </div>
         `;
@@ -749,7 +756,6 @@ window.openAdminChatModal = function(threadId) {
     
     showModal(modalTitle, modalContent, `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">Close</button>`, true); 
 
-    // Store chat ID in modal for real-time updates
     const modalOverlay = document.getElementById('modal-overlay');
     modalOverlay.setAttribute('data-chat-id', thread.id);
 
