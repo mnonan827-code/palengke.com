@@ -521,20 +521,16 @@ window.sendChatMessage = async function(threadId, sender, messageText, role) {
 // ✅ NEW: Send automatic admin welcome message
 window.sendAutoAdminResponse = async function(threadId) {
     const autoMessage = 
-`Hi there! 👋 
-We'd love to help you with your concern. Could you please share the following details?
-
-📝 Please provide: 
-- Name: 
-- Order ID: 
-- Is the product on Pre-Order? (Yes or No) 
-- Concern:
-
-Once we have your details, we'll check right away and get back to you as soon as possible.
-
-💌 You can also reach us at lgucainta@gmail.com.
-
-— Admin Team, LGU Cainta`;
+                        "Hi there! 👋\n\n" +
+                       "We'd love to help you with your concern. Could you please share the following details?\n\n" +
+                       "📝 Please provide:\n" +
+                       "• Name:\n" +
+                       "• Order ID:\n" +
+                       "• Is the product on Pre-Order? (Yes or No)\n" +
+                       "• Concern:\n\n" +
+                       "Once we have your details, we'll check right away and get back to you as soon as possible.\n\n" +
+                       "💌 You can also reach us at lgucainta@gmail.com.\n\n" +
+                       "— Admin Team, LGU Cainta";
 
     const timestamp = new Date().toISOString();
     const welcomeMessage = {
