@@ -2927,3 +2927,42 @@ body.user-menu-open {
 .bg-blue-50.border-blue-200 {
     animation: slideInLeft 0.4s ease-out;
 }
+
+/* ==========================================
+   💬 Enhanced Chat Message Formatting
+   ========================================== */
+
+.chat-message-bubble {
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    line-height: 1.6 !important;
+}
+
+.chat-message-bubble br {
+    display: block;
+    content: "";
+    margin: 0.25rem 0;
+}
+
+/* Better spacing for auto-response messages */
+.bg-blue-50.chat-message-bubble {
+    line-height: 1.7 !important;
+    padding: 1rem !important;
+}
+
+/* Smooth animation for new messages */
+@keyframes slideInMessage {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.chat-message-bubble {
+    animation: slideInMessage 0.3s ease-out;
+}
