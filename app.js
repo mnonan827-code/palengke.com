@@ -530,10 +530,10 @@ We'd love to help you with your concern. Could you please share the following de
 
 📋 Please provide:
 
-- Name:
-- Order ID:
-- Is the product on Pre-Order (Yes or No)?
-- Concern:
+  • Name:
+  • Order ID:
+  • Is the product on Pre-Order (Yes or No)?
+  • Concern:
 
 Once we have your details, we'll check right away and get back to you as soon as possible.
 
@@ -629,11 +629,10 @@ window.renderCustomerChatWindow = function() {
         const nameText = isCustomer ? senderName : (isAutoResponse ? 'Admin (Auto) 🤖' : 'Admin');
         
         // ✅ FIXED: Remove extra spaces and preserve line breaks properly
-        const lines = msg.text.trim().split('\n');
-        const formattedText = lines
-            .map(line => escapeHtml(line.trim()))
-            .filter(line => line.length > 0)
-            .join('<br>');
+        const formattedText = escapeHtml(msg.text.trim())
+    .split('\n')
+    .map(line => line.replace(/^(\s+)/, match => '&nbsp;'.repeat(match.length)))
+    .join('<br>');
         
         return `
             <div class="flex flex-col ${isCustomer ? 'items-end' : 'items-start'} mb-3">
@@ -755,12 +754,11 @@ window.openAdminChatModal = function(threadId) {
         
         const nameText = isAdmin ? (isAutoResponse ? 'Admin (Auto) 🤖' : 'Admin') : thread.customerName;
         
-        // ✅ FIXED: Remove extra spaces and preserve line breaks properly
-        const lines = msg.text.trim().split('\n');
-        const formattedText = lines
-            .map(line => escapeHtml(line.trim()))
-            .filter(line => line.length > 0)
-            .join('<br>');
+        // ✅ PRESERVE formatting: Don't trim individual lines
+const formattedText = escapeHtml(msg.text.trim())
+    .split('\n')
+    .map(line => line.replace(/^(\s+)/, match => '&nbsp;'.repeat(match.length)))
+    .join('<br>');
         
         return `
             <div class="flex flex-col ${isAdmin ? 'items-end' : 'items-start'} mb-3">
@@ -1061,10 +1059,11 @@ window.updateCustomerChatMessages = function() {
         
         const nameText = isCustomer ? senderName : (isAutoResponse ? 'Admin (Auto) 🤖' : 'Admin');
         
-        // ✅ IMPROVED: Better line break handling with proper escaping
-        const formattedText = escapeHtml(msg.text)
-            .replace(/\n\n/g, '<br><br>')
-            .replace(/\n/g, '<br>');
+       // ✅ PRESERVE formatting with indentation
+const formattedText = escapeHtml(msg.text.trim())
+    .split('\n')
+    .map(line => line.replace(/^(\s+)/, match => '&nbsp;'.repeat(match.length)))
+    .join('<br>');
         
         return `
             <div class="flex flex-col ${isCustomer ? 'items-end' : 'items-start'} mb-3 chat-message-item">
@@ -1113,12 +1112,11 @@ window.updateAdminChatMessages = function(threadId) {
         
         const nameText = isAdmin ? (isAutoResponse ? 'Admin (Auto) 🤖' : 'Admin') : thread.customerName;
         
-        // ✅ FIXED: Remove extra spaces and preserve line breaks properly
-        const lines = msg.text.trim().split('\n');
-        const formattedText = lines
-            .map(line => escapeHtml(line.trim()))
-            .filter(line => line.length > 0)
-            .join('<br>');
+       // ✅ PRESERVE formatting with indentation
+const formattedText = escapeHtml(msg.text.trim())
+    .split('\n')
+    .map(line => line.replace(/^(\s+)/, match => '&nbsp;'.repeat(match.length)))
+    .join('<br>');
         
         return `
             <div class="flex flex-col ${isAdmin ? 'items-end' : 'items-start'} mb-3">

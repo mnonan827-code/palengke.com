@@ -3074,3 +3074,42 @@ body.user-menu-open {
         font-size: 16px; /* Prevents zoom on iOS */
     }
 }
+
+/* ==========================================
+   📝 Enhanced Chat Message Formatting
+   ========================================== */
+
+/* Preserve whitespace and formatting in chat messages */
+.chat-message-bubble {
+    white-space: pre-wrap !important;
+    word-wrap: break-word !important;
+    overflow-wrap: break-word !important;
+    line-height: 1.7 !important;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+}
+
+/* Auto-response specific styling */
+.bg-blue-50.chat-message-bubble {
+    line-height: 1.8 !important;
+    padding: 1rem !important;
+    letter-spacing: 0.01em;
+}
+
+/* Ensure proper spacing for lists in messages */
+.chat-message-bubble br {
+    display: block;
+    content: "";
+    margin: 0.125rem 0;
+}
+
+/* Better readability for chat text */
+.chat-message-bubble {
+    font-size: 0.9rem;
+}
+
+@media (max-width: 640px) {
+    .chat-message-bubble {
+        font-size: 0.875rem;
+    }
+}
+
