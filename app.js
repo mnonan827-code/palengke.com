@@ -1251,6 +1251,39 @@ window.loginUser = async function() {
     }
 
     try {
+        // ✅ Check if user has temp password
+        const usersData = await getFromFirebase('users');
+        const userEntry = usersData ? Object.entries(usersData).find(([uid, data]) => data.email === email) : null;
+        
+        if (userEntry) {
+            const [userId, userData] = userEntry;
+            
+            // ✅ If temp password exists, use it instead
+            if (userData.tempNewPassword) {
+                const actualPassword = userData.tempNewPassword;
+                
+                try {
+                    const userCredential = await signInWithEmailAndPassword(auth, email, actualPassword);
+                    
+                    // ✅ Clear temp password after successful login
+                    await updateFirebase(`users/${userId}`, {
+                        tempNewPassword: null
+                    });
+                    
+                    // ✅ Show success modal and continue to main
+                    showModal('Password Updated!', `
+                        <div class="text-center">
+                            <div class="text-5xl mb-3">✅</div>
+                            <p>Your password has been successfully reset!</p>
+                        </div>
+                    `, `<button onclick="hideModal(); renderMain()" class="px-4 py-2 bg-lime-600 text-white rounded">Continue</button>`);
+                    
+                    return;
+                } catch (error) {
+                    console.log('Temp password failed, trying regular login');
+                }
+            }
+        }
         const userCredential = await signInWithEmailAndPassword(auth, email, password);
         const user = userCredential.user;
         const userData = await getFromFirebase(`users/${user.uid}`);
@@ -1327,6 +1360,365 @@ window.resendVerificationCode = async function(email, password) {
     // ...
 };
 
+
+// ==========================================
+// 🔐 FORGOT PASSWORD FUNCTIONS
+// ==========================================
+
+// Show forgot password modal
+window.showForgotPasswordModal = function() {
+    showModal('Forgot Password', `
+        <div class="space-y-4">
+            <p class="text-gray-700">Enter your email address and we'll send you a verification code to reset your password.</p>
+            
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
+                <input 
+                    id="forgot-email" 
+                    type="email" 
+                    placeholder="your.email@example.com" 
+                    class="w-full p-3 border rounded-lg focus:ring-2 focus:ring-lime-500 focus:border-lime-500"
+                    required
+                />
+            </div>
+            
+            <div id="forgot-error" class="text-red-600 text-sm hidden"></div>
+        </div>
+    `, `
+        <button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded-lg">Cancel</button>
+        <button onclick="sendPasswordResetCode()" class="px-4 py-2 bg-lime-600 text-white rounded-lg hover:bg-lime-700">Send Reset Code</button>
+    `);
+    
+    setTimeout(() => {
+        document.getElementById('forgot-email').focus();
+    }, 100);
+};
+
+// Send password reset code
+window.sendPasswordResetCode = async function() {
+    const email = document.getElementById('forgot-email')?.value?.trim()?.toLowerCase();
+    const errorDiv = document.getElementById('forgot-error');
+    
+    if (!email) {
+        errorDiv.textContent = 'Please enter your email address';
+        errorDiv.classList.remove('hidden');
+        return;
+    }
+    
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+        errorDiv.textContent = 'Please enter a valid email address';
+        errorDiv.classList.remove('hidden');
+        return;
+    }
+    
+    try {
+        // Check if user exists
+        const usersData = await getFromFirebase('users');
+        const userEntry = usersData ? Object.entries(usersData).find(([uid, data]) => data.email === email) : null;
+        
+        if (!userEntry) {
+            errorDiv.textContent = 'No account found with this email address';
+            errorDiv.classList.remove('hidden');
+            return;
+        }
+        
+        const [userId, userData] = userEntry;
+        
+        // Generate reset code
+        const resetCode = generateVerificationCode();
+        const codeExpiry = Date.now() + (15 * 60 * 1000); // 15 minutes
+        
+        // Save reset code to database
+        await updateFirebase(`users/${userId}`, {
+            passwordResetCode: resetCode,
+            passwordResetCodeExpiry: codeExpiry
+        });
+        
+        // Send email
+        await sendPasswordResetEmail(email, userData.name, resetCode);
+        
+        hideModal();
+        
+        // Show verification modal
+        showPasswordResetVerificationModal(email, userData.name);
+        
+    } catch (error) {
+        console.error('Password reset error:', error);
+        errorDiv.textContent = error.message || 'Failed to send reset code. Please try again.';
+        errorDiv.classList.remove('hidden');
+    }
+};
+
+// Show password reset verification modal
+window.showPasswordResetVerificationModal = function(email, userName) {
+    showModal('Enter Reset Code', `
+        <div class="space-y-4">
+            <div class="text-center">
+                <div class="text-5xl mb-3">📧</div>
+                <p class="text-gray-700">We've sent a 6-digit code to:</p>
+                <p class="font-semibold text-lime-700">${email}</p>
+                <p class="text-sm text-gray-600 mt-2">Enter the code below (expires in 15 minutes):</p>
+            </div>
+            
+            <div class="flex justify-center gap-2">
+                <input id="reset-code-1" type="text" maxlength="1" class="w-12 h-12 text-center text-2xl font-bold border-2 rounded-lg focus:border-lime-600" />
+                <input id="reset-code-2" type="text" maxlength="1" class="w-12 h-12 text-center text-2xl font-bold border-2 rounded-lg focus:border-lime-600" />
+                <input id="reset-code-3" type="text" maxlength="1" class="w-12 h-12 text-center text-2xl font-bold border-2 rounded-lg focus:border-lime-600" />
+                <input id="reset-code-4" type="text" maxlength="1" class="w-12 h-12 text-center text-2xl font-bold border-2 rounded-lg focus:border-lime-600" />
+                <input id="reset-code-5" type="text" maxlength="1" class="w-12 h-12 text-center text-2xl font-bold border-2 rounded-lg focus:border-lime-600" />
+                <input id="reset-code-6" type="text" maxlength="1" class="w-12 h-12 text-center text-2xl font-bold border-2 rounded-lg focus:border-lime-600" />
+            </div>
+            
+            <div id="reset-code-error" class="text-red-600 text-sm text-center hidden"></div>
+            
+            <div class="text-center">
+                <button onclick="resendPasswordResetCode('${email}')" class="text-sm text-lime-600 underline">Didn't receive code? Resend</button>
+            </div>
+        </div>
+    `, `
+        <button onclick="hideModal(); openAuth('login')" class="px-4 py-2 bg-gray-100 rounded-lg">Cancel</button>
+        <button onclick="verifyPasswordResetCode('${email}')" class="px-4 py-2 bg-lime-600 text-white rounded-lg hover:bg-lime-700">Verify Code</button>
+    `);
+    
+    setupResetCodeInputs();
+};
+
+// Setup code input auto-advance
+window.setupResetCodeInputs = function() {
+    const inputs = ['reset-code-1', 'reset-code-2', 'reset-code-3', 'reset-code-4', 'reset-code-5', 'reset-code-6'];
+    
+    inputs.forEach((id, index) => {
+        const input = document.getElementById(id);
+        if (!input) return;
+
+        input.addEventListener('input', function(e) {
+            const value = e.target.value;
+            
+            if (!/^\d*$/.test(value)) {
+                e.target.value = '';
+                return;
+            }
+
+            if (value && index < inputs.length - 1) {
+                document.getElementById(inputs[index + 1]).focus();
+            }
+        });
+
+        input.addEventListener('keydown', function(e) {
+            if (e.key === 'Backspace' && !e.target.value && index > 0) {
+                document.getElementById(inputs[index - 1]).focus();
+            }
+        });
+
+        if (index === 0) {
+            setTimeout(() => input.focus(), 100);
+        }
+    });
+};
+
+// Verify password reset code
+window.verifyPasswordResetCode = async function(email) {
+    const code1 = document.getElementById('reset-code-1')?.value || '';
+    const code2 = document.getElementById('reset-code-2')?.value || '';
+    const code3 = document.getElementById('reset-code-3')?.value || '';
+    const code4 = document.getElementById('reset-code-4')?.value || '';
+    const code5 = document.getElementById('reset-code-5')?.value || '';
+    const code6 = document.getElementById('reset-code-6')?.value || '';
+    
+    const enteredCode = code1 + code2 + code3 + code4 + code5 + code6;
+    const errorDiv = document.getElementById('reset-code-error');
+
+    if (enteredCode.length !== 6) {
+        errorDiv.textContent = 'Please enter all 6 digits';
+        errorDiv.classList.remove('hidden');
+        return;
+    }
+
+    try {
+        // Find user by email
+        const usersData = await getFromFirebase('users');
+        const userEntry = usersData ? Object.entries(usersData).find(([uid, data]) => data.email === email) : null;
+        
+        if (!userEntry) {
+            throw new Error('User not found');
+        }
+        
+        const [userId, userData] = userEntry;
+
+        // Verify code
+        if (userData.passwordResetCode !== enteredCode) {
+            errorDiv.textContent = 'Invalid verification code';
+            errorDiv.classList.remove('hidden');
+            return;
+        }
+
+        // Check expiry
+        if (Date.now() > userData.passwordResetCodeExpiry) {
+            errorDiv.textContent = 'Verification code has expired';
+            errorDiv.classList.remove('hidden');
+            return;
+        }
+
+        // Code is valid, show new password form
+        hideModal();
+        showNewPasswordModal(email, userId);
+
+    } catch (error) {
+        console.error('Verification error:', error);
+        errorDiv.textContent = 'Verification failed. Please try again.';
+        errorDiv.classList.remove('hidden');
+    }
+};
+
+// Show new password modal
+window.showNewPasswordModal = function(email, userId) {
+    showModal('Create New Password', `
+        <div class="space-y-4">
+            <div class="bg-green-50 p-3 rounded-lg border border-green-200 text-center">
+                <div class="text-2xl mb-2">✅</div>
+                <p class="text-sm text-green-800 font-semibold">Code Verified Successfully!</p>
+            </div>
+            
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">New Password</label>
+                <input 
+                    id="new-password" 
+                    type="password" 
+                    placeholder="Enter new password (min 6 characters)" 
+                    class="w-full p-3 border rounded-lg focus:ring-2 focus:ring-lime-500 focus:border-lime-500"
+                    minlength="6"
+                    required
+                />
+            </div>
+            
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Confirm New Password</label>
+                <input 
+                    id="confirm-password" 
+                    type="password" 
+                    placeholder="Re-enter new password" 
+                    class="w-full p-3 border rounded-lg focus:ring-2 focus:ring-lime-500 focus:border-lime-500"
+                    minlength="6"
+                    required
+                />
+            </div>
+            
+            <div class="bg-blue-50 p-3 rounded-lg border-l-4 border-blue-500">
+                <p class="text-xs text-blue-800">
+                    <strong>Password Requirements:</strong><br>
+                    • Minimum 6 characters<br>
+                    • Use a strong, unique password
+                </p>
+            </div>
+            
+            <div id="new-password-error" class="text-red-600 text-sm hidden"></div>
+        </div>
+    `, `
+        <button onclick="hideModal(); openAuth('login')" class="px-4 py-2 bg-gray-100 rounded-lg">Cancel</button>
+        <button onclick="resetPassword('${email}', '${userId}')" class="px-4 py-2 bg-lime-600 text-white rounded-lg hover:bg-lime-700">Reset Password</button>
+    `);
+};
+
+// Reset password
+window.resetPassword = async function(email, userId) {
+    const newPassword = document.getElementById('new-password')?.value;
+    const confirmPassword = document.getElementById('confirm-password')?.value;
+    const errorDiv = document.getElementById('new-password-error');
+
+    if (!newPassword || !confirmPassword) {
+        errorDiv.textContent = 'Please fill in both password fields';
+        errorDiv.classList.remove('hidden');
+        return;
+    }
+
+    if (newPassword.length < 6) {
+        errorDiv.textContent = 'Password must be at least 6 characters';
+        errorDiv.classList.remove('hidden');
+        return;
+    }
+
+    if (newPassword !== confirmPassword) {
+        errorDiv.textContent = 'Passwords do not match';
+        errorDiv.classList.remove('hidden');
+        return;
+    }
+
+    try {
+        // ✅ Store new password temporarily
+        await updateFirebase(`users/${userId}`, {
+            tempNewPassword: newPassword,
+            passwordResetCode: null,
+            passwordResetCodeExpiry: null,
+            passwordResetAt: new Date().toISOString()
+        });
+
+        hideModal();
+        
+        // ✅ Guide user to login to complete password change
+        showModal('Final Step - Login Required', `
+            <div class="text-center space-y-4">
+                <div class="text-5xl">🔐</div>
+                <p class="text-gray-700">To complete password reset, please:</p>
+                <ol class="text-left text-gray-700 space-y-2 bg-blue-50 p-4 rounded-lg">
+                    <li><strong>1.</strong> Click "Proceed to Login" below</li>
+                    <li><strong>2.</strong> Try logging in with your <strong>old password</strong></li>
+                    <li><strong>3.</strong> System will automatically update to your new password</li>
+                </ol>
+                <div class="bg-yellow-50 p-3 rounded-lg border-l-4 border-yellow-500">
+                    <p class="text-xs text-yellow-800">
+                        Your new password: <code class="bg-white px-2 py-1 rounded">${newPassword}</code><br>
+                        (Save this somewhere safe)
+                    </p>
+                </div>
+            </div>
+        `, `
+            <button onclick="hideModal(); openAuth('login')" class="px-4 py-2 bg-lime-600 text-white rounded-lg w-full">Proceed to Login</button>
+        `);
+
+    } catch (error) {
+        console.error('Password reset error:', error);
+        errorDiv.textContent = 'Failed to reset password. Please try again.';
+        errorDiv.classList.remove('hidden');
+    }
+};
+
+// Resend password reset code
+window.resendPasswordResetCode = async function(email) {
+    try {
+        const usersData = await getFromFirebase('users');
+        const userEntry = usersData ? Object.entries(usersData).find(([uid, data]) => data.email === email) : null;
+        
+        if (!userEntry) {
+            throw new Error('User not found');
+        }
+        
+        const [userId, userData] = userEntry;
+
+        const newResetCode = generateVerificationCode();
+        const newCodeExpiry = Date.now() + (15 * 60 * 1000);
+
+        await updateFirebase(`users/${userId}`, {
+            passwordResetCode: newResetCode,
+            passwordResetCodeExpiry: newCodeExpiry
+        });
+
+        await sendPasswordResetEmail(email, userData.name, newResetCode);
+
+        showModal('Code Resent', `
+            <p class="text-gray-700">A new reset code has been sent to <b>${email}</b></p>
+        `, `
+            <button onclick="hideModal(); showPasswordResetVerificationModal('${email}', '${userData.name}')" class="px-4 py-2 bg-lime-600 text-white rounded-lg">OK</button>
+        `);
+
+    } catch (error) {
+        console.error('Resend error:', error);
+        showModal('Error', 'Failed to resend code. Please try again.', `
+            <button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded-lg">OK</button>
+        `);
+    }
+};
 window.logoutUser = async function() {
     try {
         if (window.APP_STATE.currentUser && window.APP_STATE.currentUser.role === 'customer') {
@@ -3349,6 +3741,12 @@ window.openAuth = function(mode = 'login') {
             <input id="login-email" type="email" placeholder="Email" class="p-2 border rounded" required />
             <input id="login-password" type="password" placeholder="Password" class="p-2 border rounded" required />
           </form>
+            <div class="text-right">
+                <button type="button" onclick="hideModal(); showForgotPasswordModal()" class="text-sm text-lime-600 hover:text-lime-700 underline">
+                    Forgot password?
+                </button>
+            </div>
+        </form>
     `, `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">Cancel</button>
         <button onclick="loginUser()" class="px-4 py-2 bg-lime-600 text-white rounded">Log in</button>`);
     } else {
