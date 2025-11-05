@@ -2998,3 +2998,79 @@ body.user-menu-open {
     line-height: 1.7 !important;
     padding: 1rem !important;
 }
+/* ==========================================
+   💬 Enhanced Chat Input & Message Formatting
+   ========================================== */
+
+/* Chat textarea styling */
+.chat-input-area textarea {
+    min-height: 44px;
+    max-height: 120px;
+    overflow-y: auto;
+    resize: none;
+    font-family: inherit;
+    line-height: 1.5;
+}
+
+/* Message bubble improvements */
+.chat-message-bubble {
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    line-height: 1.6 !important;
+}
+
+/* Ensure line breaks are visible */
+.chat-message-bubble br {
+    display: block;
+    content: "";
+    margin: 0.25rem 0;
+}
+
+/* Auto-response message spacing */
+.bg-blue-50.chat-message-bubble {
+    line-height: 1.7 !important;
+    padding: 1rem !important;
+}
+
+/* Scrollbar for chat messages */
+.custom-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(132, 204, 22, 0.5) transparent;
+}
+
+.custom-scroll::-webkit-scrollbar {
+    width: 6px;
+}
+
+.custom-scroll::-webkit-scrollbar-thumb {
+    background: rgba(132, 204, 22, 0.5);
+    border-radius: 6px;
+}
+
+.custom-scroll::-webkit-scrollbar-thumb:hover {
+    background: rgba(132, 204, 22, 0.7);
+}
+
+/* Animation for new messages */
+@keyframes slideInMessage {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.chat-message-item {
+    animation: slideInMessage 0.3s ease-out;
+}
+
+/* Mobile textarea improvements */
+@media (max-width: 640px) {
+    .chat-input-area textarea {
+        font-size: 16px; /* Prevents zoom on iOS */
+    }
+}

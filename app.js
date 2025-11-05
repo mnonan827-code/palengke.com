@@ -437,16 +437,21 @@ window.getChatThreadId = function() {
 // Send a chat message (customer or admin)
 // Send a chat message (customer or admin)
 // Send a chat message (customer or admin)
+// Send a chat message (customer or admin)
 window.sendChatMessage = async function(threadId, sender, messageText, role) {
     if (!messageText.trim()) return;
 
     console.log('📤 Sending message:', { threadId, sender, role, messageText });
 
     const timestamp = new Date().toISOString();
+    
+    // ✅ NEW: Preserve line breaks by trimming only the start/end, not replacing internal whitespace
+    const processedText = messageText.trim();
+    
     const newMessage = {
         id: uid(),
         sender: sender,
-        text: messageText.trim(),
+        text: processedText,  // Keep original line breaks
         role: role,
         timestamp: timestamp
     };
@@ -461,18 +466,16 @@ window.sendChatMessage = async function(threadId, sender, messageText, role) {
         const updates = {
             lastMessageAt: timestamp,
             lastMessageBy: sender,
-            lastMessageText: newMessage.text,
+            lastMessageText: newMessage.text.substring(0, 100), // Truncate for preview
             unreadCustomer: role === 'admin' ? true : false,
             unreadAdmin: role === 'customer' ? true : false
         };
 
         if (!chatData) {
             console.log('🆕 Creating new chat thread');
-            // New thread - push message first
             const messageListRef = ref(database, `chats/${threadId}/messages`);
             await push(messageListRef, newMessage);
             
-            // Then create thread metadata
             const initialChatData = {
                 customerName: window.APP_STATE.currentUser ? window.APP_STATE.currentUser.name : 'Guest',
                 customerUid: window.APP_STATE.currentUser ? window.APP_STATE.currentUser.uid : null,
@@ -482,24 +485,18 @@ window.sendChatMessage = async function(threadId, sender, messageText, role) {
             };
             await update(chatRef, initialChatData);
             
-            // ✅ NEW: Send auto-response if this is a customer's first message
             if (role === 'customer') {
                 console.log('🤖 Triggering auto-response...');
-                // Use a longer delay to ensure the chat is fully created
                 setTimeout(() => {
                     window.sendAutoAdminResponse(threadId);
-                }, 1500); // Increased from 1000ms to 1500ms
+                }, 1500);
             }
         } else {
             console.log('📝 Appending to existing thread');
-            // Append new message
             const messageListRef = ref(database, `chats/${threadId}/messages`);
             await push(messageListRef, newMessage);
-            
-            // Update thread metadata
             await update(chatRef, updates);
             
-            // ✅ NEW: Send auto-response if this is the first customer message AND auto-response hasn't been sent yet
             if (role === 'customer' && !chatData.autoResponseSent) {
                 console.log('🤖 Sending auto-response to existing thread...');
                 setTimeout(() => {
@@ -626,33 +623,33 @@ window.renderCustomerChatWindow = function() {
     }
 
     const messagesHtml = messages.map(msg => {
-    const isCustomer = msg.role === 'customer';
-    const isAutoResponse = msg.isAutoResponse || false;
-    
-    const msgClass = isCustomer 
-        ? 'bg-lime-600 text-white self-end rounded-br-none' 
-        : (isAutoResponse 
-            ? 'bg-blue-50 text-gray-800 self-start rounded-tl-none border border-blue-200' 
-            : 'bg-gray-200 text-gray-800 self-start rounded-tl-none');
-    
-    const nameText = isCustomer ? senderName : (isAutoResponse ? 'Admin (Auto) 🤖' : 'Admin');
-    
-    // ✅ UPDATED: Better line break handling
-    const formattedText = msg.text
-        .replace(/\n\n/g, '<br><br>')  // Double line breaks
-        .replace(/\n/g, '<br>');        // Single line breaks
-    
-    return `
-        <div class="flex flex-col ${isCustomer ? 'items-end' : 'items-start'} mb-3">
-            <div class="text-xs ${isAutoResponse ? 'text-blue-600 font-semibold' : 'text-gray-500'} mb-1">
-                ${nameText} - ${new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+        const isCustomer = msg.role === 'customer';
+        const isAutoResponse = msg.isAutoResponse || false;
+        
+        const msgClass = isCustomer 
+            ? 'bg-lime-600 text-white self-end rounded-br-none' 
+            : (isAutoResponse 
+                ? 'bg-blue-50 text-gray-800 self-start rounded-tl-none border border-blue-200' 
+                : 'bg-gray-200 text-gray-800 self-start rounded-tl-none');
+        
+        const nameText = isCustomer ? senderName : (isAutoResponse ? 'Admin (Auto) 🤖' : 'Admin');
+        
+        // ✅ IMPROVED: Better line break handling with proper escaping
+        const formattedText = escapeHtml(msg.text)
+            .replace(/\n\n/g, '<br><br>')  // Double line breaks
+            .replace(/\n/g, '<br>');        // Single line breaks
+        
+        return `
+            <div class="flex flex-col ${isCustomer ? 'items-end' : 'items-start'} mb-3">
+                <div class="text-xs ${isAutoResponse ? 'text-blue-600 font-semibold' : 'text-gray-500'} mb-1">
+                    ${nameText} - ${new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </div>
+                <div class="${msgClass} max-w-xs p-3 rounded-xl shadow-sm chat-message-bubble">
+                    ${formattedText}
+                </div>
             </div>
-            <div class="${msgClass} max-w-xs p-3 rounded-xl shadow-sm chat-message-bubble">
-                ${formattedText}
-            </div>
-        </div>
-    `;
-}).join('');
+        `;
+    }).join('');
 
     return `
         <div id="chat-window-content-${threadId}" class="flex flex-col h-full">
@@ -665,10 +662,15 @@ window.renderCustomerChatWindow = function() {
             </div>
             <div class="p-4 border-t border-gray-200 flex-shrink-0">
                 <div class="flex gap-2">
-                    <input type="text" id="chat-input-${threadId}" class="flex-grow p-3 border rounded-lg focus:ring-2 focus:ring-lime-500 focus:border-lime-500 text-sm" placeholder="Type your message..." onkeydown="if(event.key === 'Enter') { event.preventDefault(); document.getElementById('chat-send-btn-${threadId}').click(); }">
+                    <textarea id="chat-input-${threadId}" 
+                              rows="1"
+                              class="flex-grow p-3 border rounded-lg focus:ring-2 focus:ring-lime-500 focus:border-lime-500 text-sm resize-none" 
+                              placeholder="Type your message... (Shift+Enter for new line)"
+                              onkeydown="handleChatInputKeydown(event, '${threadId}', '${senderName}', '${senderRole}')"
+                              oninput="autoResizeChatInput(this)"></textarea>
                     <button id="chat-send-btn-${threadId}" 
                             onclick="window.sendChatMessage('${threadId}', '${senderName}', document.getElementById('chat-input-${threadId}').value, '${senderRole}')"
-                            class="p-3 bg-lime-600 text-white rounded-lg hover:bg-lime-700 transition">
+                            class="p-3 bg-lime-600 text-white rounded-lg hover:bg-lime-700 transition flex-shrink-0">
                         <i data-lucide="send" class="w-5 h-5"></i>
                     </button>
                 </div>
@@ -746,33 +748,33 @@ window.openAdminChatModal = function(threadId) {
     const messages = thread.messages ? Object.values(thread.messages) : [];
     
     const messagesHtml = messages.map(msg => {
-    const isAdmin = msg.role === 'admin';
-    const isAutoResponse = msg.isAutoResponse || false;
-    
-    const msgClass = isAdmin 
-        ? (isAutoResponse 
-            ? 'bg-blue-50 text-gray-800 self-end rounded-br-none border border-blue-200' 
-            : 'bg-lime-600 text-white self-end rounded-br-none')
-        : 'bg-gray-200 text-gray-800 self-start rounded-tl-none';
-    
-    const nameText = isAdmin ? (isAutoResponse ? 'Admin (Auto) 🤖' : 'Admin') : thread.customerName;
-    
-    // ✅ UPDATED: Better line break handling
-    const formattedText = msg.text
-        .replace(/\n\n/g, '<br><br>')
-        .replace(/\n/g, '<br>');
-    
-    return `
-        <div class="flex flex-col ${isAdmin ? 'items-end' : 'items-start'} mb-3">
-            <div class="text-xs ${isAutoResponse ? 'text-blue-600 font-semibold' : 'text-gray-500'} mb-1">
-                ${nameText} - ${new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+        const isAdmin = msg.role === 'admin';
+        const isAutoResponse = msg.isAutoResponse || false;
+        
+        const msgClass = isAdmin 
+            ? (isAutoResponse 
+                ? 'bg-blue-50 text-gray-800 self-end rounded-br-none border border-blue-200' 
+                : 'bg-lime-600 text-white self-end rounded-br-none')
+            : 'bg-gray-200 text-gray-800 self-start rounded-tl-none';
+        
+        const nameText = isAdmin ? (isAutoResponse ? 'Admin (Auto) 🤖' : 'Admin') : thread.customerName;
+        
+        // ✅ IMPROVED: Better line break handling with proper escaping
+        const formattedText = escapeHtml(msg.text)
+            .replace(/\n\n/g, '<br><br>')
+            .replace(/\n/g, '<br>');
+        
+        return `
+            <div class="flex flex-col ${isAdmin ? 'items-end' : 'items-start'} mb-3">
+                <div class="text-xs ${isAutoResponse ? 'text-blue-600 font-semibold' : 'text-gray-500'} mb-1">
+                    ${nameText} - ${new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </div>
+                <div class="${msgClass} max-w-xs p-3 rounded-xl shadow-sm chat-message-bubble">
+                    ${formattedText}
+                </div>
             </div>
-            <div class="${msgClass} max-w-xs p-3 rounded-xl shadow-sm chat-message-bubble">
-                ${formattedText}
-            </div>
-        </div>
-    `;
-}).join('');
+        `;
+    }).join('');
 
     const modalTitle = `Chat with ${thread.customerName || thread.id}`;
     const modalContent = `
@@ -781,10 +783,15 @@ window.openAdminChatModal = function(threadId) {
                 ${messagesHtml.length > 0 ? messagesHtml : '<div class="text-center text-gray-500 p-5">Start a conversation!</div>'}
             </div>
             <div class="flex gap-2 flex-shrink-0">
-                <input type="text" id="chat-input-${thread.id}" class="flex-grow p-3 border rounded-lg focus:ring-2 focus:ring-lime-500 focus:border-lime-500 text-sm" placeholder="Type your reply...">
+                <textarea id="chat-input-${thread.id}" 
+                          rows="1"
+                          class="flex-grow p-3 border rounded-lg focus:ring-2 focus:ring-lime-500 focus:border-lime-500 text-sm resize-none" 
+                          placeholder="Type your reply... (Shift+Enter for new line)"
+                          onkeydown="handleChatInputKeydown(event, '${thread.id}', '${window.APP_STATE.currentUser.name}', 'admin')"
+                          oninput="autoResizeChatInput(this)"></textarea>
                 <button id="chat-send-btn-${thread.id}" 
                         onclick="window.sendChatMessage('${thread.id}', '${window.APP_STATE.currentUser.name}', document.getElementById('chat-input-${thread.id}').value, 'admin')"
-                        class="p-3 bg-lime-600 text-white rounded-lg hover:bg-lime-700 transition">
+                        class="p-3 bg-lime-600 text-white rounded-lg hover:bg-lime-700 transition flex-shrink-0">
                     <i data-lucide="send" class="w-5 h-5"></i>
                 </button>
             </div>
@@ -801,16 +808,6 @@ window.openAdminChatModal = function(threadId) {
         const messagesContainer = document.getElementById(`chat-messages-${thread.id}`);
         if (messagesContainer) {
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
-        }
-        
-        const chatInput = document.getElementById(`chat-input-${thread.id}`);
-        if(chatInput) {
-             chatInput.addEventListener('keydown', function(e) { 
-                if (e.key === 'Enter') {
-                    e.preventDefault();
-                    document.getElementById(`chat-send-btn-${thread.id}`).click();
-                }
-            });
         }
     }, 100);
 };
@@ -1027,7 +1024,6 @@ window.updateCustomerChatMessages = function() {
     console.log('🔄 Updating customer chat messages...');
     const chatWindow = document.getElementById('customer-chat-window');
     
-    // Only update if chat window is open
     if (!chatWindow || chatWindow.classList.contains('hidden')) {
         console.log('⏭️ Chat window not open, skipping update');
         return;
@@ -1049,17 +1045,12 @@ window.updateCustomerChatMessages = function() {
         return;
     }
     
-    // Convert messages from object to array
     const messages = thread.messages ? Object.values(thread.messages) : [];
     console.log('📬 Total messages:', messages.length);
     
-    // Determine sender info
     const senderName = window.APP_STATE.currentUser ? window.APP_STATE.currentUser.name : 'Guest';
-    
-    // Store current scroll position
     const isScrolledToBottom = messagesContainer.scrollHeight - messagesContainer.scrollTop <= messagesContainer.clientHeight + 50;
     
-    // Render messages
     const messagesHtml = messages.map(msg => {
         const isCustomer = msg.role === 'customer';
         const isAutoResponse = msg.isAutoResponse || false;
@@ -1072,8 +1063,8 @@ window.updateCustomerChatMessages = function() {
         
         const nameText = isCustomer ? senderName : (isAutoResponse ? 'Admin (Auto) 🤖' : 'Admin');
         
-        // Format message text with proper line breaks
-        const formattedText = msg.text
+        // ✅ IMPROVED: Better line break handling with proper escaping
+        const formattedText = escapeHtml(msg.text)
             .replace(/\n\n/g, '<br><br>')
             .replace(/\n/g, '<br>');
         
@@ -1091,12 +1082,10 @@ window.updateCustomerChatMessages = function() {
     
     messagesContainer.innerHTML = messagesHtml.length > 0 ? messagesHtml : '<div class="text-center text-gray-500 p-5">Start a conversation!</div>';
     
-    // Auto-scroll to bottom if user was already at bottom
     if (isScrolledToBottom) {
         setTimeout(() => window.scrollToChatBottom(threadId), 50);
     }
     
-    // Mark as read if needed
     if (thread.unreadCustomer) {
         window.markChatAsRead(threadId, 'customer');
     }
@@ -1104,7 +1093,6 @@ window.updateCustomerChatMessages = function() {
     console.log('✅ Chat messages updated');
 };
 
-// ✅ NEW: Real-time update for admin chat messages
 window.updateAdminChatMessages = function(threadId) {
     const messagesContainer = document.getElementById(`chat-messages-${threadId}`);
     if (!messagesContainer) return;
@@ -1113,20 +1101,30 @@ window.updateAdminChatMessages = function(threadId) {
     if (!thread) return;
     
     const messages = thread.messages ? Object.values(thread.messages) : [];
-    
-    // Store current scroll position
     const isScrolledToBottom = messagesContainer.scrollHeight - messagesContainer.scrollTop <= messagesContainer.clientHeight + 50;
     
     const messagesHtml = messages.map(msg => {
         const isAdmin = msg.role === 'admin';
-        const msgClass = isAdmin ? 'bg-lime-600 text-white self-end rounded-br-none' : 'bg-gray-200 text-gray-800 self-start rounded-tl-none';
-        const nameText = isAdmin ? 'Admin' : thread.customerName;
+        const isAutoResponse = msg.isAutoResponse || false;
+        
+        const msgClass = isAdmin 
+            ? (isAutoResponse 
+                ? 'bg-blue-50 text-gray-800 self-end rounded-br-none border border-blue-200' 
+                : 'bg-lime-600 text-white self-end rounded-br-none')
+            : 'bg-gray-200 text-gray-800 self-start rounded-tl-none';
+        
+        const nameText = isAdmin ? (isAutoResponse ? 'Admin (Auto) 🤖' : 'Admin') : thread.customerName;
+        
+        // ✅ IMPROVED: Better line break handling with proper escaping
+        const formattedText = escapeHtml(msg.text)
+            .replace(/\n\n/g, '<br><br>')
+            .replace(/\n/g, '<br>');
         
         return `
             <div class="flex flex-col ${isAdmin ? 'items-end' : 'items-start'} mb-3">
-                <div class="text-xs text-gray-500 mb-1">${nameText} - ${new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
-                <div class="${msgClass} max-w-xs p-3 rounded-xl shadow-sm">
-                    ${msg.text}
+                <div class="text-xs ${isAutoResponse ? 'text-blue-600 font-semibold' : 'text-gray-500'} mb-1">${nameText} - ${new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                <div class="${msgClass} max-w-xs p-3 rounded-xl shadow-sm chat-message-bubble">
+                    ${formattedText}
                 </div>
             </div>
         `;
@@ -1134,7 +1132,6 @@ window.updateAdminChatMessages = function(threadId) {
     
     messagesContainer.innerHTML = messagesHtml.length > 0 ? messagesHtml : '<div class="text-center text-gray-500 p-5">Start a conversation!</div>';
     
-    // Auto-scroll to bottom if user was already at bottom
     if (isScrolledToBottom) {
         setTimeout(() => window.scrollToChatBottom(threadId), 50);
     }
@@ -1489,6 +1486,35 @@ window.checkout = async function() {
         // Initial preview update
         updateCheckoutAddressPreview();
     }, 100);
+};
+
+// HTML escape function to prevent XSS
+window.escapeHtml = function(text) {
+    const map = {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;'
+    };
+    return text.replace(/[&<>"']/g, m => map[m]);
+};
+
+// Auto-resize textarea as user types
+window.autoResizeChatInput = function(textarea) {
+    textarea.style.height = 'auto';
+    textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
+};
+
+// Handle keyboard shortcuts in chat input
+window.handleChatInputKeydown = function(event, threadId, senderName, role) {
+    // Enter without Shift = Send message
+    if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault();
+        const sendBtn = document.getElementById(`chat-send-btn-${threadId}`);
+        if (sendBtn) sendBtn.click();
+    }
+    // Shift+Enter = New line (default behavior, no need to handle)
 };
 
 // Show user profile modal
