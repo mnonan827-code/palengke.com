@@ -1286,6 +1286,21 @@ window.loginUser = async function() {
         }
         const userCredential = await signInWithEmailAndPassword(auth, email, password);
         const user = userCredential.user;
+
+        if (!user.emailVerified) {
+    await signOut(auth); // sign out immediately
+    return showModal(
+        'Email Not Verified',
+        `
+        <div class="text-center">
+            <div class="text-5xl mb-3">📧</div>
+            <p>Your email address is not verified yet.</p>
+            <p>Please check your inbox and click the verification link before logging in.</p>
+        </div>
+        `,
+        `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`
+    );
+}
         const userData = await getFromFirebase(`users/${user.uid}`);
 
         if (!userData) {
@@ -3214,6 +3229,8 @@ window.verifyEmailCode = async function(email, password) {
     try {
         const userCredential = await signInWithEmailAndPassword(auth, email, password);
         const user = userCredential.user;
+
+        
         const userData = await getFromFirebase(`users/${user.uid}`);
 
         if (!userData) {
