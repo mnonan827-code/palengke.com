@@ -83,6 +83,46 @@ const dbRefs = {
     chats: ref(database, 'chats') // 🟢 ADD THIS LINE
 };
 
+// 🔥 TEST FUNCTION - Add this temporarily
+window.testFirebaseChat = async function() {
+    console.log('🧪 Testing Firebase Chat Connection...');
+    
+    try {
+        // Test write
+        const testRef = ref(database, 'chats/TEST-CHAT-123');
+        await set(testRef, {
+            test: 'Hello World',
+            timestamp: new Date().toISOString()
+        });
+        console.log('✅ Write test passed');
+        
+        // Test read
+        const snapshot = await get(testRef);
+        if (snapshot.exists()) {
+            console.log('✅ Read test passed:', snapshot.val());
+        } else {
+            console.log('❌ Read test failed: no data');
+        }
+        
+        // Test listener
+        console.log('🎧 Testing real-time listener...');
+        onValue(testRef, (snapshot) => {
+            if (snapshot.exists()) {
+                console.log('✅ Listener test passed:', snapshot.val());
+            }
+        });
+        
+        // Update to trigger listener
+        setTimeout(async () => {
+            await update(testRef, { test: 'Updated!' });
+            console.log('📝 Updated test data');
+        }, 1000);
+        
+    } catch (error) {
+        console.error('❌ Firebase test failed:', error);
+    }
+};
+
 // Debounce utility function
 window.debounce = function(func, wait) {
     let timeout;
