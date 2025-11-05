@@ -378,36 +378,81 @@ async function initializeFirebaseData() {
     console.log('🚀 Initializing Firebase data...');
     
     try {
-        const productsData = await getFromFirebase('products');
-        if (productsData) {
+        // ✅ STEP 1: Load Products
+        console.log('📦 Loading products...');
+        const productsSnapshot = await get(dbRefs.products);
+        if (productsSnapshot.exists()) {
+            const productsData = productsSnapshot.val();
             window.APP_STATE.products = Object.values(productsData);
+            console.log('✅ Products loaded:', window.APP_STATE.products.length);
         } else {
+            console.log('⚠️ No products found, seeding initial data...');
             await seedInitialData();
         }
 
-        const ordersData = await getFromFirebase('orders');
-        if (ordersData) {
+        // ✅ STEP 2: Load Orders
+        console.log('📋 Loading orders...');
+        const ordersSnapshot = await get(dbRefs.orders);
+        if (ordersSnapshot.exists()) {
+            const ordersData = ordersSnapshot.val();
             window.APP_STATE.orders = Object.values(ordersData);
+            console.log('✅ Orders loaded:', window.APP_STATE.orders.length);
+        } else {
+            window.APP_STATE.orders = [];
+            console.log('⚠️ No orders found');
         }
 
-        const deliveryFee = await getFromFirebase('settings/deliveryFee');
-        if (deliveryFee !== null) {
-            window.APP_STATE.deliveryFee = deliveryFee;
+        // ✅ STEP 3: Load Delivery Fee
+        console.log('💰 Loading delivery fee...');
+        const deliveryFeeSnapshot = await get(ref(database, 'settings/deliveryFee'));
+        if (deliveryFeeSnapshot.exists()) {
+            window.APP_STATE.deliveryFee = deliveryFeeSnapshot.val();
+            console.log('✅ Delivery fee loaded:', window.APP_STATE.deliveryFee);
+        } else {
+            window.APP_STATE.deliveryFee = 25.00;
+            await set(ref(database, 'settings/deliveryFee'), 25.00);
+            console.log('✅ Default delivery fee set');
         }
 
-        // 🔥 CHECK IF FUNCTIONS EXIST
-        console.log('🔍 Checking functions...');
-        console.log('updateCustomerChatMessages exists:', typeof window.updateCustomerChatMessages);
-        console.log('updateAdminChatMessages exists:', typeof window.updateAdminChatMessages);
-        console.log('renderAdminChatDropdown exists:', typeof window.renderAdminChatDropdown);
-        console.log('renderChatBubbleIndicator exists:', typeof window.renderChatBubbleIndicator);
+        // ✅ STEP 4: Load Chats
+        console.log('💬 Loading chats...');
+        const chatsSnapshot = await get(dbRefs.chats);
+        if (chatsSnapshot.exists()) {
+            const chatsData = chatsSnapshot.val();
+            window.APP_STATE.chats = Object.keys(chatsData).map(chatId => ({
+                id: chatId,
+                ...chatsData[chatId]
+            }));
+            console.log('✅ Chats loaded:', window.APP_STATE.chats.length);
+        } else {
+            window.APP_STATE.chats = [];
+            console.log('⚠️ No chats found');
+        }
 
+        // ✅ STEP 5: Setup Real-time Listeners
+        console.log('🎧 Setting up real-time listeners...');
         setupRealtimeListeners();
         
+        // ✅ STEP 6: Update Pre-order Statuses
         updatePreorderStatuses();
+        
+        // ✅ STEP 7: Render Main Content
         await renderMain();
+        
+        console.log('✅ Firebase initialization complete');
+        
+        // ✅ STEP 8: Verify sync
+        setTimeout(() => {
+            window.verifyDatabaseSync();
+        }, 2000);
+        
     } catch (error) {
         console.error('❌ Error initializing Firebase data:', error);
+        console.error('Error details:', {
+            code: error.code,
+            message: error.message,
+            stack: error.stack
+        });
     }
 }
 
@@ -774,6 +819,20 @@ window.renderChatBubbleIndicator = function() {
     }
 };
 
+// Manual sync function
+window.forceDatabaseSync = async function() {
+    console.log('🔄 Forcing database sync...');
+    
+    try {
+        await initializeFirebaseData();
+        showModal('Sync Complete', 'Database has been synchronized successfully.', 
+            `<button onclick="hideModal()" class="px-4 py-2 bg-lime-600 text-white rounded">OK</button>`);
+    } catch (error) {
+        console.error('❌ Sync failed:', error);
+        showModal('Sync Failed', 'Failed to synchronize database: ' + error.message,
+            `<button onclick="hideModal()" class="px-4 py-2 bg-red-600 text-white rounded">OK</button>`);
+    }
+};
 // Admin Chat Modal Functionality
 
 window.openAdminChatModal = function(threadId) {
@@ -990,73 +1049,92 @@ window.toggleAdminChatDropdown = function() {
 };
 
 function setupRealtimeListeners() {
-    // 🔥 CHATS LISTENER - FIXED FOR REAL-TIME UPDATES
-    console.log('🎧 Setting up chats listener...');
+    console.log('🎧 Setting up real-time listeners...');
 
+    // ✅ PRODUCTS LISTENER
+    onValue(dbRefs.products, (snapshot) => {
+        console.log('📦 Products listener triggered');
+        if (snapshot.exists()) {
+            const productsData = snapshot.val();
+            window.APP_STATE.products = Object.values(productsData);
+            console.log('✅ Products updated:', window.APP_STATE.products.length);
+            
+            // Re-render if on shop view
+            if (window.APP_STATE.view === 'shop') {
+                renderMain();
+            }
+        } else {
+            console.log('⚠️ No products in database');
+            window.APP_STATE.products = [];
+        }
+    }, (error) => {
+        console.error('❌ Products listener error:', error);
+    });
+
+    // ✅ ORDERS LISTENER
+    onValue(dbRefs.orders, (snapshot) => {
+        console.log('📋 Orders listener triggered');
+        if (snapshot.exists()) {
+            const ordersData = snapshot.val();
+            window.APP_STATE.orders = Object.values(ordersData);
+            console.log('✅ Orders updated:', window.APP_STATE.orders.length);
+            
+            // Re-render if on orders view or admin
+            if (window.APP_STATE.view === 'orders' || window.APP_STATE.view === 'admin') {
+                renderMain();
+            }
+        } else {
+            console.log('⚠️ No orders in database');
+            window.APP_STATE.orders = [];
+        }
+    }, (error) => {
+        console.error('❌ Orders listener error:', error);
+    });
+
+    // ✅ CHATS LISTENER
     onValue(dbRefs.chats, (snapshot) => {
-        console.log('💬 CHAT LISTENER TRIGGERED!');
-        console.log('📊 Snapshot exists:', snapshot.exists());
-        
+        console.log('💬 Chats listener triggered');
         if (snapshot.exists()) {
             const chatsData = snapshot.val();
-            console.log('📊 Raw chats data:', chatsData);
-            
             window.APP_STATE.chats = Object.keys(chatsData).map(chatId => ({
                 id: chatId,
                 ...chatsData[chatId]
             })).sort((a, b) => new Date(b.lastMessageAt) - new Date(a.lastMessageAt));
             
-            console.log('💬 Processed chats:', window.APP_STATE.chats);
-            console.log('📊 Total chats:', window.APP_STATE.chats.length);
+            console.log('✅ Chats updated:', window.APP_STATE.chats.length);
             
-            // ✅ Update admin chat dropdown
+            // Update UI elements
             if (typeof window.renderAdminChatDropdown === 'function') {
                 window.renderAdminChatDropdown();
             }
-            
-            // ✅ Update customer chat bubble indicator
             if (typeof window.renderChatBubbleIndicator === 'function') {
                 window.renderChatBubbleIndicator();
             }
             
-            // ✅ Update customer chat window if it's open
+            // Update chat windows if open
             const chatWindow = document.getElementById('customer-chat-window');
             if (chatWindow && !chatWindow.classList.contains('hidden')) {
-                console.log('🔄 Updating customer chat window');
                 if (typeof window.updateCustomerChatMessages === 'function') {
                     window.updateCustomerChatMessages();
                 }
             }
             
-            // ✅ Update admin chat modal if it's open
             const modalOverlay = document.getElementById('modal-overlay');
             if (modalOverlay && !modalOverlay.classList.contains('hidden')) {
                 const openChatId = modalOverlay.getAttribute('data-chat-id');
-                if (openChatId) {
-                    console.log('🔄 Updating admin chat modal:', openChatId);
-                    if (typeof window.updateAdminChatMessages === 'function') {
-                        window.updateAdminChatMessages(openChatId);
-                    }
+                if (openChatId && typeof window.updateAdminChatMessages === 'function') {
+                    window.updateAdminChatMessages(openChatId);
                 }
             }
         } else {
-            console.log('⚠️ No chats data exists');
+            console.log('⚠️ No chats in database');
             window.APP_STATE.chats = [];
-            
-            if (typeof window.renderAdminChatDropdown === 'function') {
-                window.renderAdminChatDropdown();
-            }
-            if (typeof window.renderChatBubbleIndicator === 'function') {
-                window.renderChatBubbleIndicator();
-            }
         }
     }, (error) => {
         console.error('❌ Chats listener error:', error);
-        console.error('❌ Error code:', error.code);
-        console.error('❌ Error message:', error.message);
     });
-    
-    console.log('✅ All listeners set up');
+
+    console.log('✅ All listeners set up successfully');
 }
 
 // ✅ NEW: Real-time update for customer chat messages
@@ -2270,6 +2348,46 @@ window.adminConfirmDelete = async function(id) {
     await saveToFirebase('deleteLogs', deleteLogs);
     await remove(ref(database, `products/${id}`));
     hideModal();
+};
+
+// Add this new function to verify database sync
+window.verifyDatabaseSync = async function() {
+    console.log('🔍 Starting Database Verification...');
+    
+    try {
+        // Test 1: Check products
+        const productsSnapshot = await get(ref(database, 'products'));
+        const productsData = productsSnapshot.exists() ? productsSnapshot.val() : null;
+        console.log('📦 Products in Firebase:', productsData);
+        console.log('📦 Products in APP_STATE:', window.APP_STATE.products);
+        
+        // Test 2: Check orders
+        const ordersSnapshot = await get(ref(database, 'orders'));
+        const ordersData = ordersSnapshot.exists() ? ordersSnapshot.val() : null;
+        console.log('📋 Orders in Firebase:', ordersData);
+        console.log('📋 Orders in APP_STATE:', window.APP_STATE.orders);
+        
+        // Test 3: Check users
+        const usersSnapshot = await get(ref(database, 'users'));
+        const usersData = usersSnapshot.exists() ? usersSnapshot.val() : null;
+        console.log('👥 Users in Firebase:', usersData);
+        
+        // Test 4: Check chats
+        const chatsSnapshot = await get(ref(database, 'chats'));
+        const chatsData = chatsSnapshot.exists() ? chatsSnapshot.val() : null;
+        console.log('💬 Chats in Firebase:', chatsData);
+        console.log('💬 Chats in APP_STATE:', window.APP_STATE.chats);
+        
+        console.log('✅ Database verification complete');
+        return {
+            productsMatch: JSON.stringify(productsData) === JSON.stringify(window.APP_STATE.products),
+            ordersMatch: JSON.stringify(ordersData) === JSON.stringify(window.APP_STATE.orders),
+            chatsMatch: JSON.stringify(chatsData) === JSON.stringify(window.APP_STATE.chats)
+        };
+    } catch (error) {
+        console.error('❌ Database verification failed:', error);
+        return null;
+    }
 };
 
 window.adminViewOrder = async function(id) {
