@@ -525,7 +525,11 @@ window.sendChatMessage = async function(threadId, sender, messageText, role) {
 window.sendAutoAdminResponse = async function(threadId) {
     console.log('🤖 Starting auto-response for thread:', threadId);
     
-    const autoMessage = `We'd love to help you with your concern. Could you please share the following details?
+    const autoMessage = `
+    
+Hi there! 👋
+    
+We'd love to help you with your concern. Could you please share the following details?
 
 📋 Please provide:
 
