@@ -824,108 +824,75 @@ window.toggleAdminChatDropdown = function() {
 };
 
 function setupRealtimeListeners() {
-    console.log('🎧 Setting up real-time listeners');
-    console.log('📊 Database refs:', dbRefs);
-    
-    // Products listener
-    onValue(dbRefs.products, (snapshot) => {
-        console.log('📦 Products updated');
-        if (snapshot.exists()) {
-            window.APP_STATE.products = Object.values(snapshot.val());
-            if (window.APP_STATE.view === 'shop' || (window.APP_STATE.currentUser && window.APP_STATE.currentUser.role === 'admin' && window.APP_STATE.view === 'admin')) {
-                renderMain();
-            }
-        }
-    }, (error) => {
-        console.error('❌ Products listener error:', error);
-    });
+    // 🔥 CHATS LISTENER - FIXED FOR REAL-TIME UPDATES
+console.log('🎧 Setting up chats listener...');
 
-    // Orders listener
-    onValue(dbRefs.orders, (snapshot) => {
-        console.log('📋 Orders updated');
-        if (snapshot.exists()) {
-            window.APP_STATE.orders = Object.values(snapshot.val());
-            if (window.APP_STATE.view === 'orders' || (window.APP_STATE.currentUser && window.APP_STATE.currentUser.role === 'admin' && window.APP_STATE.view === 'admin')) {
-                renderMain();
-            }
-        }
-    }, (error) => {
-        console.error('❌ Orders listener error:', error);
-    });
-
-    // 🔥 CHATS LISTENER - WITH ERROR HANDLING
-    console.log('🎧 Setting up chats listener...');
+onValue(dbRefs.chats, (snapshot) => {
+    console.log('💬 CHAT LISTENER TRIGGERED!');
+    console.log('📊 Snapshot exists:', snapshot.exists());
     
-    onValue(dbRefs.chats, (snapshot) => {
-        console.log('💬 CHAT LISTENER TRIGGERED!');
-        console.log('📊 Snapshot exists:', snapshot.exists());
+    if (snapshot.exists()) {
+        const chatsData = snapshot.val();
+        console.log('📊 Raw chats data:', chatsData);
         
-        if (snapshot.exists()) {
-            const chatsData = snapshot.val();
-            console.log('📊 Raw chats data:', chatsData);
-            
-            window.APP_STATE.chats = Object.keys(chatsData).map(chatId => ({
-                id: chatId,
-                ...chatsData[chatId]
-            })).sort((a, b) => new Date(b.lastMessageAt) - new Date(a.lastMessageAt));
-            
-            console.log('💬 Processed chats:', window.APP_STATE.chats);
-            console.log('📊 Total chats:', window.APP_STATE.chats.length);
-            
-            // Update admin UI
-            if (typeof renderAdminChatDropdown === 'function') {
-                renderAdminChatDropdown();
-            }
-            if (typeof renderChatBubbleIndicator === 'function') {
-                renderChatBubbleIndicator();
-            }
-            
-            // Update customer chat if open
-            const chatWindow = document.getElementById('customer-chat-window');
-            console.log('🪟 Customer chat window:', chatWindow);
-            console.log('🪟 Is hidden:', chatWindow?.classList.contains('hidden'));
-            
-            if (chatWindow && !chatWindow.classList.contains('hidden')) {
-                console.log('🔄 Updating customer chat window');
-                if (typeof updateCustomerChatMessages === 'function') {
-                    updateCustomerChatMessages();
-                } else {
-                    console.error('❌ updateCustomerChatMessages function not found');
-                }
-            }
-            
-            // Update admin chat modal if open
-            const modalOverlay = document.getElementById('modal-overlay');
-            console.log('🪟 Modal overlay:', modalOverlay);
-            
-            if (modalOverlay && !modalOverlay.classList.contains('hidden')) {
-                const openChatId = modalOverlay.getAttribute('data-chat-id');
-                console.log('🪟 Open chat ID:', openChatId);
-                
-                if (openChatId) {
-                    console.log('🔄 Updating admin chat modal:', openChatId);
-                    if (typeof updateAdminChatMessages === 'function') {
-                        updateAdminChatMessages(openChatId);
-                    } else {
-                        console.error('❌ updateAdminChatMessages function not found');
-                    }
-                }
-            }
-        } else {
-            console.log('⚠️ No chats data exists');
-            window.APP_STATE.chats = [];
-            if (typeof renderAdminChatDropdown === 'function') {
-                renderAdminChatDropdown();
-            }
-            if (typeof renderChatBubbleIndicator === 'function') {
-                renderChatBubbleIndicator();
+        window.APP_STATE.chats = Object.keys(chatsData).map(chatId => ({
+            id: chatId,
+            ...chatsData[chatId]
+        })).sort((a, b) => new Date(b.lastMessageAt) - new Date(a.lastMessageAt));
+        
+        console.log('💬 Processed chats:', window.APP_STATE.chats);
+        console.log('📊 Total chats:', window.APP_STATE.chats.length);
+        
+        // ✅ Update admin chat dropdown
+        if (typeof window.renderAdminChatDropdown === 'function') {
+            window.renderAdminChatDropdown();
+        }
+        
+        // ✅ Update customer chat bubble indicator
+        if (typeof window.renderChatBubbleIndicator === 'function') {
+            window.renderChatBubbleIndicator();
+        }
+        
+        // ✅ Update customer chat window if it's open
+        const chatWindow = document.getElementById('customer-chat-window');
+        if (chatWindow && !chatWindow.classList.contains('hidden')) {
+            console.log('🔄 Updating customer chat window');
+            if (typeof window.updateCustomerChatMessages === 'function') {
+                window.updateCustomerChatMessages();
+            } else {
+                console.error('❌ updateCustomerChatMessages function not found');
             }
         }
-    }, (error) => {
-        console.error('❌ Chats listener error:', error);
-        console.error('❌ Error code:', error.code);
-        console.error('❌ Error message:', error.message);
-    });
+        
+        // ✅ Update admin chat modal if it's open
+        const modalOverlay = document.getElementById('modal-overlay');
+        if (modalOverlay && !modalOverlay.classList.contains('hidden')) {
+            const openChatId = modalOverlay.getAttribute('data-chat-id');
+            if (openChatId) {
+                console.log('🔄 Updating admin chat modal:', openChatId);
+                if (typeof window.updateAdminChatMessages === 'function') {
+                    window.updateAdminChatMessages(openChatId);
+                } else {
+                    console.error('❌ updateAdminChatMessages function not found');
+                }
+            }
+        }
+    } else {
+        console.log('⚠️ No chats data exists');
+        window.APP_STATE.chats = [];
+        
+        if (typeof window.renderAdminChatDropdown === 'function') {
+            window.renderAdminChatDropdown();
+        }
+        if (typeof window.renderChatBubbleIndicator === 'function') {
+            window.renderChatBubbleIndicator();
+        }
+    }
+}, (error) => {
+    console.error('❌ Chats listener error:', error);
+    console.error('❌ Error code:', error.code);
+    console.error('❌ Error message:', error.message);
+});
     
     console.log('✅ All listeners set up');
 }
@@ -982,6 +949,97 @@ window.updateCustomerChatWindow = function() {
     // Mark as read if needed
     if (thread.unreadCustomer) {
         window.markChatAsRead(threadId, 'customer');
+    }
+};
+
+// ✅ NEW: Real-time update for customer chat messages
+window.updateCustomerChatMessages = function() {
+    const chatWindow = document.getElementById('customer-chat-window');
+    
+    // Only update if chat window is open
+    if (!chatWindow || chatWindow.classList.contains('hidden')) {
+        return;
+    }
+    
+    const threadId = window.getChatThreadId();
+    const thread = window.APP_STATE.chats.find(c => c.id === threadId || c.customerUid === threadId);
+    
+    if (!thread) return;
+    
+    const messagesContainer = document.getElementById(`chat-messages-${threadId}`);
+    if (!messagesContainer) return;
+    
+    // Convert messages from object to array
+    const messages = thread.messages ? Object.values(thread.messages) : [];
+    
+    // Determine sender info
+    const senderName = window.APP_STATE.currentUser ? window.APP_STATE.currentUser.name : 'Guest';
+    
+    // Store current scroll position
+    const isScrolledToBottom = messagesContainer.scrollHeight - messagesContainer.scrollTop <= messagesContainer.clientHeight + 50;
+    
+    // Render messages
+    const messagesHtml = messages.map(msg => {
+        const isCustomer = msg.role === 'customer';
+        const msgClass = isCustomer ? 'bg-lime-600 text-white self-end rounded-br-none' : 'bg-gray-200 text-gray-800 self-start rounded-tl-none';
+        const nameText = isCustomer ? senderName : 'Admin';
+        
+        return `
+            <div class="flex flex-col ${isCustomer ? 'items-end' : 'items-start'} mb-3">
+                <div class="text-xs text-gray-500 mb-1">${nameText} - ${new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                <div class="${msgClass} max-w-xs p-3 rounded-xl shadow-sm">
+                    ${msg.text}
+                </div>
+            </div>
+        `;
+    }).join('');
+    
+    messagesContainer.innerHTML = messagesHtml.length > 0 ? messagesHtml : '<div class="text-center text-gray-500 p-5">Start a conversation!</div>';
+    
+    // Auto-scroll to bottom if user was already at bottom
+    if (isScrolledToBottom) {
+        setTimeout(() => window.scrollToChatBottom(threadId), 50);
+    }
+    
+    // Mark as read if needed
+    if (thread.unreadCustomer) {
+        window.markChatAsRead(threadId, 'customer');
+    }
+};
+
+// ✅ NEW: Real-time update for admin chat messages
+window.updateAdminChatMessages = function(threadId) {
+    const messagesContainer = document.getElementById(`chat-messages-${threadId}`);
+    if (!messagesContainer) return;
+    
+    const thread = window.APP_STATE.chats.find(c => c.id === threadId);
+    if (!thread) return;
+    
+    const messages = thread.messages ? Object.values(thread.messages) : [];
+    
+    // Store current scroll position
+    const isScrolledToBottom = messagesContainer.scrollHeight - messagesContainer.scrollTop <= messagesContainer.clientHeight + 50;
+    
+    const messagesHtml = messages.map(msg => {
+        const isAdmin = msg.role === 'admin';
+        const msgClass = isAdmin ? 'bg-lime-600 text-white self-end rounded-br-none' : 'bg-gray-200 text-gray-800 self-start rounded-tl-none';
+        const nameText = isAdmin ? 'Admin' : thread.customerName;
+        
+        return `
+            <div class="flex flex-col ${isAdmin ? 'items-end' : 'items-start'} mb-3">
+                <div class="text-xs text-gray-500 mb-1">${nameText} - ${new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                <div class="${msgClass} max-w-xs p-3 rounded-xl shadow-sm">
+                    ${msg.text}
+                </div>
+            </div>
+        `;
+    }).join('');
+    
+    messagesContainer.innerHTML = messagesHtml.length > 0 ? messagesHtml : '<div class="text-center text-gray-500 p-5">Start a conversation!</div>';
+    
+    // Auto-scroll to bottom if user was already at bottom
+    if (isScrolledToBottom) {
+        setTimeout(() => window.scrollToChatBottom(threadId), 50);
     }
 };
 
