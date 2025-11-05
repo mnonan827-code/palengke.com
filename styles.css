@@ -2966,3 +2966,35 @@ body.user-menu-open {
 .chat-message-bubble {
     animation: slideInMessage 0.3s ease-out;
 }
+
+/* ==========================================
+   💬 Chat Message Animation
+   ========================================== */
+
+.chat-message-item {
+    animation: slideInMessage 0.3s ease-out;
+}
+
+@keyframes slideInMessage {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.chat-message-bubble {
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    line-height: 1.6 !important;
+}
+
+/* Better spacing for auto-response messages */
+.bg-blue-50.chat-message-bubble {
+    line-height: 1.7 !important;
+    padding: 1rem !important;
+}

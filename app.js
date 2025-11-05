@@ -436,6 +436,7 @@ window.getChatThreadId = function() {
 
 // Send a chat message (customer or admin)
 // Send a chat message (customer or admin)
+// Send a chat message (customer or admin)
 window.sendChatMessage = async function(threadId, sender, messageText, role) {
     if (!messageText.trim()) return;
 
@@ -476,17 +477,18 @@ window.sendChatMessage = async function(threadId, sender, messageText, role) {
                 customerName: window.APP_STATE.currentUser ? window.APP_STATE.currentUser.name : 'Guest',
                 customerUid: window.APP_STATE.currentUser ? window.APP_STATE.currentUser.uid : null,
                 status: 'open',
-                autoResponseSent: false, // ✅ Track if auto-response was sent
+                autoResponseSent: false,
                 ...updates
             };
             await update(chatRef, initialChatData);
             
             // ✅ NEW: Send auto-response if this is a customer's first message
             if (role === 'customer') {
-                console.log('🤖 Sending auto-response...');
+                console.log('🤖 Triggering auto-response...');
+                // Use a longer delay to ensure the chat is fully created
                 setTimeout(() => {
                     window.sendAutoAdminResponse(threadId);
-                }, 1000); // 1 second delay for better UX
+                }, 1500); // Increased from 1000ms to 1500ms
             }
         } else {
             console.log('📝 Appending to existing thread');
@@ -502,7 +504,7 @@ window.sendChatMessage = async function(threadId, sender, messageText, role) {
                 console.log('🤖 Sending auto-response to existing thread...');
                 setTimeout(() => {
                     window.sendAutoAdminResponse(threadId);
-                }, 1000);
+                }, 1500);
             }
         }
         
@@ -520,8 +522,12 @@ window.sendChatMessage = async function(threadId, sender, messageText, role) {
 
 // ✅ NEW: Send automatic admin welcome message
 // ✅ NEW: Send automatic admin welcome message
+// ✅ NEW: Send automatic admin welcome message
 window.sendAutoAdminResponse = async function(threadId) {
-    const autoMessage = `Hi there! 👋
+    console.log('🤖 Starting auto-response for thread:', threadId);
+    
+    const autoMessage = 
+`Hi there! 👋
 
 We'd love to help you with your concern. Could you please share the following details?
 
@@ -529,7 +535,7 @@ We'd love to help you with your concern. Could you please share the following de
 
 - Name:
 - Order ID:
-- Is the product on Pre-Order? (Yes or No)
+- Is the product on Pre-Order (Yes or No)?
 - Concern:
 
 Once we have your details, we'll check right away and get back to you as soon as possible.
@@ -549,10 +555,15 @@ Once we have your details, we'll check right away and get back to you as soon as
     };
     
     try {
+        console.log('💾 Saving auto-response to Firebase...');
         const chatRef = ref(database, `chats/${threadId}`);
         const messageListRef = ref(database, `chats/${threadId}/messages`);
-        await push(messageListRef, welcomeMessage);
         
+        // Push the auto-response message
+        await push(messageListRef, welcomeMessage);
+        console.log('✅ Auto-response message saved');
+        
+        // Update thread metadata
         const updates = {
             lastMessageAt: timestamp,
             lastMessageBy: 'Admin (Auto)',
@@ -563,17 +574,23 @@ Once we have your details, we'll check right away and get back to you as soon as
         };
         
         await update(chatRef, updates);
-        console.log('✅ Auto-response sent successfully');
+        console.log('✅ Thread metadata updated');
         
-        // ✅ NEW: Force UI update immediately
-        if (typeof window.updateCustomerChatMessages === 'function') {
+        // ✅ CRITICAL: Force immediate UI update for customer chat window
+        console.log('🔄 Forcing UI update...');
+        const chatWindow = document.getElementById('customer-chat-window');
+        if (chatWindow && !chatWindow.classList.contains('hidden')) {
+            // Immediate update
+            window.renderChatWindowUI();
+            // Scroll to bottom after a short delay
             setTimeout(() => {
-                window.updateCustomerChatMessages();
-            }, 500);
+                window.scrollToChatBottom(threadId);
+            }, 300);
         }
         
     } catch (error) {
         console.error('❌ Error sending auto-response:', error);
+        console.error('Error details:', error.message);
     }
 };
 
@@ -662,10 +679,17 @@ window.renderCustomerChatWindow = function() {
 
 // Central render function for customer chat window (called on toggle)
 window.renderChatWindowUI = function() {
+    console.log('🎨 Rendering chat window UI...');
     const chatWindowContent = document.getElementById('customer-chat-window-content');
     if (chatWindowContent) {
         chatWindowContent.innerHTML = window.renderCustomerChatWindow();
         lucide.createIcons();
+        
+        // Force scroll to bottom after render
+        const threadId = window.getChatThreadId();
+        setTimeout(() => {
+            window.scrollToChatBottom(threadId);
+        }, 100);
     }
 };
 
@@ -998,24 +1022,36 @@ function setupRealtimeListeners() {
 }
 
 // ✅ NEW: Real-time update for customer chat messages
+// ✅ NEW: Real-time update for customer chat messages
 window.updateCustomerChatMessages = function() {
+    console.log('🔄 Updating customer chat messages...');
     const chatWindow = document.getElementById('customer-chat-window');
     
     // Only update if chat window is open
     if (!chatWindow || chatWindow.classList.contains('hidden')) {
+        console.log('⏭️ Chat window not open, skipping update');
         return;
     }
     
     const threadId = window.getChatThreadId();
     const thread = window.APP_STATE.chats.find(c => c.id === threadId || c.customerUid === threadId);
     
-    if (!thread) return;
+    if (!thread) {
+        console.log('⚠️ No thread found for:', threadId);
+        return;
+    }
+    
+    console.log('📊 Thread data:', thread);
     
     const messagesContainer = document.getElementById(`chat-messages-${threadId}`);
-    if (!messagesContainer) return;
+    if (!messagesContainer) {
+        console.log('⚠️ Messages container not found');
+        return;
+    }
     
     // Convert messages from object to array
     const messages = thread.messages ? Object.values(thread.messages) : [];
+    console.log('📬 Total messages:', messages.length);
     
     // Determine sender info
     const senderName = window.APP_STATE.currentUser ? window.APP_STATE.currentUser.name : 'Guest';
@@ -1026,14 +1062,28 @@ window.updateCustomerChatMessages = function() {
     // Render messages
     const messagesHtml = messages.map(msg => {
         const isCustomer = msg.role === 'customer';
-        const msgClass = isCustomer ? 'bg-lime-600 text-white self-end rounded-br-none' : 'bg-gray-200 text-gray-800 self-start rounded-tl-none';
-        const nameText = isCustomer ? senderName : 'Admin';
+        const isAutoResponse = msg.isAutoResponse || false;
+        
+        const msgClass = isCustomer 
+            ? 'bg-lime-600 text-white self-end rounded-br-none' 
+            : (isAutoResponse 
+                ? 'bg-blue-50 text-gray-800 self-start rounded-tl-none border border-blue-200' 
+                : 'bg-gray-200 text-gray-800 self-start rounded-tl-none');
+        
+        const nameText = isCustomer ? senderName : (isAutoResponse ? 'Admin (Auto) 🤖' : 'Admin');
+        
+        // Format message text with proper line breaks
+        const formattedText = msg.text
+            .replace(/\n\n/g, '<br><br>')
+            .replace(/\n/g, '<br>');
         
         return `
-            <div class="flex flex-col ${isCustomer ? 'items-end' : 'items-start'} mb-3">
-                <div class="text-xs text-gray-500 mb-1">${nameText} - ${new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
-                <div class="${msgClass} max-w-xs p-3 rounded-xl shadow-sm">
-                    ${msg.text}
+            <div class="flex flex-col ${isCustomer ? 'items-end' : 'items-start'} mb-3 chat-message-item">
+                <div class="text-xs ${isAutoResponse ? 'text-blue-600 font-semibold' : 'text-gray-500'} mb-1">
+                    ${nameText} - ${new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </div>
+                <div class="${msgClass} max-w-xs p-3 rounded-xl shadow-sm chat-message-bubble">
+                    ${formattedText}
                 </div>
             </div>
         `;
@@ -1050,6 +1100,8 @@ window.updateCustomerChatMessages = function() {
     if (thread.unreadCustomer) {
         window.markChatAsRead(threadId, 'customer');
     }
+    
+    console.log('✅ Chat messages updated');
 };
 
 // ✅ NEW: Real-time update for admin chat messages
