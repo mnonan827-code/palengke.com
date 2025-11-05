@@ -476,9 +476,18 @@ window.sendChatMessage = async function(threadId, sender, messageText, role) {
                 customerName: window.APP_STATE.currentUser ? window.APP_STATE.currentUser.name : 'Guest',
                 customerUid: window.APP_STATE.currentUser ? window.APP_STATE.currentUser.uid : null,
                 status: 'open',
+                autoResponseSent: false, // ✅ Track if auto-response was sent
                 ...updates
             };
             await update(chatRef, initialChatData);
+            
+            // ✅ NEW: Send auto-response if this is a customer's first message
+            if (role === 'customer') {
+                console.log('🤖 Sending auto-response...');
+                setTimeout(() => {
+                    window.sendAutoAdminResponse(threadId);
+                }, 1000); // 1 second delay for better UX
+            }
         } else {
             console.log('📝 Appending to existing thread');
             // Append new message
@@ -487,6 +496,14 @@ window.sendChatMessage = async function(threadId, sender, messageText, role) {
             
             // Update thread metadata
             await update(chatRef, updates);
+            
+            // ✅ NEW: Send auto-response if this is the first customer message AND auto-response hasn't been sent yet
+            if (role === 'customer' && !chatData.autoResponseSent) {
+                console.log('🤖 Sending auto-response to existing thread...');
+                setTimeout(() => {
+                    window.sendAutoAdminResponse(threadId);
+                }, 1000);
+            }
         }
         
         console.log('✅ Message sent successfully');
@@ -498,6 +515,59 @@ window.sendChatMessage = async function(threadId, sender, messageText, role) {
     } catch (error) {
         console.error('❌ Error sending chat message:', error);
         showModal('Error', 'Failed to send message. Please try again.', `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
+    }
+};
+
+// ✅ NEW: Send automatic admin welcome message
+window.sendAutoAdminResponse = async function(threadId) {
+    const autoMessage = 
+`Hi there! 👋 
+We'd love to help you with your concern. Could you please share the following details?
+
+📝 Please provide: 
+- Name: 
+- Order ID: 
+- Is the product on Pre-Order? (Yes or No) 
+- Concern:
+
+Once we have your details, we'll check right away and get back to you as soon as possible.
+
+💌 You can also reach us at lgucainta@gmail.com.
+
+— Admin Team, LGU Cainta`;
+
+    const timestamp = new Date().toISOString();
+    const welcomeMessage = {
+        id: uid(),
+        sender: 'Admin (Auto)',
+        text: autoMessage,
+        role: 'admin',
+        timestamp: timestamp,
+        isAutoResponse: true
+    };
+    
+    try {
+        const chatRef = ref(database, `chats/${threadId}`);
+        
+        // Push the auto-response message
+        const messageListRef = ref(database, `chats/${threadId}/messages`);
+        await push(messageListRef, welcomeMessage);
+        
+        // Update thread metadata
+        const updates = {
+            lastMessageAt: timestamp,
+            lastMessageBy: 'Admin (Auto)',
+            lastMessageText: 'Auto-welcome message sent',
+            unreadCustomer: true,
+            unreadAdmin: false,
+            autoResponseSent: true
+        };
+        
+        await update(chatRef, updates);
+        
+        console.log('✅ Auto-response sent successfully');
+    } catch (error) {
+        console.error('❌ Error sending auto-response:', error);
     }
 };
 
@@ -534,13 +604,22 @@ window.renderCustomerChatWindow = function() {
 
     const messagesHtml = messages.map(msg => {
         const isCustomer = msg.role === 'customer';
-        const msgClass = isCustomer ? 'bg-lime-600 text-white self-end rounded-br-none' : 'bg-gray-200 text-gray-800 self-start rounded-tl-none';
-        const nameText = isCustomer ? senderName : 'Admin';
+        const isAutoResponse = msg.isAutoResponse || false; // ✅ Check if it's an auto-response
+        
+        const msgClass = isCustomer 
+            ? 'bg-lime-600 text-white self-end rounded-br-none' 
+            : (isAutoResponse 
+                ? 'bg-blue-50 text-gray-800 self-start rounded-tl-none border border-blue-200' 
+                : 'bg-gray-200 text-gray-800 self-start rounded-tl-none');
+        
+        const nameText = isCustomer ? senderName : (isAutoResponse ? 'Admin (Auto) 🤖' : 'Admin');
         
         return `
             <div class="flex flex-col ${isCustomer ? 'items-end' : 'items-start'} mb-3">
-                <div class="text-xs text-gray-500 mb-1">${nameText} - ${new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
-                <div class="${msgClass} max-w-xs p-3 rounded-xl shadow-sm">
+                <div class="text-xs ${isAutoResponse ? 'text-blue-600 font-semibold' : 'text-gray-500'} mb-1">
+                    ${nameText} - ${new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </div>
+                <div class="${msgClass} max-w-xs p-3 rounded-xl shadow-sm whitespace-pre-wrap">
                     ${msg.text}
                 </div>
             </div>
@@ -633,13 +712,22 @@ window.openAdminChatModal = function(threadId) {
     
     const messagesHtml = messages.map(msg => {
         const isAdmin = msg.role === 'admin';
-        const msgClass = isAdmin ? 'bg-lime-600 text-white self-end rounded-br-none' : 'bg-gray-200 text-gray-800 self-start rounded-tl-none';
-        const nameText = isAdmin ? 'Admin' : thread.customerName;
+        const isAutoResponse = msg.isAutoResponse || false; // ✅ Check if it's an auto-response
+        
+        const msgClass = isAdmin 
+            ? (isAutoResponse 
+                ? 'bg-blue-50 text-gray-800 self-end rounded-br-none border border-blue-200' 
+                : 'bg-lime-600 text-white self-end rounded-br-none')
+            : 'bg-gray-200 text-gray-800 self-start rounded-tl-none';
+        
+        const nameText = isAdmin ? (isAutoResponse ? 'Admin (Auto) 🤖' : 'Admin') : thread.customerName;
         
         return `
             <div class="flex flex-col ${isAdmin ? 'items-end' : 'items-start'} mb-3">
-                <div class="text-xs text-gray-500 mb-1">${nameText} - ${new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
-                <div class="${msgClass} max-w-xs p-3 rounded-xl shadow-sm">
+                <div class="text-xs ${isAutoResponse ? 'text-blue-600 font-semibold' : 'text-gray-500'} mb-1">
+                    ${nameText} - ${new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </div>
+                <div class="${msgClass} max-w-xs p-3 rounded-xl shadow-sm whitespace-pre-wrap">
                     ${msg.text}
                 </div>
             </div>
@@ -665,7 +753,7 @@ window.openAdminChatModal = function(threadId) {
     
     showModal(modalTitle, modalContent, `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">Close</button>`, true); 
 
-    // 🔥 Store chat ID in modal for real-time updates
+    // Store chat ID in modal for real-time updates
     const modalOverlay = document.getElementById('modal-overlay');
     modalOverlay.setAttribute('data-chat-id', thread.id);
 
@@ -729,25 +817,26 @@ window.setupAdminChatListener = function(threadId) {
 // In app.js (Add this function)
 
 // Function to control which chat interface is visible based on user role
+// Function to control which chat interface is visible based on user role
 window.updateChatVisibility = function() {
     // Check if the current user is logged in AND has the 'admin' role
     const isAdmin = window.APP_STATE.currentUser && window.APP_STATE.currentUser.role === 'admin';
-    // If not logged in, or logged in as a non-admin, they are a 'customer' view
-    const isCustomerView = !isAdmin; 
+    // ✅ Customer must be logged in (not admin, but logged in)
+    const isCustomerLoggedIn = window.APP_STATE.currentUser && window.APP_STATE.currentUser.role !== 'admin';
     
     // Get the chat containers
     const customerChatContainer = document.getElementById('customer-chat-container');
     const adminChatArea = document.getElementById('admin-chat-area');
     
-    // 1. Customer Chat Bubble (Visible to ALL non-admins/guests)
+    // 1. Customer Chat Bubble (Visible ONLY to logged-in customers)
     if (customerChatContainer) {
-        if (isCustomerView) {
+        if (isCustomerLoggedIn) {
             customerChatContainer.classList.remove('hidden');
             // Check for unread messages once chat is visible
             window.renderChatBubbleIndicator(); 
         } else {
             customerChatContainer.classList.add('hidden');
-            // Ensure the window is closed if an admin is viewing
+            // Ensure the window is closed if not a logged-in customer
             const chatWindow = document.getElementById('customer-chat-window');
             if(chatWindow && !chatWindow.classList.contains('hidden')) {
                 window.toggleCustomerChat(false); // Force close

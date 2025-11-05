@@ -2816,3 +2816,42 @@ body.user-menu-open {
     /* Ensure the modal content is full height */
     max-height: calc(100vh - 120px); 
 }
+
+/* ==========================================
+   🤖 Auto-Response Message Styling
+   ========================================== */
+
+/* Auto-response message bubble */
+.bg-blue-50 {
+    background-color: #eff6ff !important;
+}
+
+.border-blue-200 {
+    border-color: #bfdbfe !important;
+}
+
+.text-blue-600 {
+    color: #2563eb !important;
+}
+
+/* Preserve line breaks in auto-response */
+.whitespace-pre-wrap {
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+
+/* Auto-response animation */
+@keyframes slideInLeft {
+    from {
+        opacity: 0;
+        transform: translateX(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+.bg-blue-50.border-blue-200 {
+    animation: slideInLeft 0.4s ease-out;
+}
