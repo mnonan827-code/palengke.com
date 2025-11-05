@@ -1251,99 +1251,102 @@ window.loginUser = async function() {
     }
 
     try {
-        // ✅ Check if user has temp password
-        const usersData = await getFromFirebase('users');
-        const userEntry = usersData ? Object.entries(usersData).find(([uid, data]) => data.email === email) : null;
-        
-        if (userEntry) {
-            const [userId, userData] = userEntry;
-            
-            // ✅ If temp password exists, use it instead
-            if (userData.tempNewPassword) {
-                const actualPassword = userData.tempNewPassword;
-                
-                try {
-                    const userCredential = await signInWithEmailAndPassword(auth, email, actualPassword);
-                    
-                    // ✅ Clear temp password after successful login
-                    await updateFirebase(`users/${userId}`, {
-                        tempNewPassword: null
-                    });
-                    
-                    // ✅ Show success modal and continue to main
-                    showModal('Password Updated!', `
-                        <div class="text-center">
-                            <div class="text-5xl mb-3">✅</div>
-                            <p>Your password has been successfully reset!</p>
-                        </div>
-                    `, `<button onclick="hideModal(); renderMain()" class="px-4 py-2 bg-lime-600 text-white rounded">Continue</button>`);
-                    
-                    return;
-                } catch (error) {
-                    console.log('Temp password failed, trying regular login');
-                }
+        // ✅ Try to check if the user has a temporary password
+        let userId = null;
+        let userData = null;
+
+        try {
+            const usersData = await getFromFirebase('users');
+            if (usersData) {
+                const entry = Object.entries(usersData).find(
+                    ([uid, data]) => data.email?.toLowerCase() === email
+                );
+                if (entry) [userId, userData] = entry;
+            }
+        } catch (e) {
+            console.warn('Could not fetch user list:', e);
+        }
+
+        // ✅ If a temp password exists, use it
+        if (userData && userData.tempNewPassword) {
+            try {
+                const userCredential = await signInWithEmailAndPassword(auth, email, userData.tempNewPassword);
+
+                // clear temp password after successful login
+                await updateFirebase(`users/${userId}`, { tempNewPassword: null });
+
+                showModal(
+                    'Password Updated!',
+                    `
+                    <div class="text-center">
+                        <div class="text-5xl mb-3">✅</div>
+                        <p>Your password has been successfully reset!</p>
+                    </div>
+                    `,
+                    `<button onclick="hideModal(); renderMain()" class="px-4 py-2 bg-lime-600 text-white rounded">Continue</button>`
+                );
+                return;
+            } catch (err) {
+                console.log('Temp password failed, falling back to normal login');
             }
         }
+
+        // ✅ Regular login
         const userCredential = await signInWithEmailAndPassword(auth, email, password);
         const user = userCredential.user;
 
+        // ✅ Check Firebase Auth verification (NOT from DB)
         if (!user.emailVerified) {
-    await signOut(auth); // sign out immediately
-    return showModal(
-        'Email Not Verified',
-        `
-        <div class="text-center">
-            <div class="text-5xl mb-3">📧</div>
-            <p>Your email address is not verified yet.</p>
-            <p>Please check your inbox and click the verification link before logging in.</p>
-        </div>
-        `,
-        `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`
-    );
-}
-        const userData = await getFromFirebase(`users/${user.uid}`);
-
-        if (!userData) {
-            await signOut(auth);
-            return showModal('Error', 'User data not found.', `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
-        }
-
-        if (!userData.emailVerified) {
             await signOut(auth);
             return showModal(
                 'Email Not Verified',
                 `
-                <div class="space-y-3">
-                    <p class="text-gray-700">Please verify your email before logging in.</p>
-                    <p class="text-sm text-gray-600">Check your inbox for the verification code.</p>
+                <div class="text-center">
+                    <div class="text-5xl mb-3">📧</div>
+                    <p>Your email address is not verified yet.</p>
+                    <p>Please check your inbox and click the verification link before logging in.</p>
                 </div>
                 `,
-                `<button onclick="hideModal(); showVerificationModal('${email}', '${password}')" class="px-4 py-2 bg-lime-600 text-white rounded">Enter Verification Code</button>
-                 <button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">Cancel</button>`
+                `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`
             );
         }
 
+        // ✅ Get user details from Realtime DB (optional)
+        const userDataFromDB = await getFromFirebase(`users/${user.uid}`);
+        if (!userDataFromDB) {
+            // Auto-create the user entry if missing (to prevent “User data not found”)
+            await updateFirebase(`users/${user.uid}`, {
+                email: user.email,
+                name: user.displayName || "User",
+                role: "customer",
+                createdAt: Date.now(),
+            });
+        }
+
+        // ✅ Update local app state
         window.APP_STATE.currentUser = {
             uid: user.uid,
             email: user.email,
-            name: userData.name,
-            role: userData.role,
+            name: userDataFromDB?.name || user.displayName || "User",
+            role: userDataFromDB?.role || "customer",
         };
 
+        // ✅ Load cart if exists
         const userCart = await getFromFirebase(`carts/${user.uid}`);
         if (userCart) {
             window.APP_STATE.cart = Object.values(userCart);
         }
 
+        // ✅ Done — update UI
         hideModal();
-updateAuthArea();
-renderMain();
+        updateAuthArea();
+        renderMain();
 
-showModal(
-    'Logged in',
-    `Welcome back, <b>${window.APP_STATE.currentUser.name}</b>!`,
-    `<button onclick="hideModal(); renderMain()" class="px-4 py-2 bg-lime-600 text-white rounded">OK</button>`
-);
+        showModal(
+            'Logged in',
+            `Welcome back, <b>${window.APP_STATE.currentUser.name}</b>!`,
+            `<button onclick="hideModal(); renderMain()" class="px-4 py-2 bg-lime-600 text-white rounded">OK</button>`
+        );
 
     } catch (error) {
         console.error('Login error:', error);
@@ -1369,11 +1372,30 @@ showModal(
     }
 };
 
+// ✅ Optional resend verification helper
 window.resendVerificationCode = async function(email, password) {
-    // ...
-    await sendVerificationCodeEmail(email, userData.name, newVerificationCode);  // ← Uses EmailJS
-    // ...
+    try {
+        const usersData = await getFromFirebase('users');
+        const entry = usersData ? Object.entries(usersData).find(([uid, data]) => data.email?.toLowerCase() === email) : null;
+        if (!entry) return alert('User not found.');
+
+        const [userId, userData] = entry;
+        const newVerificationCode = Math.floor(100000 + Math.random() * 900000); // 6-digit code
+
+        await updateFirebase(`users/${userId}`, { verificationCode: newVerificationCode });
+
+        await sendVerificationCodeEmail(email, userData.name, newVerificationCode);
+
+        showModal(
+            'Verification Email Sent',
+            'A new verification code has been sent to your email.',
+            `<button onclick="hideModal()" class="px-4 py-2 bg-lime-600 text-white rounded">OK</button>`
+        );
+    } catch (e) {
+        console.error('Resend verification failed:', e);
+    }
 };
+
 
 
 // ==========================================
