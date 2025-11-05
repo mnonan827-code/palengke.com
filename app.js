@@ -630,10 +630,10 @@ const messagesHtml = messages.map(msg => {
     const nameText = isCustomer ? senderName : (isAutoResponse ? 'Admin (Auto) 🤖' : 'Admin');
     
     // ✅ FIXED: Remove extra spaces and preserve line breaks properly
-    const formattedText = escapeHtml(msg.text).replace(/\n/g, '<br>')
-        .split('\n')
-        .map(line => line.replace(/^(\s+)/, match => '&nbsp;'.repeat(match.length)))
-        .join('<br>');
+    const formattedText = escapeHtml(msg.text)
+    .split('\n')
+    .map(line => line.replace(/^ +/gm, match => '&nbsp;'.repeat(match.length)))
+    .join('<br>');
     
     return `
         <div class="flex flex-col ${isCustomer ? 'items-end' : 'items-start'} mb-3">
@@ -756,10 +756,10 @@ window.openAdminChatModal = function(threadId) {
     const nameText = isAdmin ? (isAutoResponse ? 'Admin (Auto) 🤖' : 'Admin') : thread.customerName;
     
     // ✅ FIXED: Preserve formatting with proper line breaks
-    const formattedText = escapeHtml(msg.text).replace(/\n/g, '<br>')
-        .split('\n')
-        .map(line => line.replace(/^(\s+)/, match => '&nbsp;'.repeat(match.length)))
-        .join('<br>');
+    const formattedText = escapeHtml(msg.text)
+    .split('\n')
+    .map(line => line.replace(/^ +/gm, match => '&nbsp;'.repeat(match.length)))
+    .join('<br>');
     
     return `
         <div class="flex flex-col ${isAdmin ? 'items-end' : 'items-start'} mb-3">
@@ -1060,11 +1060,10 @@ window.updateCustomerChatMessages = function() {
     
     const nameText = isCustomer ? senderName : (isAutoResponse ? 'Admin (Auto) 🤖' : 'Admin');
     
-    // ✅ FIXED: Preserve formatting with indentation
-    const formattedText = escapeHtml(msg.text).replace(/\n/g, '<br>')
-        .split('\n')
-        .map(line => line.replace(/^(\s+)/, match => '&nbsp;'.repeat(match.length)))
-        .join('<br>');
+    const formattedText = escapeHtml(msg.text)
+    .split('\n')
+    .map(line => line.replace(/^ +/gm, match => '&nbsp;'.repeat(match.length)))
+    .join('<br>');
     
     return `
         <div class="flex flex-col ${isCustomer ? 'items-end' : 'items-start'} mb-3 chat-message-item">
@@ -1113,11 +1112,10 @@ window.updateAdminChatMessages = function(threadId) {
     
     const nameText = isAdmin ? (isAutoResponse ? 'Admin (Auto) 🤖' : 'Admin') : thread.customerName;
     
-    // ✅ FIXED: Preserve formatting with indentation
-    const formattedText = escapeHtml(msg.text).replace(/\n/g, '<br>')
-        .split('\n')
-        .map(line => line.replace(/^(\s+)/, match => '&nbsp;'.repeat(match.length)))
-        .join('<br>');
+    const formattedText = escapeHtml(msg.text)
+    .split('\n')
+    .map(line => line.replace(/^ +/gm, match => '&nbsp;'.repeat(match.length)))
+    .join('<br>');
     
     return `
         <div class="flex flex-col ${isAdmin ? 'items-end' : 'items-start'} mb-3">
