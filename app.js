@@ -445,7 +445,7 @@ window.sendChatMessage = async function(threadId, sender, messageText, role) {
 
     const timestamp = new Date().toISOString();
     
-    // ✅ NEW: Preserve line breaks by trimming only the start/end, not replacing internal whitespace
+    // ✅ NEW: Preserve line breaks by trimming only start/end
     const processedText = messageText.trim();
     
     const newMessage = {
@@ -455,6 +455,8 @@ window.sendChatMessage = async function(threadId, sender, messageText, role) {
         role: role,
         timestamp: timestamp
     };
+    
+    // ... rest of the function stays the same
     
     try {
         const chatRef = ref(database, `chats/${threadId}`);
@@ -523,8 +525,7 @@ window.sendChatMessage = async function(threadId, sender, messageText, role) {
 window.sendAutoAdminResponse = async function(threadId) {
     console.log('🤖 Starting auto-response for thread:', threadId);
     
-    const autoMessage = 
-`Hi there! 👋
+    const autoMessage = `Hi there! 👋
 
 We'd love to help you with your concern. Could you please share the following details?
 
@@ -616,35 +617,35 @@ window.renderCustomerChatWindow = function() {
         window.markChatAsRead(threadId, 'customer');
     }
 
-    const messagesHtml = messages.map(msg => {
-        const isCustomer = msg.role === 'customer';
-        const isAutoResponse = msg.isAutoResponse || false;
-        
-        const msgClass = isCustomer 
-            ? 'bg-lime-600 text-white self-end rounded-br-none' 
-            : (isAutoResponse 
-                ? 'bg-blue-50 text-gray-800 self-start rounded-tl-none border border-blue-200' 
-                : 'bg-gray-200 text-gray-800 self-start rounded-tl-none');
-        
-        const nameText = isCustomer ? senderName : (isAutoResponse ? 'Admin (Auto) 🤖' : 'Admin');
-        
-        // ✅ FIXED: Remove extra spaces and preserve line breaks properly
-        const formattedText = escapeHtml(msg.text.trim())
-    .split('\n')
-    .map(line => line.replace(/^(\s+)/, match => '&nbsp;'.repeat(match.length)))
-    .join('<br>');
-        
-        return `
-            <div class="flex flex-col ${isCustomer ? 'items-end' : 'items-start'} mb-3">
-                <div class="text-xs ${isAutoResponse ? 'text-blue-600 font-semibold' : 'text-gray-500'} mb-1">
-                    ${nameText} - ${new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                </div>
-                <div class="${msgClass} max-w-xs p-3 rounded-xl shadow-sm chat-message-bubble">
-                    ${formattedText}
-                </div>
+   const messagesHtml = messages.map(msg => {
+    const isCustomer = msg.role === 'customer';
+    const isAutoResponse = msg.isAutoResponse || false;
+    
+    const msgClass = isCustomer 
+        ? 'bg-lime-600 text-white self-end rounded-br-none' 
+        : (isAutoResponse 
+            ? 'bg-blue-50 text-gray-800 self-start rounded-tl-none border border-blue-200' 
+            : 'bg-gray-200 text-gray-800 self-start rounded-tl-none');
+    
+    const nameText = isCustomer ? senderName : (isAutoResponse ? 'Admin (Auto) 🤖' : 'Admin');
+    
+    // ✅ FIXED: Preserve line breaks and indentation
+    const formattedText = escapeHtml(msg.text.trim())
+        .split('\n')
+        .map(line => line.replace(/^(\s+)/, match => '&nbsp;'.repeat(match.length)))
+        .join('<br>');
+    
+    return `
+        <div class="flex flex-col ${isCustomer ? 'items-end' : 'items-start'} mb-3">
+            <div class="text-xs ${isAutoResponse ? 'text-blue-600 font-semibold' : 'text-gray-500'} mb-1">
+                ${nameText} - ${new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </div>
-        `;
-    }).join('');
+            <div class="${msgClass} max-w-xs p-3 rounded-xl shadow-sm chat-message-bubble">
+                ${formattedText}
+            </div>
+        </div>
+    `;
+}).join('');
 
     return `
         <div id="chat-window-content-${threadId}" class="flex flex-col h-full">
@@ -743,34 +744,34 @@ window.openAdminChatModal = function(threadId) {
     const messages = thread.messages ? Object.values(thread.messages) : [];
     
     const messagesHtml = messages.map(msg => {
-        const isAdmin = msg.role === 'admin';
-        const isAutoResponse = msg.isAutoResponse || false;
-        
-        const msgClass = isAdmin 
-            ? (isAutoResponse 
-                ? 'bg-blue-50 text-gray-800 self-end rounded-br-none border border-blue-200' 
-                : 'bg-lime-600 text-white self-end rounded-br-none')
-            : 'bg-gray-200 text-gray-800 self-start rounded-tl-none';
-        
-        const nameText = isAdmin ? (isAutoResponse ? 'Admin (Auto) 🤖' : 'Admin') : thread.customerName;
-        
-        // ✅ PRESERVE formatting: Don't trim individual lines
-const formattedText = escapeHtml(msg.text.trim())
-    .split('\n')
-    .map(line => line.replace(/^(\s+)/, match => '&nbsp;'.repeat(match.length)))
-    .join('<br>');
-        
-        return `
-            <div class="flex flex-col ${isAdmin ? 'items-end' : 'items-start'} mb-3">
-                <div class="text-xs ${isAutoResponse ? 'text-blue-600 font-semibold' : 'text-gray-500'} mb-1">
-                    ${nameText} - ${new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                </div>
-                <div class="${msgClass} max-w-xs p-3 rounded-xl shadow-sm chat-message-bubble">
-                    ${formattedText}
-                </div>
+    const isAdmin = msg.role === 'admin';
+    const isAutoResponse = msg.isAutoResponse || false;
+    
+    const msgClass = isAdmin 
+        ? (isAutoResponse 
+            ? 'bg-blue-50 text-gray-800 self-end rounded-br-none border border-blue-200' 
+            : 'bg-lime-600 text-white self-end rounded-br-none')
+        : 'bg-gray-200 text-gray-800 self-start rounded-tl-none';
+    
+    const nameText = isAdmin ? (isAutoResponse ? 'Admin (Auto) 🤖' : 'Admin') : thread.customerName;
+    
+    // ✅ FIXED: Preserve formatting with proper line breaks
+    const formattedText = escapeHtml(msg.text.trim())
+        .split('\n')
+        .map(line => line.replace(/^(\s+)/, match => '&nbsp;'.repeat(match.length)))
+        .join('<br>');
+    
+    return `
+        <div class="flex flex-col ${isAdmin ? 'items-end' : 'items-start'} mb-3">
+            <div class="text-xs ${isAutoResponse ? 'text-blue-600 font-semibold' : 'text-gray-500'} mb-1">
+                ${nameText} - ${new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </div>
-        `;
-    }).join('');
+            <div class="${msgClass} max-w-xs p-3 rounded-xl shadow-sm chat-message-bubble">
+                ${formattedText}
+            </div>
+        </div>
+    `;
+}).join('');
 
     const modalTitle = `Chat with ${thread.customerName || thread.id}`;
     const modalContent = `
@@ -1048,34 +1049,34 @@ window.updateCustomerChatMessages = function() {
     const isScrolledToBottom = messagesContainer.scrollHeight - messagesContainer.scrollTop <= messagesContainer.clientHeight + 50;
     
     const messagesHtml = messages.map(msg => {
-        const isCustomer = msg.role === 'customer';
-        const isAutoResponse = msg.isAutoResponse || false;
-        
-        const msgClass = isCustomer 
-            ? 'bg-lime-600 text-white self-end rounded-br-none' 
-            : (isAutoResponse 
-                ? 'bg-blue-50 text-gray-800 self-start rounded-tl-none border border-blue-200' 
-                : 'bg-gray-200 text-gray-800 self-start rounded-tl-none');
-        
-        const nameText = isCustomer ? senderName : (isAutoResponse ? 'Admin (Auto) 🤖' : 'Admin');
-        
-       // ✅ PRESERVE formatting with indentation
-const formattedText = escapeHtml(msg.text.trim())
-    .split('\n')
-    .map(line => line.replace(/^(\s+)/, match => '&nbsp;'.repeat(match.length)))
-    .join('<br>');
-        
-        return `
-            <div class="flex flex-col ${isCustomer ? 'items-end' : 'items-start'} mb-3 chat-message-item">
-                <div class="text-xs ${isAutoResponse ? 'text-blue-600 font-semibold' : 'text-gray-500'} mb-1">
-                    ${nameText} - ${new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                </div>
-                <div class="${msgClass} max-w-xs p-3 rounded-xl shadow-sm chat-message-bubble">
-                    ${formattedText}
-                </div>
+    const isCustomer = msg.role === 'customer';
+    const isAutoResponse = msg.isAutoResponse || false;
+    
+    const msgClass = isCustomer 
+        ? 'bg-lime-600 text-white self-end rounded-br-none' 
+        : (isAutoResponse 
+            ? 'bg-blue-50 text-gray-800 self-start rounded-tl-none border border-blue-200' 
+            : 'bg-gray-200 text-gray-800 self-start rounded-tl-none');
+    
+    const nameText = isCustomer ? senderName : (isAutoResponse ? 'Admin (Auto) 🤖' : 'Admin');
+    
+    // ✅ FIXED: Preserve formatting with indentation
+    const formattedText = escapeHtml(msg.text.trim())
+        .split('\n')
+        .map(line => line.replace(/^(\s+)/, match => '&nbsp;'.repeat(match.length)))
+        .join('<br>');
+    
+    return `
+        <div class="flex flex-col ${isCustomer ? 'items-end' : 'items-start'} mb-3 chat-message-item">
+            <div class="text-xs ${isAutoResponse ? 'text-blue-600 font-semibold' : 'text-gray-500'} mb-1">
+                ${nameText} - ${new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </div>
-        `;
-    }).join('');
+            <div class="${msgClass} max-w-xs p-3 rounded-xl shadow-sm chat-message-bubble">
+                ${formattedText}
+            </div>
+        </div>
+    `;
+}).join('');
     
     messagesContainer.innerHTML = messagesHtml.length > 0 ? messagesHtml : '<div class="text-center text-gray-500 p-5">Start a conversation!</div>';
     
@@ -1101,32 +1102,32 @@ window.updateAdminChatMessages = function(threadId) {
     const isScrolledToBottom = messagesContainer.scrollHeight - messagesContainer.scrollTop <= messagesContainer.clientHeight + 50;
     
     const messagesHtml = messages.map(msg => {
-        const isAdmin = msg.role === 'admin';
-        const isAutoResponse = msg.isAutoResponse || false;
-        
-        const msgClass = isAdmin 
-            ? (isAutoResponse 
-                ? 'bg-blue-50 text-gray-800 self-end rounded-br-none border border-blue-200' 
-                : 'bg-lime-600 text-white self-end rounded-br-none')
-            : 'bg-gray-200 text-gray-800 self-start rounded-tl-none';
-        
-        const nameText = isAdmin ? (isAutoResponse ? 'Admin (Auto) 🤖' : 'Admin') : thread.customerName;
-        
-       // ✅ PRESERVE formatting with indentation
-const formattedText = escapeHtml(msg.text.trim())
-    .split('\n')
-    .map(line => line.replace(/^(\s+)/, match => '&nbsp;'.repeat(match.length)))
-    .join('<br>');
-        
-        return `
-            <div class="flex flex-col ${isAdmin ? 'items-end' : 'items-start'} mb-3">
-                <div class="text-xs ${isAutoResponse ? 'text-blue-600 font-semibold' : 'text-gray-500'} mb-1">${nameText} - ${new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
-                <div class="${msgClass} max-w-xs p-3 rounded-xl shadow-sm chat-message-bubble">
-                    ${formattedText}
-                </div>
+    const isAdmin = msg.role === 'admin';
+    const isAutoResponse = msg.isAutoResponse || false;
+    
+    const msgClass = isAdmin 
+        ? (isAutoResponse 
+            ? 'bg-blue-50 text-gray-800 self-end rounded-br-none border border-blue-200' 
+            : 'bg-lime-600 text-white self-end rounded-br-none')
+        : 'bg-gray-200 text-gray-800 self-start rounded-tl-none';
+    
+    const nameText = isAdmin ? (isAutoResponse ? 'Admin (Auto) 🤖' : 'Admin') : thread.customerName;
+    
+    // ✅ FIXED: Preserve formatting with indentation
+    const formattedText = escapeHtml(msg.text.trim())
+        .split('\n')
+        .map(line => line.replace(/^(\s+)/, match => '&nbsp;'.repeat(match.length)))
+        .join('<br>');
+    
+    return `
+        <div class="flex flex-col ${isAdmin ? 'items-end' : 'items-start'} mb-3">
+            <div class="text-xs ${isAutoResponse ? 'text-blue-600 font-semibold' : 'text-gray-500'} mb-1">${nameText} - ${new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+            <div class="${msgClass} max-w-xs p-3 rounded-xl shadow-sm chat-message-bubble">
+                ${formattedText}
             </div>
-        `;
-    }).join('');
+        </div>
+    `;
+}).join('');
     
     messagesContainer.innerHTML = messagesHtml.length > 0 ? messagesHtml : '<div class="text-center text-gray-500 p-5">Start a conversation!</div>';
     
