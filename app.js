@@ -1687,6 +1687,27 @@ window.checkout = async function() {
     }, 100);
 };
 
+// Add this AFTER window.checkout = async function() { ... }
+
+// Debug wrapper to ensure checkout is accessible
+window.ensureCheckoutWorks = function() {
+    console.log('🔍 Checking checkout button...');
+    const btn = document.getElementById('checkout-btn');
+    
+    if (!btn) {
+        console.error('❌ Checkout button not found');
+        return false;
+    }
+    
+    console.log('✅ Checkout button exists');
+    
+    // Test click
+    btn.addEventListener('click', function(e) {
+        console.log('🖱️ Checkout button clicked!');
+    });
+    
+    return true;
+};
 // HTML escape function to prevent XSS
 window.escapeHtml = function(text) {
     const map = {
@@ -3858,6 +3879,17 @@ setTimeout(() => {
     icons();
     updateCartBadge();
     renderCartDrawer();
+
+    setTimeout(() => {
+    const checkoutBtn = document.getElementById('checkout-btn');
+    if (checkoutBtn) {
+        checkoutBtn.onclick = function(e) {
+            e.preventDefault();
+            console.log('🛒 Checkout clicked');
+            checkout();
+        };
+    }
+}, 100);
     
     // Restore search input value if exists
     const searchInput = document.getElementById('search-input');
@@ -4845,9 +4877,19 @@ if (closeCart) {
 }
     
     const checkoutBtn = document.getElementById('checkout-btn');
-    if (checkoutBtn) {
-        checkoutBtn.addEventListener('click', checkout);
-    }
+if (checkoutBtn) {
+    // Remove any existing listeners by cloning
+    const newCheckoutBtn = checkoutBtn.cloneNode(true);
+    checkoutBtn.parentNode.replaceChild(newCheckoutBtn, checkoutBtn);
+    
+    // Add fresh listener
+    newCheckoutBtn.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        console.log('Checkout button clicked');
+        checkout();
+    });
+}
     
     // Modal
     const modalOverlay = document.getElementById('modal-overlay');
