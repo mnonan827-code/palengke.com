@@ -1510,18 +1510,60 @@ window.checkout = async function() {
     }
 
     // Check if user has completed profile
-    const userData = await getFromFirebase(`users/${window.APP_STATE.currentUser.uid}`);
-    const profile = userData.profile || {};
-    
-    if(!profile.fullName || !profile.idUrl) {
-        return showModal('Complete Your Profile', `
-            <div class="space-y-3">
-                <p class="text-gray-700">Please complete your profile with valid ID before placing an order.</p>
-                <p class="text-sm text-gray-600">This is required for verification and delivery purposes.</p>
+    // Check if user has completed profile
+const userData = await getFromFirebase(`users/${window.APP_STATE.currentUser.uid}`);
+const profile = userData.profile || {};
+
+// ✅ NEW: Check if profile is denied
+if(profile.denied) {
+    return showModal('Profile Verification Denied', `
+        <div class="space-y-3">
+            <div class="text-center">
+                <div class="text-5xl mb-3">❌</div>
+                <p class="text-red-700 font-semibold">Your profile verification was denied.</p>
             </div>
-        `, `<button onclick="hideModal(); showUserProfile();" class="px-4 py-2 bg-lime-600 text-white rounded">Complete Profile</button>
-            <button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">Cancel</button>`);
-    }
+            <div class="bg-red-50 p-3 rounded border border-red-200">
+                <div class="text-xs text-red-800 font-semibold mb-1">Reason:</div>
+                <div class="text-sm text-red-900">${profile.denialReason || 'No reason provided'}</div>
+            </div>
+            <p class="text-sm text-gray-600">Please update your profile information and resubmit for verification.</p>
+        </div>
+    `, `<button onclick="hideModal(); showUserProfile();" class="px-4 py-2 bg-lime-600 text-white rounded">Update Profile</button>
+        <button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">Cancel</button>`);
+}
+
+// ✅ NEW: Check if profile is pending verification
+if(!profile.verified && profile.submittedAt) {
+    return showModal('Profile Pending Verification', `
+        <div class="space-y-3">
+            <div class="text-center">
+                <div class="text-5xl mb-3">⏳</div>
+                <p class="text-yellow-700 font-semibold">Your profile is pending admin verification.</p>
+            </div>
+            <p class="text-sm text-gray-600">Please wait for admin approval before placing orders. This usually takes 24-48 hours.</p>
+        </div>
+    `, `<button onclick="hideModal()" class="px-4 py-2 bg-lime-600 text-white rounded">OK</button>`);
+}
+
+if(!profile.fullName || !profile.idUrl) {
+    return showModal('Complete Your Profile', `
+        <div class="space-y-3">
+            <p class="text-gray-700">Please complete your profile with valid ID before placing an order.</p>
+            <p class="text-sm text-gray-600">This is required for verification and delivery purposes.</p>
+        </div>
+    `, `<button onclick="hideModal(); showUserProfile();" class="px-4 py-2 bg-lime-600 text-white rounded">Complete Profile</button>
+        <button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">Cancel</button>`);
+}
+
+// ✅ NEW: Check if profile is verified
+if(!profile.verified) {
+    return showModal('Profile Not Verified', `
+        <div class="space-y-3">
+            <p class="text-gray-700">Your profile must be verified by an admin before you can place orders.</p>
+            <p class="text-sm text-gray-600">This helps ensure secure transactions for all users.</p>
+        </div>
+    `, `<button onclick="hideModal()" class="px-4 py-2 bg-lime-600 text-white rounded">OK</button>`);
+}
     
     const subtotal = window.APP_STATE.cart.reduce((s,i)=> s + i.price * i.quantity, 0);
     const deliveryFee = window.APP_STATE.deliveryFee || 25.00;
@@ -2037,7 +2079,18 @@ window.validateAndPlaceOrder = async function() {
     const profile = userData.profile || {};
     
     // Proceed with placing order
-    const newId = 'O-' + uid();
+    // ✅ Generate numeric order ID (e.g., 1001, 1002, 1003...)
+const getNextOrderId = async () => {
+    const ordersSnapshot = await get(ref(database, 'orders'));
+    if (ordersSnapshot.exists()) {
+        const orders = Object.values(ordersSnapshot.val());
+        const maxId = Math.max(...orders.map(o => parseInt(o.id) || 0));
+        return maxId + 1;
+    }
+    return 1001; // Start from 1001
+};
+
+const newId = await getNextOrderId();
     const itemsCopy = window.APP_STATE.cart.map(i=> ({ ...i }));
     const subtotal = itemsCopy.reduce((s,i)=> s + i.price * i.quantity, 0);
     const deliveryFee = window.APP_STATE.deliveryFee || 25.00;
@@ -4685,3 +4738,4 @@ window.addEventListener('keydown', (e) => {
 
 console.log('validateAndPlaceOrder exists:', typeof window.validateAndPlaceOrder);
 console.log('CAINTA_BARANGAYS:', CAINTA_BARANGAYS);
+
