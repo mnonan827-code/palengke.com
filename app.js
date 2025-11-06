@@ -2090,7 +2090,7 @@ window.validateAndPlaceOrder = async function() {
     
     // Proceed with placing order
     // ✅ FIXED: Generate proper random order ID
-const newId = 'O-' + uid(); // Now generates O-XXXXXXXX with random alphanumeric
+const newId = 'O-' + generateOrderId(); // Now generates O-XXXXXXXX with random alphanumeric
     const itemsCopy = window.APP_STATE.cart.map(i=> ({ ...i }));
     const subtotal = itemsCopy.reduce((s,i)=> s + i.price * i.quantity, 0);
     const deliveryFee = window.APP_STATE.deliveryFee || 25.00;
@@ -2913,14 +2913,39 @@ window.viewDeleteLogs = async function() {
 window.$ = function(sel){ return document.querySelector(sel); };
 window.$all = function(sel){ return Array.from(document.querySelectorAll(sel)); };
 window.formatPeso = function(n){ return '₱' + Number(n).toLocaleString('en-PH', {minimumFractionDigits:2, maximumFractionDigits:2}); };
+// ✅ FIXED: Generate uniform numeric Order ID
+window.generateOrderId = function() {
+    // Generate 8-digit numeric ID with timestamp + random
+    const timestamp = Date.now().toString().slice(-5); // Last 5 digits of timestamp
+    const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0'); // 3 random digits
+    return timestamp + random; // Results in 8 digits total
+};
+
+// ✅ RECOMMENDED: Generate uniform 8-digit numeric Order ID
+window.generateOrderId = function() {
+    // Get current date/time components
+    const now = new Date();
+    const year = now.getFullYear().toString().slice(-2); // Last 2 digits of year (25)
+    const month = (now.getMonth() + 1).toString().padStart(2, '0'); // Month (01-12)
+    const day = now.getDate().toString().padStart(2, '0'); // Day (01-31)
+    const hours = now.getHours().toString().padStart(2, '0'); // Hours (00-23)
+    
+    // Generate 2 random digits
+    const random = Math.floor(Math.random() * 100).toString().padStart(2, '0');
+    
+    // Format: YYMMDDHHRR (Year-Month-Day-Hour-Random)
+    // Example: 25110614 = Nov 6, 2025, 14:XX with random suffix
+    return year + month + day + hours.slice(0, 1) + random;
+};
+
+// Keep original uid for other purposes (chat, logs, etc.)
 window.uid = function() { 
-    // Generate random alphanumeric string (8 characters)
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    let result = '';
-    for (let i = 0; i < 8; i++) {
-        result += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return result;
+    return Date.now().toString(36) + Math.random().toString(36).substring(2);
+};
+
+// Keep original uid for other purposes (chat IDs, etc.)
+window.uid = function() { 
+    return Date.now().toString(36) + Math.random().toString(36).substring(2);
 };
 
 // ADD THESE NEW FUNCTIONS:
@@ -4909,6 +4934,15 @@ window.testAllButtons = function() {
     console.log('⚠️ Missing Buttons:', results.missing);
     
     return results;
+};
+
+// ✅ Format Order ID consistently
+window.formatOrderId = function(orderId) {
+    // Ensure format is always O-XXXXXXXX
+    if (!orderId.startsWith('O-')) {
+        return 'O-' + orderId;
+    }
+    return orderId;
 };
 
 console.log('validateAndPlaceOrder exists:', typeof window.validateAndPlaceOrder);
