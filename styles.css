@@ -3327,3 +3327,54 @@ pre.chat-message-text {
 #checkout-btn:not(:disabled):active {
     transform: scale(0.98);
 }
+
+/* ==========================================
+   🛒 Cart Drawer Close Animation
+   ========================================== */
+
+#cart-drawer {
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+#cart-drawer:not(.hidden) {
+    opacity: 1;
+    transform: translateX(0);
+}
+
+#cart-drawer.hidden {
+    opacity: 0;
+    transform: translateX(20px);
+    pointer-events: none;
+}
+
+#close-cart {
+    position: relative;
+}
+
+#close-cart:hover {
+    background: rgba(239, 68, 68, 0.1);
+    border-radius: 0.375rem;
+}
+
+#close-cart:active {
+    transform: scale(0.9);
+}
+
+/* Close button ripple effect */
+#close-cart::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    border-radius: 50%;
+    background: rgba(239, 68, 68, 0.3);
+    transform: translate(-50%, -50%);
+    transition: width 0.3s, height 0.3s;
+}
+
+#close-cart:active::before {
+    width: 40px;
+    height: 40px;
+}

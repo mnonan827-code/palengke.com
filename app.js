@@ -2850,6 +2850,8 @@ window.confirmDenyProfile = async function(userId) {
     }
 };
 
+
+
 window.adminEditOrder = function(id) {
     if(!window.APP_STATE.currentUser || window.APP_STATE.currentUser.role !== 'admin') return showModal('Forbidden', 'Admin access required.', `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
     const o = window.APP_STATE.orders.find(x=> x.id === id);
@@ -3677,12 +3679,29 @@ window.hideUserMenu = function() {
 
 window.toggleCartDrawer = function(show) {
     const drawer = document.getElementById('cart-drawer');
+    
+    if (!drawer) {
+        console.error('Cart drawer not found');
+        return;
+    }
+    
     if (typeof show === 'boolean') {
-        drawer.classList.toggle('hidden', !show);
+        if (show) {
+            drawer.classList.remove('hidden');
+            console.log('🛒 Cart drawer opened');
+        } else {
+            drawer.classList.add('hidden');
+            console.log('❌ Cart drawer closed');
+        }
     } else {
         drawer.classList.toggle('hidden');
+        console.log('🔄 Cart drawer toggled');
     }
-    renderCartDrawer();
+    
+    // Only render if opening
+    if (!drawer.classList.contains('hidden')) {
+        renderCartDrawer();
+    }
 };
 
 window.updateCartBadge = function() {
@@ -4867,13 +4886,25 @@ if (cartBtn) {
 
 const closeCart = document.getElementById('close-cart');
 if (closeCart) {
+    // Remove existing listeners
     const newCloseCart = closeCart.cloneNode(true);
     closeCart.parentNode.replaceChild(newCloseCart, closeCart);
-    newCloseCart.addEventListener('click', (e) => {
+    
+    // Add fresh listener
+    newCloseCart.addEventListener('click', function(e) {
         e.preventDefault();
         e.stopPropagation();
+        console.log('❌ Close cart button clicked');
         toggleCartDrawer(false);
     });
+    
+    // Also ensure onclick works
+    newCloseCart.onclick = function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        console.log('❌ Close cart (onclick) triggered');
+        toggleCartDrawer(false);
+    };
 }
     
     const checkoutBtn = document.getElementById('checkout-btn');
@@ -4912,6 +4943,24 @@ if (checkoutBtn) {
     console.log('✅ Event listeners setup complete');
 }
 
+// Add BEFORE the closing brace of setupEventListeners()
+
+// Close cart when clicking outside
+document.addEventListener('click', function(e) {
+    const cartDrawer = document.getElementById('cart-drawer');
+    const cartBtn = document.getElementById('cart-btn');
+    
+    if (!cartDrawer || cartDrawer.classList.contains('hidden')) {
+        return;
+    }
+    
+    // Check if click is outside cart drawer and cart button
+    if (!cartDrawer.contains(e.target) && !cartBtn.contains(e.target)) {
+        console.log('👆 Clicked outside cart, closing...');
+        toggleCartDrawer(false);
+    }
+});
+
 // Auth state listener
 onAuthStateChanged(auth, async (user) => {
     if (user) {
@@ -4949,11 +4998,10 @@ window.addEventListener('load', () => {
 window.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
         hideModal();
-        document.getElementById('cart-drawer').classList.add('hidden');
+        toggleCartDrawer(false); // ✅ Use function instead
         closeMobileMenu();
-        hideUserMenu();
+        closeUserMenu();
     }
-
 });
 
 // ✅ VERIFY ALL CRITICAL FUNCTIONS EXIST
