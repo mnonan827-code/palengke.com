@@ -351,29 +351,17 @@ window.toggleMobileMenu = function() {
     const mobileMenu = document.getElementById('mobile-menu');
     const mobileMenuBtn = document.getElementById('mobile-menu-btn');
     
-    if (!mobileMenu || !mobileMenuBtn) return;
+    mobileMenu.classList.toggle('hidden');
+    mobileMenu.classList.toggle('active');
     
-    const isHidden = mobileMenu.classList.contains('hidden');
-    
-    if (isHidden) {
-        // Open menu
-        mobileMenu.classList.remove('hidden');
-        mobileMenu.classList.add('active');
+    // Update icon
+    const icon = mobileMenuBtn.querySelector('i');
+    if (mobileMenu.classList.contains('hidden')) {
+        icon.setAttribute('data-lucide', 'menu');
     } else {
-        // Close menu
-        mobileMenu.classList.add('hidden');
-        mobileMenu.classList.remove('active');
+        icon.setAttribute('data-lucide', 'x');
     }
-    
-    // Update icon with proper check
-    setTimeout(() => {
-        const icon = mobileMenuBtn.querySelector('i');
-        if (icon) {
-            const shouldShowX = !mobileMenu.classList.contains('hidden');
-            icon.setAttribute('data-lucide', shouldShowX ? 'x' : 'menu');
-            lucide.createIcons();
-        }
-    }, 50);
+    lucide.createIcons();
 };
 
 window.closeMobileMenu = function() {
@@ -1522,60 +1510,18 @@ window.checkout = async function() {
     }
 
     // Check if user has completed profile
-    // Check if user has completed profile
-const userData = await getFromFirebase(`users/${window.APP_STATE.currentUser.uid}`);
-const profile = userData.profile || {};
-
-// ✅ NEW: Check if profile is denied
-if(profile.denied) {
-    return showModal('Profile Verification Denied', `
-        <div class="space-y-3">
-            <div class="text-center">
-                <div class="text-5xl mb-3">❌</div>
-                <p class="text-red-700 font-semibold">Your profile verification was denied.</p>
+    const userData = await getFromFirebase(`users/${window.APP_STATE.currentUser.uid}`);
+    const profile = userData.profile || {};
+    
+    if(!profile.fullName || !profile.idUrl) {
+        return showModal('Complete Your Profile', `
+            <div class="space-y-3">
+                <p class="text-gray-700">Please complete your profile with valid ID before placing an order.</p>
+                <p class="text-sm text-gray-600">This is required for verification and delivery purposes.</p>
             </div>
-            <div class="bg-red-50 p-3 rounded border border-red-200">
-                <div class="text-xs text-red-800 font-semibold mb-1">Reason:</div>
-                <div class="text-sm text-red-900">${profile.denialReason || 'No reason provided'}</div>
-            </div>
-            <p class="text-sm text-gray-600">Please update your profile information and resubmit for verification.</p>
-        </div>
-    `, `<button onclick="hideModal(); showUserProfile();" class="px-4 py-2 bg-lime-600 text-white rounded">Update Profile</button>
-        <button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">Cancel</button>`);
-}
-
-// ✅ NEW: Check if profile is pending verification
-if(!profile.verified && profile.submittedAt) {
-    return showModal('Profile Pending Verification', `
-        <div class="space-y-3">
-            <div class="text-center">
-                <div class="text-5xl mb-3">⏳</div>
-                <p class="text-yellow-700 font-semibold">Your profile is pending admin verification.</p>
-            </div>
-            <p class="text-sm text-gray-600">Please wait for admin approval before placing orders. This usually takes 24-48 hours.</p>
-        </div>
-    `, `<button onclick="hideModal()" class="px-4 py-2 bg-lime-600 text-white rounded">OK</button>`);
-}
-
-if(!profile.fullName || !profile.idUrl) {
-    return showModal('Complete Your Profile', `
-        <div class="space-y-3">
-            <p class="text-gray-700">Please complete your profile with valid ID before placing an order.</p>
-            <p class="text-sm text-gray-600">This is required for verification and delivery purposes.</p>
-        </div>
-    `, `<button onclick="hideModal(); showUserProfile();" class="px-4 py-2 bg-lime-600 text-white rounded">Complete Profile</button>
-        <button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">Cancel</button>`);
-}
-
-// ✅ NEW: Check if profile is verified
-if(!profile.verified) {
-    return showModal('Profile Not Verified', `
-        <div class="space-y-3">
-            <p class="text-gray-700">Your profile must be verified by an admin before you can place orders.</p>
-            <p class="text-sm text-gray-600">This helps ensure secure transactions for all users.</p>
-        </div>
-    `, `<button onclick="hideModal()" class="px-4 py-2 bg-lime-600 text-white rounded">OK</button>`);
-}
+        `, `<button onclick="hideModal(); showUserProfile();" class="px-4 py-2 bg-lime-600 text-white rounded">Complete Profile</button>
+            <button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">Cancel</button>`);
+    }
     
     const subtotal = window.APP_STATE.cart.reduce((s,i)=> s + i.price * i.quantity, 0);
     const deliveryFee = window.APP_STATE.deliveryFee || 25.00;
@@ -2091,42 +2037,7 @@ window.validateAndPlaceOrder = async function() {
     const profile = userData.profile || {};
     
     // Proceed with placing order
-    // ✅ Generate numeric order ID (e.g., 1001, 1002, 1003...)
-// ✅ Generate random order ID in format O-XXXXXXXX (e.g., O-45782341, O-92736105...)
-const generateRandomOrderId = async () => {
-    const ordersSnapshot = await get(ref(database, 'orders'));
-    const existingIds = new Set();
-    
-    // Get all existing order IDs
-    if (ordersSnapshot.exists()) {
-        const orders = Object.values(ordersSnapshot.val());
-        orders.forEach(o => {
-            if (o.id) existingIds.add(o.id);
-        });
-    }
-    
-    // Generate random 8-digit number until we get a unique one
-    let newId;
-    let attempts = 0;
-    const maxAttempts = 100; // Prevent infinite loop
-    
-    do {
-        // Generate random number between 10000000 and 99999999 (8 digits)
-        const randomNum = Math.floor(Math.random() * 90000000) + 10000000;
-        newId = 'O-' + randomNum;
-        attempts++;
-    } while (existingIds.has(newId) && attempts < maxAttempts);
-    
-    // Fallback if somehow we can't generate unique ID
-    if (attempts >= maxAttempts) {
-        const timestamp = Date.now().toString().slice(-8);
-        newId = 'O-' + timestamp;
-    }
-    
-    return newId;
-};
-
-const newId = await getNextOrderId();
+    const newId = 'O-' + uid();
     const itemsCopy = window.APP_STATE.cart.map(i=> ({ ...i }));
     const subtotal = itemsCopy.reduce((s,i)=> s + i.price * i.quantity, 0);
     const deliveryFee = window.APP_STATE.deliveryFee || 25.00;
@@ -3367,20 +3278,23 @@ window.updateAuthArea = function() {
 };
 
 // Initialize user dropdown functionality
-// Initialize user dropdown functionality
 function initUserDropdown() {
     const btn = document.getElementById('user-menu-btn');
     const menu = document.getElementById('user-menu');
     const wrapper = document.querySelector('.user-menu-wrapper');
     
     if (!btn || !menu || !wrapper) {
-        console.log('User dropdown elements not found');
+        console.log('Dropdown elements not found');
         return;
     }
 
     console.log('Initializing user dropdown...');
 
-    // Create overlay if it doesn't exist
+    // Remove any existing listeners by cloning
+    const newBtn = btn.cloneNode(true);
+    btn.parentNode.replaceChild(newBtn, btn);
+
+    // Create or get overlay
     let overlay = document.getElementById('user-menu-overlay');
     if (!overlay) {
         overlay = document.createElement('div');
@@ -3389,23 +3303,12 @@ function initUserDropdown() {
         document.body.appendChild(overlay);
     }
 
-    // Remove existing listeners by replacing the button
-    const newBtn = btn.cloneNode(true);
-    btn.parentNode.replaceChild(newBtn, btn);
-
-    // Add click listener to button
+    // Toggle dropdown on button click
     newBtn.addEventListener('click', function(e) {
         e.preventDefault();
         e.stopPropagation();
         console.log('User menu button clicked');
-        
-        const isOpen = menu.classList.contains('show');
-        
-        if (isOpen) {
-            closeUserMenu();
-        } else {
-            openUserMenu();
-        }
+        toggleUserMenu();
     });
 
     // Close on overlay click
@@ -3785,9 +3688,6 @@ setTimeout(() => {
     if (searchInput && window.APP_STATE.searchQuery) {
         searchInput.value = window.APP_STATE.searchQuery;
     }
-    
-    // ← ADD THIS LINE
-    reinitializeButtons();
 };
 
 window.switchTo = function(v) {
@@ -4379,6 +4279,8 @@ window.initializeOrderSearchListeners = function() {
     
     // ===== REGULAR ORDERS SEARCH =====
     const orderSearchInput = document.getElementById('order-search-input');
+    const orderClearBtn = document.getElementById('clear-order-search-btn');
+    const orderClearButton = document.getElementById('clear-order-search-button');
     
     if (orderSearchInput) {
         console.log('✅ Found order search input');
@@ -4390,20 +4292,40 @@ window.initializeOrderSearchListeners = function() {
         // Set to empty initially
         newOrderInput.value = '';
         
-        // Debounced search handler
-        let orderSearchTimeout;
+        // Add input listener
         newOrderInput.addEventListener('input', function(e) {
-            clearTimeout(orderSearchTimeout);
-            orderSearchTimeout = setTimeout(() => {
-                const query = e.target.value;
-                handleOrderSearch(query, 'regular');
-            }, 300);
+            const query = e.target.value;
+            orderSearchValue = query;
+            orderSearchCursor = e.target.selectionStart;
+            handleOrderSearch(query, 'regular');
         });
         
         // Prevent Enter key
         newOrderInput.addEventListener('keydown', function(e) {
             if (e.key === 'Enter') e.preventDefault();
         });
+        
+        // Clear button (X icon)
+        if (orderClearBtn) {
+            const newOrderClearBtn = orderClearBtn.cloneNode(true);
+            orderClearBtn.parentNode.replaceChild(newOrderClearBtn, orderClearBtn);
+            
+            newOrderClearBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                clearOrderSearch('regular');
+            });
+        }
+        
+        // Clear button (outside)
+        if (orderClearButton) {
+            const newOrderClearButton = orderClearButton.cloneNode(true);
+            orderClearButton.parentNode.replaceChild(newOrderClearButton, orderClearButton);
+            
+            newOrderClearButton.addEventListener('click', function(e) {
+                e.preventDefault();
+                clearOrderSearch('regular');
+            });
+        }
         
         // Initialize counts
         const regularOrders = window.APP_STATE.orders.filter(o => !o.type || o.type !== 'pre-order');
@@ -4412,6 +4334,8 @@ window.initializeOrderSearchListeners = function() {
     
     // ===== PRE-ORDER ORDERS SEARCH =====
     const preorderSearchInput = document.getElementById('preorder-search-input');
+    const preorderClearBtn = document.getElementById('clear-preorder-search-btn');
+    const preorderClearButton = document.getElementById('clear-preorder-search-button');
     
     if (preorderSearchInput) {
         console.log('✅ Found preorder search input');
@@ -4423,14 +4347,12 @@ window.initializeOrderSearchListeners = function() {
         // Set to empty initially
         newPreorderInput.value = '';
         
-        // Debounced search handler
-        let preorderSearchTimeout;
+        // Add input listener
         newPreorderInput.addEventListener('input', function(e) {
-            clearTimeout(preorderSearchTimeout);
-            preorderSearchTimeout = setTimeout(() => {
-                const query = e.target.value;
-                handleOrderSearch(query, 'preorder');
-            }, 300);
+            const query = e.target.value;
+            preorderSearchValue = query;
+            preorderSearchCursor = e.target.selectionStart;
+            handleOrderSearch(query, 'preorder');
         });
         
         // Prevent Enter key
@@ -4438,61 +4360,35 @@ window.initializeOrderSearchListeners = function() {
             if (e.key === 'Enter') e.preventDefault();
         });
         
+        // Clear button (X icon)
+        if (preorderClearBtn) {
+            const newPreorderClearBtn = preorderClearBtn.cloneNode(true);
+            preorderClearBtn.parentNode.replaceChild(newPreorderClearBtn, preorderClearBtn);
+            
+            newPreorderClearBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                clearOrderSearch('preorder');
+            });
+        }
+        
+        // Clear button (outside)
+        if (preorderClearButton) {
+            const newPreorderClearButton = preorderClearButton.cloneNode(true);
+            preorderClearButton.parentNode.replaceChild(newPreorderClearButton, preorderClearButton);
+            
+            newPreorderClearButton.addEventListener('click', function(e) {
+                e.preventDefault();
+                clearOrderSearch('preorder');
+            });
+        }
+        
         // Initialize counts
         const preorderOrders = window.APP_STATE.orders.filter(o => o.type === 'pre-order');
         updateOrderSearchResultsCount(preorderOrders.length, preorderOrders.length, 'preorder');
     }
     
-    // Setup clear buttons
-    setupClearButtons();
-    
     setTimeout(() => icons(), 50);
 };
-
-// Helper function to setup clear buttons
-function setupClearButtons() {
-    // Regular orders clear button
-    const orderClearBtn = document.getElementById('clear-order-search-btn');
-    if (orderClearBtn) {
-        const newOrderClearBtn = orderClearBtn.cloneNode(true);
-        orderClearBtn.parentNode.replaceChild(newOrderClearBtn, orderClearBtn);
-        newOrderClearBtn.addEventListener('click', function(e) {
-            e.preventDefault();
-            clearOrderSearch('regular');
-        });
-    }
-    
-    const orderClearButton = document.getElementById('clear-order-search-button');
-    if (orderClearButton) {
-        const newOrderClearButton = orderClearButton.cloneNode(true);
-        orderClearButton.parentNode.replaceChild(newOrderClearButton, orderClearButton);
-        newOrderClearButton.addEventListener('click', function(e) {
-            e.preventDefault();
-            clearOrderSearch('regular');
-        });
-    }
-    
-    // Pre-order orders clear button
-    const preorderClearBtn = document.getElementById('clear-preorder-search-btn');
-    if (preorderClearBtn) {
-        const newPreorderClearBtn = preorderClearBtn.cloneNode(true);
-        preorderClearBtn.parentNode.replaceChild(newPreorderClearBtn, preorderClearBtn);
-        newPreorderClearBtn.addEventListener('click', function(e) {
-            e.preventDefault();
-            clearOrderSearch('preorder');
-        });
-    }
-    
-    const preorderClearButton = document.getElementById('clear-preorder-search-button');
-    if (preorderClearButton) {
-        const newPreorderClearButton = preorderClearButton.cloneNode(true);
-        preorderClearButton.parentNode.replaceChild(newPreorderClearButton, preorderClearButton);
-        newPreorderClearButton.addEventListener('click', function(e) {
-            e.preventDefault();
-            clearOrderSearch('preorder');
-        });
-    }
-}
 
 
 // NEW FUNCTION: Render User Verification Page
@@ -4743,44 +4639,6 @@ function setupEventListeners() {
     });
 }
 
-// Re-initialize button listeners after DOM updates
-window.reinitializeButtons = function() {
-    setupSearchClearButton();
-    const orderSearchInput = document.getElementById('order-search-input');
-    const preorderSearchInput = document.getElementById('preorder-search-input');
-    
-    if (orderSearchInput || preorderSearchInput) {
-        initializeOrderSearchListeners();
-    }
-};
-
-// Setup search clear button
-function setupSearchClearButton() {
-    const clearBtn = document.getElementById('clear-search-btn');
-    const searchInput = document.getElementById('search-input');
-    
-    if (clearBtn && searchInput) {
-        // Remove old listener
-        const newClearBtn = clearBtn.cloneNode(true);
-        clearBtn.parentNode.replaceChild(newClearBtn, clearBtn);
-        
-        // Add new listener
-        newClearBtn.addEventListener('click', function(e) {
-            e.preventDefault();
-            clearSearch();
-        });
-        
-        // Update visibility based on input
-        if (searchInput.value) {
-            newClearBtn.classList.remove('hidden');
-        } else {
-            newClearBtn.classList.add('hidden');
-        }
-    }
-}
-
-
-
 // Auth state listener
 onAuthStateChanged(auth, async (user) => {
     if (user) {
@@ -4827,4 +4685,3 @@ window.addEventListener('keydown', (e) => {
 
 console.log('validateAndPlaceOrder exists:', typeof window.validateAndPlaceOrder);
 console.log('CAINTA_BARANGAYS:', CAINTA_BARANGAYS);
-
