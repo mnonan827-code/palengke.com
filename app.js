@@ -1264,16 +1264,25 @@ window.signupUser = async function() {
     const contact = document.getElementById('signup-contact')?.value?.trim() || '';
 
     if (!name || !email || !password) {
-        return showModal('Missing fields', 'Please fill all required signup fields.', `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
+        return showModal('Missing fields', 'Please fill all required signup fields.', 
+            `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
+    }
+
+    if (password.length < 6) {
+        return showModal('Weak Password', 'Password must be at least 6 characters long.', 
+            `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
     }
 
     try {
+        // Create user account
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
         const user = userCredential.user;
 
+        // Generate verification code
         const verificationCode = generateVerificationCode();
-        const codeExpiry = Date.now() + (15 * 60 * 1000);
+        const codeExpiry = Date.now() + (15 * 60 * 1000); // 15 minutes
 
+        // Save user data
         const userData = {
             uid: user.uid,
             email: email,
@@ -1283,36 +1292,37 @@ window.signupUser = async function() {
             createdAt: new Date().toISOString(),
             emailVerified: false,
             verificationCode: verificationCode,
-            verificationCodeExpiry: codeExpiry
+            verificationCodeExpiry: codeExpiry,
+            dataPrivacyAccepted: false
         };
         await saveToFirebase(`users/${user.uid}`, userData);
 
+        // Send verification email
         await sendVerificationCodeEmail(email, name, verificationCode);
-await signOut(auth);
+        
+        // Sign out user until they verify
+        await signOut(auth);
 
-// Show Data Privacy Act modal
-await signOut(auth);
-
-// Go directly to verification modal
-hideModal();
-showVerificationModal(email, password);
-
+        // Show verification modal
+        hideModal();
+        showVerificationModal(email, password);
 
     } catch (error) {
         console.error('Signup error:', error);
         let errorMessage = 'An error occurred during signup.';
         
         if (error.code === 'auth/email-already-in-use') {
-            errorMessage = 'This email is already registered. Please try logging in.';
+            errorMessage = 'This email is already registered. Please try logging in or use a different email.';
         } else if (error.code === 'auth/weak-password') {
             errorMessage = 'Password should be at least 6 characters.';
         } else if (error.code === 'auth/invalid-email') {
             errorMessage = 'Invalid email address.';
-        } else if (error.message.includes('email')) {
+        } else if (error.message && error.message.includes('email')) {
             errorMessage = 'Failed to send verification email. Please check the email address and try again.';
         }
 
-        showModal('Signup Error', errorMessage, `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
+        showModal('Signup Error', errorMessage, 
+            `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
     }
 };
 
@@ -1568,7 +1578,6 @@ window.showNewPasswordModal = function(email, uid) {
     `);
 };
 
-// ✅ CORRECTED: Reset Password (replaces the previous version)
 window.resetPassword = async function(email, uid) {
     const newPassword = document.getElementById('new-password')?.value;
     const confirmPassword = document.getElementById('confirm-password')?.value;
@@ -1605,66 +1614,39 @@ window.resetPassword = async function(email, uid) {
             throw new Error('User not found');
         }
 
-        // Delete the old account
-        try {
-            const oldUser = auth.currentUser;
-            if (oldUser && oldUser.email === email) {
-                await oldUser.delete();
-            }
-        } catch (deleteError) {
-            console.log('No active session to delete');
-        }
-
-        // Create new account with same email but new password
-        const userCredential = await createUserWithEmailAndPassword(auth, email, newPassword);
-        const newUser = userCredential.user;
-
-        // Restore all user data with new UID
-        const restoredUserData = {
-            ...userData,
-            uid: newUser.uid,
+        // Store temporary password for next login
+        await updateFirebase(`users/${uid}`, {
             passwordResetCode: null,
             passwordResetExpiry: null,
+            tempNewPassword: newPassword,
+            passwordResetPending: true,
             passwordResetAt: new Date().toISOString()
-        };
-
-        await saveToFirebase(`users/${newUser.uid}`, restoredUserData);
-
-        // If there was cart data, migrate it
-        if (userData.uid !== newUser.uid) {
-            const oldCart = await getFromFirebase(`carts/${userData.uid}`);
-            if (oldCart) {
-                await saveToFirebase(`carts/${newUser.uid}`, oldCart);
-                await remove(ref(database, `carts/${userData.uid}`));
-            }
-            
-            // Remove old user data
-            await remove(ref(database, `users/${userData.uid}`));
-        }
-
-        // Sign out
-        await signOut(auth);
+        });
 
         hideModal();
-        showModal('Password Reset Successful! ✓', `
-            <div class="text-center space-y-3">
-                <div class="text-5xl text-green-600">✓</div>
-                <p class="text-gray-700">Your password has been reset successfully!</p>
-                <p class="text-sm text-gray-600">You can now log in with your new password.</p>
+        showModal('Password Reset Initiated', `
+            <div class="text-center space-y-4">
+                <div class="text-5xl">🔐</div>
+                <p class="text-gray-700">Your password reset has been initiated.</p>
+                <div class="bg-blue-50 p-4 rounded-lg text-left border-l-4 border-blue-500">
+                    <p class="text-sm text-blue-900 mb-2"><strong>To complete the reset:</strong></p>
+                    <ol class="text-sm text-blue-800 list-decimal list-inside space-y-1">
+                        <li>Log in with your <strong>old password</strong></li>
+                        <li>Your password will be automatically updated</li>
+                        <li>Use your <strong>new password</strong> for future logins</li>
+                    </ol>
+                </div>
+                <p class="text-xs text-gray-600">Keep your new password safe!</p>
             </div>
-        `, `
-            <button onclick="hideModal(); openAuth('login')" class="px-4 py-2 bg-lime-600 text-white rounded">Log In Now</button>
-        `);
+        `, `<button onclick="hideModal(); openAuth('login')" class="px-4 py-2 bg-lime-600 text-white rounded">Go to Login</button>`);
 
     } catch (error) {
         console.error('Password reset error:', error);
         
         let errorMessage = 'Unable to reset password. Please try again.';
         
-        if (error.code === 'auth/email-already-in-use') {
-            errorMessage = 'This email is already in use. Please contact support.';
-        } else if (error.code === 'auth/weak-password') {
-            errorMessage = 'Password is too weak. Please use at least 6 characters.';
+        if (error.code === 'auth/requires-recent-login') {
+            errorMessage = 'For security reasons, please log in again before changing your password.';
         }
         
         if (errorDiv) {
@@ -2089,6 +2071,109 @@ window.resendPasswordResetCode = async function(email) {
             'Failed to resend reset code. Please try again.',
             `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`
         );
+    }
+};
+
+// Login user function
+window.loginUser = async function() {
+    const email = document.getElementById('login-email')?.value?.trim()?.toLowerCase();
+    const password = document.getElementById('login-password')?.value;
+
+    if (!email || !password) {
+        return showModal('Missing fields', 'Please enter both email and password.', 
+            `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
+    }
+
+    try {
+        const userCredential = await signInWithEmailAndPassword(auth, email, password);
+        const user = userCredential.user;
+
+        // Get user data from database
+        const userData = await getFromFirebase(`users/${user.uid}`);
+        
+        if (!userData) {
+            await signOut(auth);
+            return showModal('Error', 'User data not found. Please contact support.', 
+                `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
+        }
+
+        // Check if email is verified
+        if (!userData.emailVerified) {
+            await signOut(auth);
+            return showModal('Email Not Verified', 
+                'Please verify your email before logging in. Check your inbox for the verification code.',
+                `<button onclick="hideModal(); showVerificationModal('${email}', '${password}')" class="px-4 py-2 bg-lime-600 text-white rounded">Enter Verification Code</button>
+                 <button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">Cancel</button>`);
+        }
+
+        // Check if user needs to complete password reset
+        if (userData.passwordResetPending && userData.tempNewPassword) {
+            try {
+                await updatePassword(user, userData.tempNewPassword);
+                
+                // Clear temporary password fields
+                await updateFirebase(`users/${user.uid}`, {
+                    passwordResetPending: null,
+                    tempNewPassword: null
+                });
+                
+                showModal('Password Updated', 
+                    'Your password has been successfully updated. Please log in again with your new password.',
+                    `<button onclick="hideModal(); openAuth('login')" class="px-4 py-2 bg-lime-600 text-white rounded">OK</button>`);
+                
+                await signOut(auth);
+                return;
+            } catch (error) {
+                console.error('Password update error:', error);
+            }
+        }
+
+        // Set current user
+        window.APP_STATE.currentUser = {
+            uid: user.uid,
+            email: user.email,
+            name: userData.name,
+            role: userData.role
+        };
+
+        // Load user cart
+        const userCart = await getFromFirebase(`carts/${user.uid}`);
+        if (userCart) {
+            window.APP_STATE.cart = Array.isArray(userCart) ? userCart : Object.values(userCart);
+        }
+
+        hideModal();
+        updateAuthArea();
+        renderMain();
+        
+        showModal('Welcome Back! 👋', 
+            `<div class="text-center space-y-3">
+                <div class="text-5xl">🎉</div>
+                <p class="text-gray-700">Welcome back, <b>${userData.name}</b>!</p>
+                <p class="text-sm text-gray-600">You're successfully logged in.</p>
+            </div>`,
+            `<button onclick="hideModal()" class="px-4 py-2 bg-lime-600 text-white rounded">Start Shopping</button>`);
+
+    } catch (error) {
+        console.error('Login error:', error);
+        
+        let errorMessage = 'Failed to log in. Please try again.';
+        
+        if (error.code === 'auth/user-not-found') {
+            errorMessage = 'No account found with this email. Please sign up first.';
+        } else if (error.code === 'auth/wrong-password') {
+            errorMessage = 'Incorrect password. Please try again or reset your password.';
+        } else if (error.code === 'auth/invalid-email') {
+            errorMessage = 'Invalid email address format.';
+        } else if (error.code === 'auth/too-many-requests') {
+            errorMessage = 'Too many failed login attempts. Please try again later.';
+        } else if (error.code === 'auth/invalid-credential') {
+            errorMessage = 'Invalid email or password. Please check your credentials.';
+        }
+        
+        showModal('Login Failed', errorMessage, 
+            `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>
+             <button onclick="hideModal(); showForgotPasswordModal()" class="px-4 py-2 bg-blue-600 text-white rounded">Forgot Password?</button>`);
     }
 };
 
