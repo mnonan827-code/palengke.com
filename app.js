@@ -1449,6 +1449,14 @@ window.addToCart = async function(productId, qty = 1) {
     if (p.quantity <= 0) return showModal('Out of stock', `${p.name} is out of stock.`, `<button onclick="hideModal()" class="px-4 py-2 bg-gray-200 rounded">OK</button>`);
 
     const idx = window.APP_STATE.cart.findIndex(c => c.productId === productId && !c.preordered);
+    const currentQtyInCart = idx >= 0 ? window.APP_STATE.cart[idx].quantity : 0;
+    const newTotalQty = currentQtyInCart + qty;
+    
+    // Check order limit
+    if(p.orderLimit && newTotalQty > p.orderLimit) {
+        return showModal('Order Limit Exceeded', `Maximum order quantity for ${p.name} is ${p.orderLimit} ${p.unit}${p.orderLimit > 1 ? 's' : ''} per customer. You already have ${currentQtyInCart} in your cart.`, `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
+    }
+    
     if (idx >= 0) {
         if (p.quantity < qty) return showModal('Not enough stock', `Only ${p.quantity} ${p.unit} left in stock.`, `<button onclick="hideModal()" class="px-4 py-2 bg-gray-200 rounded">OK</button>`);
         window.APP_STATE.cart[idx].quantity += qty;
@@ -1495,7 +1503,15 @@ window.changeCartItem = async function(pid, newQty) {
     const diff = newQty - oldQty;
     const product = window.APP_STATE.products.find(p=> p.id === pid);
     
-    if(diff > 0 && product && product.quantity < diff) {
+    if(!product) return;
+    
+    // Check order limit
+    if(product.orderLimit && newQty > product.orderLimit) {
+        return showModal('Order Limit Exceeded', `Maximum order quantity for ${product.name} is ${product.orderLimit} ${product.unit}${product.orderLimit > 1 ? 's' : ''} per customer.`, `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
+    }
+    
+    // Check stock availability
+    if(diff > 0 && product.quantity < diff) {
         return showModal('Not enough stock', `Only ${product.quantity} ${product.unit} left in stock.`, `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
     }
     
@@ -2216,6 +2232,11 @@ window.adminAddProduct = function() {
             <option value="bundle">bundle</option>
         </select>
     </div>
+    <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Order Limit per Customer (optional)</label>
+        <input id="p-order-limit" type="number" min="1" placeholder="e.g., 5 (leave empty for no limit)" class="p-2 border rounded w-full" />
+        <div class="text-xs text-gray-500 mt-1">Maximum quantity a customer can order at once</div>
+    </div>
     <input id="p-origin" placeholder="Origin (Farm name)" class="p-2 border rounded" />
     <div class="grid grid-cols-2 gap-2">
         <input id="p-farmer" placeholder="Farmer name" class="p-2 border rounded" />
@@ -2257,6 +2278,7 @@ window.adminSaveProduct = async function(editId = null) {
     const price = parseFloat(document.getElementById('p-price')?.value);
     const qty = parseInt(document.getElementById('p-qty')?.value);
     const unit = document.getElementById('p-unit')?.value?.trim();
+    const orderLimit = parseInt(document.getElementById('p-order-limit')?.value) || null;
     const origin = document.getElementById('p-origin')?.value?.trim();
     const farmer = document.getElementById('p-farmer')?.value?.trim();
     const contact = document.getElementById('p-contact')?.value?.trim();
@@ -2267,7 +2289,6 @@ window.adminSaveProduct = async function(editId = null) {
     if(!name || isNaN(price) || isNaN(qty) || !unit || !origin || !farmer || !contact){
         return showModal('Missing fields', 'Please fill all product fields correctly.', `<button onclick="hideModal()" class="btn btn-secondary">OK</button>`);
     }
-
 
     let imgUrl = '';
     
@@ -2283,9 +2304,8 @@ window.adminSaveProduct = async function(editId = null) {
             return showModal('Upload Error', 'Failed to upload image: ' + uploadError.message, `<button onclick="hideModal()" class="btn btn-secondary">OK</button>`);
         }
     } else {
-        // Use placeholder
-        imgUrl = `https://placehold.co/600x360/4ade80/ffffff?text=${encodeURIComponent(name || 'Product')}`;
-        console.log('Using placeholder image:', imgUrl);
+        imgUrl = preview.src || `https://placehold.co/600x360/4ade80/ffffff?text=${encodeURIComponent(name || 'Product')}`;
+        console.log('Using existing or placeholder image:', imgUrl);
     }
 
     const isPre = document.getElementById('p-preorder')?.checked;
@@ -2298,11 +2318,11 @@ window.adminSaveProduct = async function(editId = null) {
             price, 
             quantity: qty, 
             unit, 
+            orderLimit: orderLimit,
             origin, 
             farmer: { name: farmer, contact }, 
             imgUrl: imgUrl,
             freshness: freshness,
-
         };
         if(isPre){
             productUpdate.preorder = true;
@@ -2322,7 +2342,8 @@ window.adminSaveProduct = async function(editId = null) {
             description,
             price, 
             quantity: qty, 
-            unit, 
+            unit,
+            orderLimit: orderLimit,
             origin, 
             farmer: { name: farmer, contact }, 
             imgUrl: imgUrl,
@@ -2358,6 +2379,11 @@ window.adminEditProduct = function(id) {
             <option value="pack" ${p.unit === 'pack' ? 'selected' : ''}>pack</option>
             <option value="bundle" ${p.unit === 'bundle' ? 'selected' : ''}>bundle</option>
         </select>
+    </div>
+    <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Order Limit per Customer (optional)</label>
+        <input id="p-order-limit" type="number" min="1" value="${p.orderLimit || ''}" placeholder="e.g., 5 (leave empty for no limit)" class="p-2 border rounded w-full" />
+        <div class="text-xs text-gray-500 mt-1">Maximum quantity a customer can order at once</div>
     </div>
     <input id="p-origin" value="${p.origin}" placeholder="Origin (Farm name)" class="p-2 border rounded" />
     <div class="grid grid-cols-2 gap-2">
@@ -3646,6 +3672,9 @@ window.updateCartBadge = function() {
 window.renderCartDrawer = function() {
     const body = document.getElementById('cart-drawer-body');
     if (!body) return;
+    
+    const isAdmin = window.APP_STATE.currentUser && window.APP_STATE.currentUser.role === 'admin';
+    
     if (window.APP_STATE.cart.length === 0) {
         body.innerHTML = `<div class="text-center py-12 text-gray-500">Your cart is empty – add fresh products from the shop.</div>`;
         document.getElementById('cart-subtotal').textContent = formatPeso(0);
@@ -3655,42 +3684,63 @@ window.renderCartDrawer = function() {
         icons();
         return;
     }
+    
     const itemsHtml = window.APP_STATE.cart.map(it => {
+        const product = window.APP_STATE.products.find(p => p.id === it.productId);
+        const maxQty = product ? product.quantity : 0;
+        const orderLimit = product && product.orderLimit ? product.orderLimit : 999;
+        const currentLimit = Math.min(maxQty, orderLimit);
+        
         return `
             <div class="flex items-center gap-3 py-3 border-b">
                 <div class="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center overflow-hidden">
-                  <img src="${(window.APP_STATE.products.find(p => p.id === it.productId) || {imgUrl:''}).imgUrl}" alt="${it.name}" class="object-cover w-full h-full">
+                  <img src="${(product || {imgUrl:''}).imgUrl}" alt="${it.name}" class="object-cover w-full h-full">
                 </div>
-                <div class="flex-1">
-                  <div class="font-medium text-gray-800">${it.name}</div>
-                  <div class="text-sm text-gray-500">${it.quantity} x ${formatPeso(it.price)} / ${it.unit}</div>
+                <div class="flex-1 min-w-0">
+                  <div class="font-medium text-gray-800 truncate">${it.name}</div>
+                  <div class="text-sm text-gray-500">${formatPeso(it.price)} / ${it.unit}</div>
+                  ${product && product.orderLimit ? `<div class="text-xs text-orange-600 mt-1">Max: ${product.orderLimit} ${it.unit}${product.orderLimit > 1 ? 's' : ''}</div>` : ''}
                 </div>
                 <div class="text-right">
                   <div class="font-semibold text-gray-800">${formatPeso(it.price * it.quantity)}</div>
                   <div class="flex gap-1 mt-2 justify-end items-center">
-                    <button onclick="changeCartItem(${it.productId}, ${it.quantity - 1})" class="px-2 py-1 rounded-md text-sm bg-gray-100 hover:bg-gray-200">-</button>
+                    <button onclick="changeCartItem(${it.productId}, ${it.quantity - 1})" class="px-2 py-1 rounded-md text-sm bg-gray-100 hover:bg-gray-200" ${isAdmin ? 'disabled style="opacity:0.5;cursor:not-allowed;"' : ''}>-</button>
                     <input 
                         type="number" 
                         value="${it.quantity}" 
                         min="1"
+                        max="${currentLimit}"
                         onchange="changeCartItem(${it.productId}, parseInt(this.value) || 1)"
                         class="w-12 px-1 py-1 text-center text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-lime-500"
+                        ${isAdmin ? 'disabled style="opacity:0.5;cursor:not-allowed;"' : ''}
                     />
-                    <button onclick="changeCartItem(${it.productId}, ${it.quantity + 1})" class="px-2 py-1 rounded-md text-sm bg-gray-100 hover:bg-gray-200">+</button>
-                    <button onclick="removeCartItem(${it.productId})" class="px-2 py-1 rounded-md text-sm bg-red-50 text-red-600 hover:bg-red-100">Remove</button>
+                    <button onclick="changeCartItem(${it.productId}, ${it.quantity + 1})" class="px-2 py-1 rounded-md text-sm bg-gray-100 hover:bg-gray-200" ${isAdmin ? 'disabled style="opacity:0.5;cursor:not-allowed;"' : ''}>+</button>
+                    <button onclick="removeCartItem(${it.productId})" class="px-2 py-1 rounded-md text-sm bg-red-50 text-red-600 hover:bg-red-100" ${isAdmin ? 'disabled style="opacity:0.5;cursor:not-allowed;"' : ''}>Remove</button>
                   </div>
                 </div>
             </div>
         `;
     }).join('');
+    
     body.innerHTML = itemsHtml;
     const subtotal = window.APP_STATE.cart.reduce((s,i)=> s + (i.price * i.quantity), 0);
-    const deliveryFee = subtotal > 0 ? 25.00 : 0;
+    const deliveryFee = subtotal > 0 ? window.APP_STATE.deliveryFee || 25.00 : 0;
     const total = subtotal + deliveryFee;
 
     document.getElementById('cart-subtotal').textContent = formatPeso(subtotal);
     document.getElementById('cart-delivery-fee').textContent = formatPeso(deliveryFee);
     document.getElementById('cart-total').textContent = formatPeso(total);
+    
+    // Update checkout button visibility
+    const checkoutBtn = document.getElementById('checkout-btn');
+    if (checkoutBtn) {
+        if (isAdmin) {
+            checkoutBtn.style.display = 'none';
+        } else {
+            checkoutBtn.style.display = 'block';
+        }
+    }
+    
     updateCartBadge();
     icons();
 };
@@ -3947,6 +3997,7 @@ window.showProduct = function(id) {
                 <div class="text-gray-500 text-sm mb-1">Farmer: <b>${p.farmer.name}</b> (${p.farmer.contact})</div>
                 <div class="text-gray-700 text-sm mb-1">Price: <b>${formatPeso(p.price)}</b> / ${p.unit}</div>
                 <div class="text-gray-700 text-sm mb-1">Stock: <b class="${lowStock?'text-red-500':''}">${p.quantity}</b> ${p.unit}${p.quantity>1?'s':''}</div>
+                ${p.orderLimit ? `<div class="text-orange-600 text-sm font-semibold mb-1">⚠️ Max order: ${p.orderLimit} ${p.unit}${p.orderLimit > 1 ? 's' : ''} per customer</div>` : ''}
                 ${isPre ? `<div class="text-yellow-600 text-sm">Pre-Order available in ${rem>0? rem : 0} day(s)</div>` : ''}
             </div>
         </div>
@@ -4778,14 +4829,20 @@ function setupEventListeners() {
     
     // Cart
     const cartBtn = document.getElementById('cart-btn');
-    if (cartBtn) {
-        cartBtn.addEventListener('click', () => toggleCartDrawer());
-    }
-    
-    const closeCart = document.getElementById('close-cart');
-    if (closeCart) {
-        closeCart.addEventListener('click', () => toggleCartDrawer(false));
-    }
+if (cartBtn) {
+    cartBtn.addEventListener('click', () => toggleCartDrawer());
+}
+
+const closeCart = document.getElementById('close-cart');
+if (closeCart) {
+    const newCloseCart = closeCart.cloneNode(true);
+    closeCart.parentNode.replaceChild(newCloseCart, closeCart);
+    newCloseCart.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        toggleCartDrawer(false);
+    });
+}
     
     const checkoutBtn = document.getElementById('checkout-btn');
     if (checkoutBtn) {
