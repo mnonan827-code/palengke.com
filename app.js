@@ -2080,14 +2080,38 @@ window.validateAndPlaceOrder = async function() {
     
     // Proceed with placing order
     // ✅ Generate numeric order ID (e.g., 1001, 1002, 1003...)
-const getNextOrderId = async () => {
+// ✅ Generate random order ID in format O-XXXXXXXX (e.g., O-45782341, O-92736105...)
+const generateRandomOrderId = async () => {
     const ordersSnapshot = await get(ref(database, 'orders'));
+    const existingIds = new Set();
+    
+    // Get all existing order IDs
     if (ordersSnapshot.exists()) {
         const orders = Object.values(ordersSnapshot.val());
-        const maxId = Math.max(...orders.map(o => parseInt(o.id) || 0));
-        return maxId + 1;
+        orders.forEach(o => {
+            if (o.id) existingIds.add(o.id);
+        });
     }
-    return 1001; // Start from 1001
+    
+    // Generate random 8-digit number until we get a unique one
+    let newId;
+    let attempts = 0;
+    const maxAttempts = 100; // Prevent infinite loop
+    
+    do {
+        // Generate random number between 10000000 and 99999999 (8 digits)
+        const randomNum = Math.floor(Math.random() * 90000000) + 10000000;
+        newId = 'O-' + randomNum;
+        attempts++;
+    } while (existingIds.has(newId) && attempts < maxAttempts);
+    
+    // Fallback if somehow we can't generate unique ID
+    if (attempts >= maxAttempts) {
+        const timestamp = Date.now().toString().slice(-8);
+        newId = 'O-' + timestamp;
+    }
+    
+    return newId;
 };
 
 const newId = await getNextOrderId();
