@@ -1485,17 +1485,29 @@ window.preOrderItem = async function(productId, qty = 1) {
 window.changeCartItem = async function(pid, newQty) {
     const idx = window.APP_STATE.cart.findIndex(c=> c.productId === pid);
     if(idx === -1) return;
+    
+    // Ensure quantity is at least 1
+    newQty = Math.max(1, parseInt(newQty) || 1);
+    
     if(newQty <= 0) return removeCartItem(pid);
+    
     const oldQty = window.APP_STATE.cart[idx].quantity;
     const diff = newQty - oldQty;
     const product = window.APP_STATE.products.find(p=> p.id === pid);
+    
     if(diff > 0 && product && product.quantity < diff) {
         return showModal('Not enough stock', `Only ${product.quantity} ${product.unit} left in stock.`, `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
     }
-    if(product) product.quantity = Math.max(0, product.quantity - diff * 1 * (diff > 0 ? 1 : -1));
+    
+    if(product) {
+        product.quantity = Math.max(0, product.quantity - diff);
+    }
+    
     window.APP_STATE.cart[idx].quantity = newQty;
-    saveToFirebase(`carts/${window.APP_STATE.currentUser.uid}`, window.APP_STATE.cart);
-    updateFirebase(`products/${pid}`, { quantity: product.quantity });
+    
+    await saveToFirebase(`carts/${window.APP_STATE.currentUser.uid}`, window.APP_STATE.cart);
+    await updateFirebase(`products/${pid}`, { quantity: product.quantity });
+    
     renderCartDrawer();
     renderMain();
 };
@@ -3635,32 +3647,39 @@ window.renderCartDrawer = function() {
     const body = document.getElementById('cart-drawer-body');
     if (!body) return;
     if (window.APP_STATE.cart.length === 0) {
-        body.innerHTML = `<div class="text-center py-12 text-gray-500">Your cart is empty — add fresh products from the shop.</div>`;
+        body.innerHTML = `<div class="text-center py-12 text-gray-500">Your cart is empty – add fresh products from the shop.</div>`;
         document.getElementById('cart-subtotal').textContent = formatPeso(0);
         document.getElementById('cart-delivery-fee').textContent = formatPeso(0);
         document.getElementById('cart-total').textContent = formatPeso(0);
         updateCartBadge();
         icons();
         return;
-     }
+    }
     const itemsHtml = window.APP_STATE.cart.map(it => {
         return `
             <div class="flex items-center gap-3 py-3 border-b">
                 <div class="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center overflow-hidden">
                   <img src="${(window.APP_STATE.products.find(p => p.id === it.productId) || {imgUrl:''}).imgUrl}" alt="${it.name}" class="object-cover w-full h-full">
-                  </div>
+                </div>
                 <div class="flex-1">
                   <div class="font-medium text-gray-800">${it.name}</div>
                   <div class="text-sm text-gray-500">${it.quantity} x ${formatPeso(it.price)} / ${it.unit}</div>
-                  </div>
+                </div>
                 <div class="text-right">
                   <div class="font-semibold text-gray-800">${formatPeso(it.price * it.quantity)}</div>
-                  <div class="flex gap-1 mt-2 justify-end">
-                    <button onclick="changeCartItem(${it.productId}, ${it.quantity - 1})" class="px-2 py-1 rounded-md text-sm bg-gray-100">-</button>
-                    <button onclick="changeCartItem(${it.productId}, ${it.quantity + 1})" class="px-2 py-1 rounded-md text-sm bg-gray-100">+</button>
-                    <button onclick="removeCartItem(${it.productId})" class="px-2 py-1 rounded-md text-sm bg-red-50 text-red-600">Remove</button>
+                  <div class="flex gap-1 mt-2 justify-end items-center">
+                    <button onclick="changeCartItem(${it.productId}, ${it.quantity - 1})" class="px-2 py-1 rounded-md text-sm bg-gray-100 hover:bg-gray-200">-</button>
+                    <input 
+                        type="number" 
+                        value="${it.quantity}" 
+                        min="1"
+                        onchange="changeCartItem(${it.productId}, parseInt(this.value) || 1)"
+                        class="w-12 px-1 py-1 text-center text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-lime-500"
+                    />
+                    <button onclick="changeCartItem(${it.productId}, ${it.quantity + 1})" class="px-2 py-1 rounded-md text-sm bg-gray-100 hover:bg-gray-200">+</button>
+                    <button onclick="removeCartItem(${it.productId})" class="px-2 py-1 rounded-md text-sm bg-red-50 text-red-600 hover:bg-red-100">Remove</button>
                   </div>
-                 </div>
+                </div>
             </div>
         `;
     }).join('');

@@ -3219,3 +3219,70 @@ pre.chat-message-text {
     white-space: pre-wrap !important;
     display: block;
 }
+
+/* ==========================================
+   🛒 Enhanced Cart Drawer Scrolling
+   ========================================== */
+
+#cart-drawer {
+    display: flex;
+    flex-direction: column;
+}
+
+#cart-drawer-body {
+    max-height: none !important;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+#cart-drawer-body::-webkit-scrollbar {
+    width: 6px;
+}
+
+#cart-drawer-body::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 3px;
+}
+
+#cart-drawer-body::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 3px;
+}
+
+#cart-drawer-body::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+}
+
+/* Mobile cart drawer improvements */
+@media (max-width: 768px) {
+    #cart-drawer {
+        width: 100vw;
+        right: 0;
+        left: 0;
+        top: 0;
+        height: 100vh;
+        max-height: 100vh;
+        border-radius: 0;
+    }
+}
+
+/* ==========================================
+   🔢 Cart Quantity Input Styling
+   ========================================== */
+
+#cart-drawer-body input[type="number"] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+}
+
+#cart-drawer-body input[type="number"]::-webkit-inner-spin-button,
+#cart-drawer-body input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+#cart-drawer-body input[type="number"]:focus {
+    border-color: #84cc16;
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(132, 204, 22, 0.2);
+}
