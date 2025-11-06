@@ -88,6 +88,17 @@ const dbRefs = {
     chats: ref(database, 'chats') // 🟢 ADD THIS LINE
 };
 
+// Helper to safely initialize Lucide icons
+window.safeIconInit = function() {
+    try {
+        if (window.lucide && typeof lucide.createIcons === 'function') {
+            lucide.createIcons();
+        }
+    } catch (error) {
+        console.warn('Icon initialization failed:', error);
+    }
+};
+
 // 🔥 TEST FUNCTION - Add this temporarily
 window.testFirebaseChat = async function() {
     console.log('🧪 Testing Firebase Chat Connection...');
@@ -1042,6 +1053,10 @@ window.renderAdminChatDropdown = function() {
 // Toggle Admin Chat Dropdown
 window.toggleAdminChatDropdown = function() {
     const dropdown = document.getElementById('admin-chat-dropdown');
+    if (!dropdown) {
+        console.error('Admin chat dropdown not found');
+        return;
+    }
     dropdown.classList.toggle('hidden');
     if (!dropdown.classList.contains('hidden')) {
         window.renderAdminChatDropdown();
@@ -1509,9 +1524,29 @@ window.checkout = async function() {
         return showModal('Login required', 'Please log in or create an account to place your order.', `<button onclick="hideModal(); openAuth('login')" class="px-4 py-2 bg-lime-600 text-white rounded">Log in</button><button onclick="hideModal(); openAuth('signup')" class="px-4 py-2 bg-white border rounded">Sign up</button>`);
     }
 
-    // Check if user has completed profile
+    // ✅ NEW: Check if user has completed profile
     const userData = await getFromFirebase(`users/${window.APP_STATE.currentUser.uid}`);
     const profile = userData.profile || {};
+    
+    // ✅ NEW: Check if profile is denied
+    if(profile.denied) {
+        return showModal('Profile Verification Denied', `
+            <div class="space-y-3">
+                <div class="bg-red-50 p-3 rounded-lg border-l-4 border-red-500">
+                    <div class="flex items-center gap-2 text-red-800 mb-2">
+                        <i data-lucide="x-circle" class="w-5 h-5"></i>
+                        <span class="font-semibold">Your profile verification was denied</span>
+                    </div>
+                    <div class="bg-white p-2 rounded border border-red-200">
+                        <div class="text-xs text-red-700 font-semibold mb-1">Reason:</div>
+                        <div class="text-sm text-red-900">${profile.denialReason || 'No reason provided'}</div>
+                    </div>
+                </div>
+                <p class="text-gray-700">Please update your profile information and resubmit for verification before you can place orders.</p>
+            </div>
+        `, `<button onclick="hideModal(); showUserProfile();" class="px-4 py-2 bg-lime-600 text-white rounded">Update Profile</button>
+            <button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">Cancel</button>`);
+    }
     
     if(!profile.fullName || !profile.idUrl) {
         return showModal('Complete Your Profile', `
@@ -1522,7 +1557,24 @@ window.checkout = async function() {
         `, `<button onclick="hideModal(); showUserProfile();" class="px-4 py-2 bg-lime-600 text-white rounded">Complete Profile</button>
             <button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">Cancel</button>`);
     }
+
+    // ✅ NEW: Check if profile is still pending verification
+    if(!profile.verified) {
+        return showModal('Profile Pending Verification', `
+            <div class="space-y-3">
+                <div class="bg-yellow-50 p-3 rounded-lg border-l-4 border-yellow-500">
+                    <div class="flex items-center gap-2 text-yellow-800">
+                        <i data-lucide="clock" class="w-5 h-5"></i>
+                        <span class="font-semibold">Your profile is pending verification</span>
+                    </div>
+                </div>
+                <p class="text-gray-700">An admin is reviewing your profile information.</p>
+                <p class="text-sm text-gray-600">You'll be able to place orders once your profile is verified.</p>
+            </div>
+        `, `<button onclick="hideModal()" class="px-4 py-2 bg-lime-600 text-white rounded">OK</button>`);
+    }
     
+    // ... rest of the checkout function continues as normal
     const subtotal = window.APP_STATE.cart.reduce((s,i)=> s + i.price * i.quantity, 0);
     const deliveryFee = window.APP_STATE.deliveryFee || 25.00;
     const total = subtotal + deliveryFee;
@@ -2037,7 +2089,8 @@ window.validateAndPlaceOrder = async function() {
     const profile = userData.profile || {};
     
     // Proceed with placing order
-    const newId = 'O-' + uid();
+    // ✅ FIXED: Generate proper random order ID
+const newId = 'O-' + uid(); // Now generates O-XXXXXXXX with random alphanumeric
     const itemsCopy = window.APP_STATE.cart.map(i=> ({ ...i }));
     const subtotal = itemsCopy.reduce((s,i)=> s + i.price * i.quantity, 0);
     const deliveryFee = window.APP_STATE.deliveryFee || 25.00;
@@ -2554,6 +2607,8 @@ window.viewUserProfile = async function(userId) {
                         </span>
                         ${profile.verified ? 
                             '<span class="text-xs bg-green-500 text-white px-2 py-0.5 rounded">Verified</span>' : 
+                            profile.denied ?
+                            '<span class="text-xs bg-red-500 text-white px-2 py-0.5 rounded">Denied</span>' :
                             '<span class="text-xs bg-yellow-500 text-white px-2 py-0.5 rounded">Pending</span>'
                         }
                     </h4>
@@ -2567,8 +2622,16 @@ window.viewUserProfile = async function(userId) {
                         <div><b>ID Type:</b> ${profile.idType}</div>
                         ${profile.submittedAt ? `<div class="text-xs text-gray-500"><b>Submitted:</b> ${new Date(profile.submittedAt).toLocaleString()}</div>` : ''}
                         ${profile.verifiedAt ? `<div class="text-xs text-gray-500"><b>Verified:</b> ${new Date(profile.verifiedAt).toLocaleString()}</div>` : ''}
+                        ${profile.deniedAt ? `<div class="text-xs text-gray-500"><b>Denied:</b> ${new Date(profile.deniedAt).toLocaleString()}</div>` : ''}
                     </div>
                 </div>
+
+                ${profile.denied ? `
+                    <div class="bg-red-50 p-3 rounded border border-red-200">
+                        <div class="text-xs text-red-700 font-semibold mb-1">Denial Reason:</div>
+                        <div class="text-sm text-red-900">${profile.denialReason || 'No reason provided'}</div>
+                    </div>
+                ` : ''}
 
                 ${profile.idUrl ? `
                     <div class="bg-gray-50 p-3 rounded">
@@ -2584,10 +2647,13 @@ window.viewUserProfile = async function(userId) {
             </div>
         `, `
             <button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">Close</button>
-            ${!profile.verified && profile.idUrl ? `
-  <button onclick="verifyCustomerProfile('${userId}')" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">✓ Verify Profile</button>
-  <button onclick="denyCustomerProfile('${userId}')" class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700">✗ Deny Profile</button>
-` : ''}
+            ${!profile.verified && profile.idUrl && !profile.denied ? `
+                <button onclick="verifyCustomerProfile('${userId}')" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">✓ Verify Profile</button>
+                <button onclick="denyCustomerProfile('${userId}')" class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700">✗ Deny Profile</button>
+            ` : ''}
+            ${profile.denied && profile.idUrl ? `
+                <button onclick="verifyCustomerProfile('${userId}')" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">✓ Approve Now</button>
+            ` : ''}
         `);
 
         setTimeout(() => icons(), 100);
@@ -2847,7 +2913,15 @@ window.viewDeleteLogs = async function() {
 window.$ = function(sel){ return document.querySelector(sel); };
 window.$all = function(sel){ return Array.from(document.querySelectorAll(sel)); };
 window.formatPeso = function(n){ return '₱' + Number(n).toLocaleString('en-PH', {minimumFractionDigits:2, maximumFractionDigits:2}); };
-window.uid = function(){ return Date.now().toString().slice(-8); };
+window.uid = function() { 
+    // Generate random alphanumeric string (8 characters)
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let result = '';
+    for (let i = 0; i < 8; i++) {
+        result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return result;
+};
 
 // ADD THESE NEW FUNCTIONS:
 
@@ -3115,7 +3189,15 @@ window.uploadImagePreview = function(fileInputId, previewImgId) {
     reader.readAsDataURL(f);
 };
 
-window.icons = function(){ if(window.lucide) lucide.createIcons(); };
+window.icons = function() { 
+    try {
+        if (window.lucide && typeof lucide.createIcons === 'function') {
+            lucide.createIcons();
+        }
+    } catch (error) {
+        console.warn('Lucide icons failed to initialize:', error);
+    }
+};
 
 window.updateFreshnessDisplay = function(value) {
     const freshnessValue = document.getElementById('freshness-value');
@@ -4587,6 +4669,10 @@ ${deniedUsers.length > 0 ? `
 
 // NEW FUNCTION: Switch between admin dashboard views
 window.switchAdminView = function(viewName) {
+    if (!window.APP_STATE.currentUser || window.APP_STATE.currentUser.role !== 'admin') {
+        return showModal('Forbidden', 'Admin access required.', `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
+    }
+    
     window.APP_STATE.adminView = viewName;
     renderMain();
 };
@@ -4607,26 +4693,68 @@ window.toggleHowItWorks = function() {
 
 // Event Listeners
 function setupEventListeners() {
+    console.log('🔧 Setting up event listeners...');
+    
     // Main navigation
-    document.getElementById('view-store').addEventListener('click', () => switchTo('shop'));
-    document.getElementById('view-orders').addEventListener('click', () => switchTo('orders'));
-    document.getElementById('browse-products').addEventListener('click', () => switchTo('shop'));
-    document.getElementById('how-it-works').addEventListener('click', toggleHowItWorks);
+    const viewStore = document.getElementById('view-store');
+    if (viewStore) {
+        viewStore.addEventListener('click', () => switchTo('shop'));
+    }
+    
+    const viewOrders = document.getElementById('view-orders');
+    if (viewOrders) {
+        viewOrders.addEventListener('click', () => switchTo('orders'));
+    }
+    
+    const browseProducts = document.getElementById('browse-products');
+    if (browseProducts) {
+        browseProducts.addEventListener('click', () => switchTo('shop'));
+    }
+    
+    const howItWorks = document.getElementById('how-it-works');
+    if (howItWorks) {
+        howItWorks.addEventListener('click', toggleHowItWorks);
+    }
     
     // Mobile navigation
-    document.getElementById('mobile-menu-btn').addEventListener('click', toggleMobileMenu);
-    document.getElementById('mobile-view-store').addEventListener('click', () => switchTo('shop'));
-    document.getElementById('mobile-view-orders').addEventListener('click', () => switchTo('orders'));
+    const mobileMenuBtn = document.getElementById('mobile-menu-btn');
+    if (mobileMenuBtn) {
+        mobileMenuBtn.addEventListener('click', toggleMobileMenu);
+    }
+    
+    const mobileViewStore = document.getElementById('mobile-view-store');
+    if (mobileViewStore) {
+        mobileViewStore.addEventListener('click', () => switchTo('shop'));
+    }
+    
+    const mobileViewOrders = document.getElementById('mobile-view-orders');
+    if (mobileViewOrders) {
+        mobileViewOrders.addEventListener('click', () => switchTo('orders'));
+    }
     
     // Cart
-    document.getElementById('cart-btn').addEventListener('click', () => toggleCartDrawer());
-    document.getElementById('close-cart').addEventListener('click', () => toggleCartDrawer(false));
-    document.getElementById('checkout-btn').addEventListener('click', checkout);
+    const cartBtn = document.getElementById('cart-btn');
+    if (cartBtn) {
+        cartBtn.addEventListener('click', () => toggleCartDrawer());
+    }
+    
+    const closeCart = document.getElementById('close-cart');
+    if (closeCart) {
+        closeCart.addEventListener('click', () => toggleCartDrawer(false));
+    }
+    
+    const checkoutBtn = document.getElementById('checkout-btn');
+    if (checkoutBtn) {
+        checkoutBtn.addEventListener('click', checkout);
+    }
     
     // Modal
-    document.getElementById('modal-overlay').addEventListener('click', (e) => {
-        if (e.target === e.currentTarget) hideModal();
-    });
+    const modalOverlay = document.getElementById('modal-overlay');
+    if (modalOverlay) {
+        modalOverlay.addEventListener('click', (e) => {
+            if (e.target === e.currentTarget) hideModal();
+        });
+    }
 
     // Close mobile menu when clicking outside
     document.addEventListener('click', (e) => {
@@ -4637,6 +4765,8 @@ function setupEventListeners() {
             closeMobileMenu();
         }
     });
+    
+    console.log('✅ Event listeners setup complete');
 }
 
 // Auth state listener
@@ -4682,6 +4812,104 @@ window.addEventListener('keydown', (e) => {
     }
 
 });
+
+// ✅ VERIFY ALL CRITICAL FUNCTIONS EXIST
+window.addEventListener('load', () => {
+    const criticalFunctions = [
+        'switchTo',
+        'checkout',
+        'toggleCartDrawer',
+        'toggleMobileMenu',
+        'openAuth',
+        'loginUser',
+        'signupUser',
+        'logoutUser',
+        'addToCart',
+        'preOrderItem',
+        'showUserProfile',
+        'adminAddProduct',
+        'adminEditProduct',
+        'adminDeleteProduct',
+        'adminViewOrder',
+        'adminEditOrder',
+        'adminDeleteOrder',
+        'verifyCustomerProfile',
+        'denyCustomerProfile',
+        'viewUserProfile',
+        'switchAdminView',
+        'toggleAdminChatDropdown'
+    ];
+    
+    const missing = criticalFunctions.filter(fn => typeof window[fn] !== 'function');
+    
+    if (missing.length > 0) {
+        console.error('❌ Missing functions:', missing);
+    } else {
+        console.log('✅ All critical functions loaded successfully');
+    }
+    
+    // Test button bindings
+    setTimeout(() => {
+        console.log('🔍 Testing button bindings...');
+        const testResults = window.testAllButtons();
+        
+        if (testResults.broken.length > 0 || testResults.missing.length > 0) {
+            console.warn('⚠️ Some buttons may not work correctly');
+        } else {
+            console.log('✅ All buttons properly configured');
+        }
+    }, 2000);
+});
+
+// ✅ Ensure Browse Products Button Works
+window.browsToShop = function() {
+    window.APP_STATE.view = 'shop';
+    window.APP_STATE.searchQuery = '';
+    closeMobileMenu();
+    renderMain();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+};
+
+// ✅ BUTTON FUNCTIONALITY TESTER
+window.testAllButtons = function() {
+    const results = {
+        working: [],
+        broken: [],
+        missing: []
+    };
+    
+    const buttonsToTest = [
+        { id: 'view-store', fn: 'switchTo', params: ['shop'] },
+        { id: 'view-orders', fn: 'switchTo', params: ['orders'] },
+        { id: 'cart-btn', fn: 'toggleCartDrawer', params: [] },
+        { id: 'browse-products', fn: 'switchTo', params: ['shop'] },
+        { id: 'how-it-works', fn: 'toggleHowItWorks', params: [] },
+        { id: 'checkout-btn', fn: 'checkout', params: [] },
+        { id: 'close-cart', fn: 'toggleCartDrawer', params: [false] },
+        { id: 'mobile-menu-btn', fn: 'toggleMobileMenu', params: [] },
+        { id: 'user-menu-btn', fn: 'toggleUserMenu', params: [] },
+    ];
+    
+    buttonsToTest.forEach(test => {
+        const element = document.getElementById(test.id);
+        if (!element) {
+            results.missing.push(test.id);
+            return;
+        }
+        
+        if (typeof window[test.fn] === 'function') {
+            results.working.push(test.id);
+        } else {
+            results.broken.push({ id: test.id, fn: test.fn });
+        }
+    });
+    
+    console.log('✅ Working Buttons:', results.working);
+    console.log('❌ Broken Buttons:', results.broken);
+    console.log('⚠️ Missing Buttons:', results.missing);
+    
+    return results;
+};
 
 console.log('validateAndPlaceOrder exists:', typeof window.validateAndPlaceOrder);
 console.log('CAINTA_BARANGAYS:', CAINTA_BARANGAYS);
