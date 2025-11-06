@@ -1555,27 +1555,61 @@ window.sendPasswordResetCode = async function() {
     try {
         console.log('🔍 Looking for user with email:', email);
         
-        // Check if email exists in database
+        // ✅ NEW: Get Firebase Auth user first, then match with database
         const usersData = await getFromFirebase('users');
         console.log('📊 Users data loaded:', usersData ? 'Yes' : 'No');
         
         if (!usersData) {
             console.error('❌ No users data found in database');
             if (errorDiv) {
-                errorDiv.textContent = 'No account found with this email address';
+                errorDiv.textContent = 'Database error. Please contact support.';
                 errorDiv.classList.remove('hidden');
             }
             return;
         }
         
-        // Find user by email
-        // Find user by email (check both root level and in auth)
-const userEntry = Object.entries(usersData).find(([uid, userData]) => {
-    console.log('Checking user:', userData.email, 'against', email);
-    // Check email at root level (newer format) OR in auth (if exists)
-    const userEmail = userData.email?.toLowerCase();
-    return userEmail === email;
-});
+        // Find user by email (check multiple possible locations)
+        let userEntry = null;
+        
+        // Method 1: Check root level email
+        userEntry = Object.entries(usersData).find(([uid, userData]) => 
+            userData.email?.toLowerCase() === email
+        );
+        
+        // Method 2: If not found, try to find by Firebase Auth UID
+        // This is a fallback for users created before email was stored properly
+        if (!userEntry) {
+            console.log('⚠️ Email not found at root level, checking auth...');
+            
+            // Try to sign in temporarily to get the UID
+            try {
+                const { signInWithEmailAndPassword } = await import("https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js");
+                
+                // This will fail if password is wrong, but that's okay - we just need to know if the account exists
+                await signInWithEmailAndPassword(auth, email, 'test-password-to-check-existence');
+                
+            } catch (authError) {
+                console.log('Auth error:', authError.code);
+                
+                if (authError.code === 'auth/user-not-found') {
+                    if (errorDiv) {
+                        errorDiv.textContent = 'No account found with this email address';
+                        errorDiv.classList.remove('hidden');
+                    }
+                    return;
+                } else if (authError.code === 'auth/wrong-password' || authError.code === 'auth/invalid-credential') {
+                    // ✅ Account exists! Now find it in database by checking all users
+                    console.log('✅ Firebase Auth account exists, finding in database...');
+                    
+                    // Get the UID from auth state
+                    const user = auth.currentUser;
+                    if (user) {
+                        userEntry = [user.uid, usersData[user.uid]];
+                        console.log('✅ Found user by auth UID:', user.uid);
+                    }
+                }
+            }
+        }
         
         if (!userEntry) {
             console.error('❌ No user found with email:', email);
@@ -1607,11 +1641,18 @@ const userEntry = Object.entries(usersData).find(([uid, userData]) => {
         
         console.log('💾 Saving reset code to database...');
         
-        // Save reset code to database
-        await updateFirebase(`users/${userId}`, {
+        // ✅ Save email if it doesn't exist
+        const updates = {
             passwordResetCode: resetCode,
             passwordResetExpiry: codeExpiry
-        });
+        };
+        
+        if (!userData.email) {
+            updates.email = email; // ✅ Add email to database if missing
+            console.log('💾 Adding missing email to user record');
+        }
+        
+        await updateFirebase(`users/${userId}`, updates);
         
         console.log('📧 Sending email...');
         
@@ -5260,6 +5301,24 @@ window.addEventListener('keydown', (e) => {
     }
 
 });
+
+// 🔧 MANUAL FIX: Add email to user record
+window.manuallyFixUserEmail = async function(email, userId) {
+    try {
+        console.log(`🔧 Fixing user ${userId} with email ${email}`);
+        
+        await updateFirebase(`users/${userId}`, {
+            email: email.toLowerCase()
+        });
+        
+        console.log('✅ Email added successfully');
+        alert('Email added to your account. Try forgot password again!');
+        
+    } catch (error) {
+        console.error('❌ Failed to add email:', error);
+        alert('Failed to add email. Error: ' + error.message);
+    }
+};
 
 
 console.log('validateAndPlaceOrder exists:', typeof window.validateAndPlaceOrder);
