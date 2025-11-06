@@ -5200,5 +5200,39 @@ window.addEventListener('keydown', (e) => {
 
 });
 
+// Add this temporarily to test
+window.testPasswordReset = async function() {
+    console.log('🧪 Testing password reset system...');
+    
+    try {
+        // Test 1: Check if we can read users
+        const usersData = await getFromFirebase('users');
+        console.log('Test 1 - Users data:', usersData);
+        
+        if (!usersData) {
+            console.error('❌ No users in database');
+            return;
+        }
+        
+        // Test 2: List all user emails
+        console.log('Test 2 - User emails in database:');
+        Object.entries(usersData).forEach(([uid, userData]) => {
+            console.log(`  - ${userData.email} (${userData.role})`);
+        });
+        
+        // Test 3: Try to find a specific email
+        const testEmail = 'mmonan827@gmail.com';
+        const found = Object.entries(usersData).find(([uid, userData]) => 
+            userData.email?.toLowerCase() === testEmail.toLowerCase()
+        );
+        console.log('Test 3 - Found user:', found ? 'Yes' : 'No');
+        
+        console.log('✅ All tests completed');
+        
+    } catch (error) {
+        console.error('❌ Test failed:', error);
+    }
+};
+
 console.log('validateAndPlaceOrder exists:', typeof window.validateAndPlaceOrder);
 console.log('CAINTA_BARANGAYS:', CAINTA_BARANGAYS);
