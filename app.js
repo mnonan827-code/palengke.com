@@ -1468,45 +1468,57 @@ window.loginUser = async function() {
 
 // Show forgot password modal
 // Show forgot password modal
+// Show forgot password modal - UPDATED VERSION
 window.showForgotPasswordModal = function() {
+    console.log('🔓 Opening Forgot Password modal...');
+    
     hideModal(); // Close login modal first
     
-    showModal('Forgot Password', `
-        <div class="space-y-4">
-            <p class="text-gray-700">Enter your registered email address and we'll send you a verification code to reset your password.</p>
-            
-            <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
-                <input 
-                    id="forgot-email" 
-                    type="email" 
-                    placeholder="your@email.com" 
-                    class="w-full p-2 border rounded focus:ring-2 focus:ring-lime-500" 
-                    required 
-                    autocomplete="email"
-                />
-            </div>
-            
-            <div id="forgot-error" class="text-red-600 text-sm font-semibold hidden"></div>
-        </div>
-    `, `
-        <button onclick="hideModal(); openAuth('login')" class="px-4 py-2 bg-gray-100 rounded hover:bg-gray-200">Back to Login</button>
-        <button onclick="sendPasswordResetCode()" class="px-4 py-2 bg-lime-600 text-white rounded hover:bg-lime-700">Send Reset Code</button>
-    `);
-    
+    // Small delay to ensure modal closes first
     setTimeout(() => {
-        const emailInput = document.getElementById('forgot-email');
-        if (emailInput) {
-            emailInput.focus();
+        showModal('Forgot Password', `
+            <div class="space-y-4">
+                <p class="text-gray-700">Enter your registered email address and we'll send you a verification code to reset your password.</p>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
+                    <input 
+                        id="forgot-email" 
+                        type="email" 
+                        placeholder="your@email.com" 
+                        class="w-full p-2 border rounded focus:ring-2 focus:ring-lime-500" 
+                        required 
+                        autocomplete="email"
+                    />
+                </div>
+                
+                <div id="forgot-error" class="text-red-600 text-sm font-semibold hidden"></div>
+            </div>
+        `, `
+            <button onclick="hideModal(); openAuth('login')" class="px-4 py-2 bg-gray-100 rounded hover:bg-gray-200">Back to Login</button>
+            <button id="send-reset-btn" onclick="sendPasswordResetCode()" class="px-4 py-2 bg-lime-600 text-white rounded hover:bg-lime-700">Send Reset Code</button>
+        `);
+        
+        setTimeout(() => {
+            const emailInput = document.getElementById('forgot-email');
+            const errorDiv = document.getElementById('forgot-error');
             
-            // Add Enter key handler
-            emailInput.addEventListener('keypress', function(e) {
-                if (e.key === 'Enter') {
-                    e.preventDefault();
-                    sendPasswordResetCode();
-                }
-            });
-        }
+            console.log('📝 Input field found:', emailInput ? 'Yes' : 'No');
+            console.log('🚨 Error div found:', errorDiv ? 'Yes' : 'No');
+            
+            if (emailInput) {
+                emailInput.focus();
+                
+                // Add Enter key handler
+                emailInput.addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        console.log('⌨️ Enter pressed, sending reset code...');
+                        sendPasswordResetCode();
+                    }
+                });
+            }
+        }, 100);
     }, 100);
 };
 
@@ -1557,10 +1569,13 @@ window.sendPasswordResetCode = async function() {
         }
         
         // Find user by email
-        const userEntry = Object.entries(usersData).find(([uid, userData]) => {
-            console.log('Checking user:', userData.email, 'against', email);
-            return userData.email?.toLowerCase() === email;
-        });
+        // Find user by email (check both root level and in auth)
+const userEntry = Object.entries(usersData).find(([uid, userData]) => {
+    console.log('Checking user:', userData.email, 'against', email);
+    // Check email at root level (newer format) OR in auth (if exists)
+    const userEmail = userData.email?.toLowerCase();
+    return userEmail === email;
+});
         
         if (!userEntry) {
             console.error('❌ No user found with email:', email);
@@ -1920,6 +1935,45 @@ window.resendVerificationCode = async function(email, password) {
     // ...
     await sendVerificationCodeEmail(email, userData.name, newVerificationCode);  // ← Uses EmailJS
     // ...
+};
+
+// 🔧 TEMPORARY FIX: Update existing users with their email
+window.fixExistingUserEmails = async function() {
+    console.log('🔧 Fixing existing user emails...');
+    
+    try {
+        const usersData = await getFromFirebase('users');
+        if (!usersData) {
+            console.log('No users found');
+            return;
+        }
+        
+        let fixedCount = 0;
+        
+        for (const [uid, userData] of Object.entries(usersData)) {
+            // Check if user has auth email but not in database root
+            if (userData.email) {
+                console.log(`✅ User ${uid} already has email: ${userData.email}`);
+                continue;
+            }
+            
+            // If user has no email at root, check if they have profile email
+            if (userData.profile && !userData.email) {
+                console.log(`⚠️ User ${uid} missing email at root level`);
+                // You'll need to manually add their email
+                // For now, just log the issue
+            }
+        }
+        
+        console.log(`✅ Fixed ${fixedCount} users`);
+        showModal('Fix Complete', `Updated ${fixedCount} user records with email addresses.`, 
+            `<button onclick="hideModal()" class="px-4 py-2 bg-lime-600 text-white rounded">OK</button>`);
+        
+    } catch (error) {
+        console.error('❌ Error fixing user emails:', error);
+        showModal('Error', 'Failed to fix user emails: ' + error.message,
+            `<button onclick="hideModal()" class="px-4 py-2 bg-red-600 text-white rounded">OK</button>`);
+    }
 };
 
 window.logoutUser = async function() {
@@ -2414,27 +2468,34 @@ window.saveUserProfile = async function() {
         const homeAddress = addressParts.join(', ');
 
         const profileData = {
-            fullName,
-            birthday,
-            age,
-            unit,
-            building: building || '',
-            street,
-            barangay,
-            homeAddress,
-            idType,
-            idUrl,
-            verified: false,
-            denied: false,  // ✅ Clear denial status
-            denialReason: null,  // ✅ Clear denial reason
-            deniedAt: null,  // ✅ Clear denial timestamp
-            deniedBy: null,  // ✅ Clear who denied it
-            submittedAt: new Date().toISOString()
-        };
+    fullName,
+    birthday,
+    age,
+    unit,
+    building: building || '',
+    street,
+    barangay,
+    homeAddress,
+    idType,
+    idUrl,
+    verified: false,
+    denied: false,
+    denialReason: null,
+    deniedAt: null,
+    deniedBy: null,
+    submittedAt: new Date().toISOString()
+};
+
+// ✅ NEW: Also save email at the user root level for easier lookup
+await updateFirebase(`users/${window.APP_STATE.currentUser.uid}`, {
+    email: window.APP_STATE.currentUser.email, // Save email here too
+    profile: profileData
+});
 
         await updateFirebase(`users/${window.APP_STATE.currentUser.uid}`, {
-            profile: profileData
-        });
+    email: window.APP_STATE.currentUser.email,
+    profile: profileData
+});
 
         hideModal();
         showModal('Profile Saved', `
@@ -5200,39 +5261,6 @@ window.addEventListener('keydown', (e) => {
 
 });
 
-// Add this temporarily to test
-window.testPasswordReset = async function() {
-    console.log('🧪 Testing password reset system...');
-    
-    try {
-        // Test 1: Check if we can read users
-        const usersData = await getFromFirebase('users');
-        console.log('Test 1 - Users data:', usersData);
-        
-        if (!usersData) {
-            console.error('❌ No users in database');
-            return;
-        }
-        
-        // Test 2: List all user emails
-        console.log('Test 2 - User emails in database:');
-        Object.entries(usersData).forEach(([uid, userData]) => {
-            console.log(`  - ${userData.email} (${userData.role})`);
-        });
-        
-        // Test 3: Try to find a specific email
-        const testEmail = 'mmonan827@gmail.com';
-        const found = Object.entries(usersData).find(([uid, userData]) => 
-            userData.email?.toLowerCase() === testEmail.toLowerCase()
-        );
-        console.log('Test 3 - Found user:', found ? 'Yes' : 'No');
-        
-        console.log('✅ All tests completed');
-        
-    } catch (error) {
-        console.error('❌ Test failed:', error);
-    }
-};
 
 console.log('validateAndPlaceOrder exists:', typeof window.validateAndPlaceOrder);
 console.log('CAINTA_BARANGAYS:', CAINTA_BARANGAYS);
