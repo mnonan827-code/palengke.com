@@ -1467,6 +1467,7 @@ window.loginUser = async function() {
 };
 
 // Show forgot password modal
+// Show forgot password modal
 window.showForgotPasswordModal = function() {
     hideModal(); // Close login modal first
     
@@ -1482,25 +1483,44 @@ window.showForgotPasswordModal = function() {
                     placeholder="your@email.com" 
                     class="w-full p-2 border rounded focus:ring-2 focus:ring-lime-500" 
                     required 
+                    autocomplete="email"
                 />
             </div>
             
-            <div id="forgot-error" class="text-red-600 text-sm hidden"></div>
+            <div id="forgot-error" class="text-red-600 text-sm font-semibold hidden"></div>
         </div>
     `, `
-        <button onclick="hideModal(); openAuth('login')" class="px-4 py-2 bg-gray-100 rounded">Back to Login</button>
+        <button onclick="hideModal(); openAuth('login')" class="px-4 py-2 bg-gray-100 rounded hover:bg-gray-200">Back to Login</button>
         <button onclick="sendPasswordResetCode()" class="px-4 py-2 bg-lime-600 text-white rounded hover:bg-lime-700">Send Reset Code</button>
     `);
     
     setTimeout(() => {
-        document.getElementById('forgot-email').focus();
+        const emailInput = document.getElementById('forgot-email');
+        if (emailInput) {
+            emailInput.focus();
+            
+            // Add Enter key handler
+            emailInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    sendPasswordResetCode();
+                }
+            });
+        }
     }, 100);
 };
 
 // Send password reset code
+// Send password reset code
 window.sendPasswordResetCode = async function() {
     const email = document.getElementById('forgot-email')?.value?.trim()?.toLowerCase();
     const errorDiv = document.getElementById('forgot-error');
+    
+    // Clear previous errors
+    if (errorDiv) {
+        errorDiv.textContent = '';
+        errorDiv.classList.add('hidden');
+    }
     
     if (!email) {
         if (errorDiv) {
@@ -1521,9 +1541,14 @@ window.sendPasswordResetCode = async function() {
     }
     
     try {
+        console.log('🔍 Looking for user with email:', email);
+        
         // Check if email exists in database
         const usersData = await getFromFirebase('users');
+        console.log('📊 Users data loaded:', usersData ? 'Yes' : 'No');
+        
         if (!usersData) {
+            console.error('❌ No users data found in database');
             if (errorDiv) {
                 errorDiv.textContent = 'No account found with this email address';
                 errorDiv.classList.remove('hidden');
@@ -1532,11 +1557,13 @@ window.sendPasswordResetCode = async function() {
         }
         
         // Find user by email
-        const userEntry = Object.entries(usersData).find(([uid, userData]) => 
-            userData.email === email
-        );
+        const userEntry = Object.entries(usersData).find(([uid, userData]) => {
+            console.log('Checking user:', userData.email, 'against', email);
+            return userData.email?.toLowerCase() === email;
+        });
         
         if (!userEntry) {
+            console.error('❌ No user found with email:', email);
             if (errorDiv) {
                 errorDiv.textContent = 'No account found with this email address';
                 errorDiv.classList.remove('hidden');
@@ -1545,9 +1572,11 @@ window.sendPasswordResetCode = async function() {
         }
         
         const [userId, userData] = userEntry;
+        console.log('✅ User found:', userId, userData.name);
         
         // Check if user is admin
         if (userData.role === 'admin') {
+            console.log('⚠️ Admin account detected');
             if (errorDiv) {
                 errorDiv.textContent = 'Password reset is not available for admin accounts. Please contact system administrator.';
                 errorDiv.classList.remove('hidden');
@@ -1555,9 +1584,13 @@ window.sendPasswordResetCode = async function() {
             return;
         }
         
+        console.log('🔐 Generating reset code...');
+        
         // Generate reset code
         const resetCode = generateVerificationCode();
         const codeExpiry = Date.now() + (15 * 60 * 1000); // 15 minutes
+        
+        console.log('💾 Saving reset code to database...');
         
         // Save reset code to database
         await updateFirebase(`users/${userId}`, {
@@ -1565,16 +1598,26 @@ window.sendPasswordResetCode = async function() {
             passwordResetExpiry: codeExpiry
         });
         
+        console.log('📧 Sending email...');
+        
         // Send email
         await sendPasswordResetEmail(email, userData.name, resetCode);
+        
+        console.log('✅ Password reset code sent successfully');
         
         hideModal();
         showPasswordResetVerification(email);
         
     } catch (error) {
-        console.error('Password reset error:', error);
+        console.error('❌ Password reset error:', error);
+        console.error('Error details:', {
+            message: error.message,
+            code: error.code,
+            stack: error.stack
+        });
+        
         if (errorDiv) {
-            errorDiv.textContent = 'An error occurred. Please try again.';
+            errorDiv.textContent = 'An error occurred while processing your request. Please try again.';
             errorDiv.classList.remove('hidden');
         }
     }
