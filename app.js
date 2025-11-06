@@ -3954,26 +3954,28 @@ window.renderAdminDashboard = async function() {
     const filteredRegular = filterProducts(regular);
     const filteredPreorder = filterProducts(preorderList);
 
-    const regularRows = filteredRegular.map(p => `
-        <tr class="hover:bg-gray-50 border-b">
-            <td class="px-3 py-2 text-sm">${p.name}</td>
-            <td class="px-3 py-2 text-sm hidden sm:table-cell">${p.origin}</td>
-            <td class="px-3 py-2 text-sm hidden md:table-cell">${p.farmer.name}</td>
-            <td class="px-3 py-2 text-sm font-semibold">${formatPeso(p.price)}</td>
-            <td class="px-3 py-2 text-sm">${p.quantity} ${p.unit}</td>
-            <td class="px-3 py-2 text-sm hidden lg:table-cell">
-                ${p.freshness ? `<span class="freshness-badge freshness-${p.freshnessIndicator || 'fresh'}">${getFreshnessEmoji(p.freshnessIndicator)} ${p.freshness}%</span>` : '<span class="text-gray-400">N/A</span>'}
-            </td>
-            <td class="px-3 py-2 text-sm text-right">
-                <div class="flex flex-col sm:flex-row gap-1 justify-end">
-                    <button onclick="adminEditProduct(${p.id})" class="px-2 py-1 text-xs bg-white border rounded hover:bg-gray-50">Edit</button>
-                    <button onclick="adminDeleteProduct(${p.id})" class="px-2 py-1 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100">Delete</button>
-                </div>
-            </td>
-        </tr>
-    `).join('');
+    // ✅ CORRECTED: Regular Products Table Rows
+const regularRows = filteredRegular.length > 0 ? filteredRegular.map(p => `
+    <tr class="hover:bg-gray-50 border-b">
+        <td class="px-3 py-2 text-sm">${p.name}</td>
+        <td class="px-3 py-2 text-sm hidden sm:table-cell">${p.origin}</td>
+        <td class="px-3 py-2 text-sm hidden md:table-cell">${p.farmer.name}</td>
+        <td class="px-3 py-2 text-sm font-semibold">${formatPeso(p.price)}</td>
+        <td class="px-3 py-2 text-sm">${p.quantity} ${p.unit}</td>
+        <td class="px-3 py-2 text-sm hidden lg:table-cell">
+            ${p.freshness ? `<span class="freshness-badge freshness-${p.freshnessIndicator || 'fresh'}">${getFreshnessEmoji(p.freshnessIndicator)} ${p.freshness}%</span>` : '<span class="text-gray-400">N/A</span>'}
+        </td>
+        <td class="px-3 py-2 text-sm text-right">
+            <div class="flex flex-col sm:flex-row gap-1 justify-end">
+                <button onclick="adminEditProduct(${p.id})" class="px-2 py-1 text-xs bg-white border rounded hover:bg-gray-50">Edit</button>
+                <button onclick="adminDeleteProduct(${p.id})" class="px-2 py-1 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100">Delete</button>
+            </div>
+        </td>
+    </tr>
+`).join('') : '<tr><td class="px-3 py-8 text-center text-gray-500 text-sm" colspan="7">No regular products</td></tr>';
 
-    const preorderRows = filteredPreorder.map(p => {
+// ✅ CORRECTED: Pre-Order Products Table Rows
+const preorderRows = filteredPreorder.length > 0 ? filteredPreorder.map(p => {
     const rem = computeRemainingDays(p);
     return `
         <tr class="hover:bg-gray-50 border-b">
@@ -3996,8 +3998,7 @@ window.renderAdminDashboard = async function() {
             </td>
         </tr>
     `;
-}).join('');
-
+}).join('') : '<tr><td class="px-3 py-8 text-center text-gray-500 text-sm" colspan="8">No pre-order products</td></tr>';
 
     // ✅ FILTER ORDERS
     // ✅ FILTER ORDERS - Reset search state when rendering dashboard
@@ -4108,6 +4109,7 @@ const filteredPreorderOrders = preorderOrders;
       ` : ''}
 
       <div class="space-y-6">
+        <!-- ✅ REGULAR PRODUCTS TABLE -->
         <div class="bg-white rounded-xl border overflow-hidden">
           <div class="p-4 border-b">
             <div class="flex items-center justify-between">
@@ -4116,158 +4118,159 @@ const filteredPreorderOrders = preorderOrders;
             </div>
           </div>
           <div class="overflow-x-auto">
-    <table class="w-full text-sm">
-        <thead class="bg-gray-50 text-gray-700">
-            <tr>
-                <th class="px-3 py-3 text-left font-medium">Order ID</th>
-                <th class="px-3 py-3 text-left font-medium">Customer</th>
-                <th class="px-3 py-3 text-left font-medium">Total</th>
-                <th class="px-3 py-3 text-left font-medium">Status</th>
-                <th class="px-3 py-3 text-left font-medium hidden lg:table-cell">Date</th>
-                <th class="px-3 py-3 text-right font-medium">Actions</th>
-            </tr>
-        </thead>
-        <tbody id="regular-orders-tbody" class="divide-y divide-gray-200">
-            ${regularOrderRows || '<tr><td class="px-3 py-8 text-center text-gray-500 text-sm" colspan="6">No regular orders</td></tr>'}
-        </tbody>
-    </table>
-</div>
+            <table class="w-full text-sm">
+              <thead class="bg-gray-50 text-gray-700">
+                <tr>
+                  <th class="px-3 py-3 text-left font-medium">Name</th>
+                  <th class="px-3 py-3 text-left font-medium hidden sm:table-cell">Origin</th>
+                  <th class="px-3 py-3 text-left font-medium hidden md:table-cell">Farmer</th>
+                  <th class="px-3 py-3 text-left font-medium">Price</th>
+                  <th class="px-3 py-3 text-left font-medium">Stock</th>
+                  <th class="px-3 py-3 text-left font-medium hidden lg:table-cell">Freshness</th>
+                  <th class="px-3 py-3 text-right font-medium">Actions</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-200">
+                ${regularRows}
+              </tbody>
+            </table>
+          </div>
         </div>
 
+        <!-- ✅ PRE-ORDER PRODUCTS TABLE -->
         <div class="bg-white rounded-xl border overflow-hidden">
           <div class="p-4 border-b">
             <h3 class="font-semibold text-lg">Products — Pre-Order</h3>
           </div>
           <div class="overflow-x-auto">
-    <table class="w-full text-sm">
-        <thead class="bg-gray-50 text-gray-700">
-            <tr>
-                <th class="px-3 py-3 text-left font-medium">Order ID</th>
-                <th class="px-3 py-3 text-left font-medium">Customer</th>
-                <th class="px-3 py-3 text-left font-medium">Total</th>
-                <th class="px-3 py-3 text-left font-medium">Status</th>
-                <th class="px-3 py-3 text-left font-medium hidden lg:table-cell">Date</th>
-                <th class="px-3 py-3 text-right font-medium">Actions</th>
-            </tr>
-        </thead>
-        <tbody id="preorder-orders-tbody" class="divide-y divide-gray-200">
-            ${preorderOrderRows || '<tr><td class="px-3 py-8 text-center text-gray-500 text-sm" colspan="6">No pre-order orders</td></tr>'}
-        </tbody>
-    </table>
-</div>
+            <table class="w-full text-sm">
+              <thead class="bg-gray-50 text-gray-700">
+                <tr>
+                  <th class="px-3 py-3 text-left font-medium">Name</th>
+                  <th class="px-3 py-3 text-left font-medium hidden sm:table-cell">Origin</th>
+                  <th class="px-3 py-3 text-left font-medium hidden md:table-cell">Farmer</th>
+                  <th class="px-3 py-3 text-left font-medium">Price</th>
+                  <th class="px-3 py-3 text-left font-medium">Stock</th>
+                  <th class="px-3 py-3 text-left font-medium hidden lg:table-cell">Freshness</th>
+                  <th class="px-3 py-3 text-left font-medium">Time Left</th>
+                  <th class="px-3 py-3 text-right font-medium">Actions</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-200">
+                ${preorderRows}
+              </tbody>
+            </table>
+          </div>
         </div>
 
-        <!-- ✅ REGULAR ORDERS WITH SEARCH -->
-<div class="bg-white rounded-xl border overflow-hidden">
-    <div class="p-4 border-b">
-        <h3 class="font-semibold text-lg mb-3">Orders – Regular</h3>
-        
-        <!-- Search Bar -->
-        <div class="order-search-section flex items-center gap-3">
-            <div class="flex-1 relative">
+        <!-- REGULAR ORDERS TABLE -->
+        <div class="bg-white rounded-xl border overflow-hidden">
+          <div class="p-4 border-b">
+            <h3 class="font-semibold text-lg mb-3">Orders — Regular</h3>
+            
+            <div class="order-search-section flex items-center gap-3">
+              <div class="flex-1 relative">
                 <i data-lucide="search" class="w-5 h-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
                 <input 
-                    id="order-search-input" 
-                    type="text" 
-                    placeholder="Search by Order ID, Customer, Email, Contact, Status..." 
-                    class="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-lime-500 text-sm"
-                    value=""
+                  id="order-search-input" 
+                  type="text" 
+                  placeholder="Search by Order ID, Customer, Email, Contact, Status..." 
+                  class="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-lime-500 text-sm"
+                  value=""
                 />
                 <button 
-                    id="clear-order-search-btn" 
-                    class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 hidden"
-                    onclick="clearOrderSearch('regular')"
+                  id="clear-order-search-btn" 
+                  class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 hidden"
+                  onclick="clearOrderSearch('regular')"
                 >
-                    <i data-lucide="x" class="w-5 h-5"></i>
+                  <i data-lucide="x" class="w-5 h-5"></i>
                 </button>
-            </div>
-            <button 
+              </div>
+              <button 
                 id="clear-order-search-button"
                 onclick="clearOrderSearch('regular')"
                 class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm"
-            >
+              >
                 Clear
-            </button>
-        </div>
-        <div id="order-search-results-count" class="mt-2 text-sm text-gray-600"></div>
-    </div>
-    
-    <div class="overflow-x-auto">
-        <table class="w-full text-sm">
-            <thead class="bg-gray-50 text-gray-700">
+              </button>
+            </div>
+            <div id="order-search-results-count" class="mt-2 text-sm text-gray-600"></div>
+          </div>
+          
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead class="bg-gray-50 text-gray-700">
                 <tr>
-                    <th class="px-3 py-3 text-left font-medium">Order ID</th>
-                    <th class="px-3 py-3 text-left font-medium">Customer</th>
-                    <th class="px-3 py-3 text-left font-medium">Total</th>
-                    <th class="px-3 py-3 text-left font-medium">Status</th>
-                    <th class="px-3 py-3 text-left font-medium hidden lg:table-cell">Date</th>
-                    <th class="px-3 py-3 text-right font-medium">Actions</th>
+                  <th class="px-3 py-3 text-left font-medium">Order ID</th>
+                  <th class="px-3 py-3 text-left font-medium">Customer</th>
+                  <th class="px-3 py-3 text-left font-medium">Total</th>
+                  <th class="px-3 py-3 text-left font-medium">Status</th>
+                  <th class="px-3 py-3 text-left font-medium hidden lg:table-cell">Date</th>
+                  <th class="px-3 py-3 text-right font-medium">Actions</th>
                 </tr>
-            </thead>
-            <tbody id="regular-orders-tbody" class="divide-y divide-gray-200">
-                ${regularOrderRows || '<tr><td class="px-3 py-8 text-center text-gray-500 text-sm" colspan="6">No regular orders</td></tr>'}
-            </tbody>
-        </table>
-    </div>
-</div>
+              </thead>
+              <tbody id="regular-orders-tbody" class="divide-y divide-gray-200">
+                ${regularOrderRows}
+              </tbody>
+            </table>
+          </div>
+        </div>
 
-<!-- ✅ PRE-ORDER ORDERS WITH SEARCH -->
-<div class="bg-white rounded-xl border overflow-hidden">
-    <div class="p-4 border-b">
-        <h3 class="font-semibold text-lg mb-3">Orders – Pre-Order</h3>
-        
-        <!-- Search Bar -->
-        <div class="order-search-section flex items-center gap-3">
-            <div class="flex-1 relative">
+        <!-- PRE-ORDER ORDERS TABLE -->
+        <div class="bg-white rounded-xl border overflow-hidden">
+          <div class="p-4 border-b">
+            <h3 class="font-semibold text-lg mb-3">Orders — Pre-Order</h3>
+            
+            <div class="order-search-section flex items-center gap-3">
+              <div class="flex-1 relative">
                 <i data-lucide="search" class="w-5 h-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
                 <input 
-                    id="preorder-search-input" 
-                    type="text" 
-                    placeholder="Search by Order ID, Customer, Email, Contact, Status..." 
-                    class="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-lime-500 text-sm"
-                    value=""
+                  id="preorder-search-input" 
+                  type="text" 
+                  placeholder="Search by Order ID, Customer, Email, Contact, Status..." 
+                  class="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-lime-500 text-sm"
+                  value=""
                 />
                 <button 
-                    id="clear-preorder-search-btn" 
-                    class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 hidden"
-                    onclick="clearOrderSearch('preorder')"
+                  id="clear-preorder-search-btn" 
+                  class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 hidden"
+                  onclick="clearOrderSearch('preorder')"
                 >
-                    <i data-lucide="x" class="w-5 h-5"></i>
+                  <i data-lucide="x" class="w-5 h-5"></i>
                 </button>
-            </div>
-            <button 
+              </div>
+              <button 
                 id="clear-preorder-search-button"
                 onclick="clearOrderSearch('preorder')"
                 class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm"
-            >
+              >
                 Clear
-            </button>
-        </div>
-        <div id="preorder-search-results-count" class="mt-2 text-sm text-gray-600"></div>
-    </div>
-    
-    <div class="overflow-x-auto">
-        <table class="w-full text-sm">
-            <thead class="bg-gray-50 text-gray-700">
+              </button>
+            </div>
+            <div id="preorder-search-results-count" class="mt-2 text-sm text-gray-600"></div>
+          </div>
+          
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead class="bg-gray-50 text-gray-700">
                 <tr>
-                    <th class="px-3 py-3 text-left font-medium">Order ID</th>
-                    <th class="px-3 py-3 text-left font-medium">Customer</th>
-                    <th class="px-3 py-3 text-left font-medium">Total</th>
-                    <th class="px-3 py-3 text-left font-medium">Status</th>
-                    <th class="px-3 py-3 text-left font-medium hidden lg:table-cell">Date</th>
-                    <th class="px-3 py-3 text-right font-medium">Actions</th>
+                  <th class="px-3 py-3 text-left font-medium">Order ID</th>
+                  <th class="px-3 py-3 text-left font-medium">Customer</th>
+                  <th class="px-3 py-3 text-left font-medium">Total</th>
+                  <th class="px-3 py-3 text-left font-medium">Status</th>
+                  <th class="px-3 py-3 text-left font-medium hidden lg:table-cell">Date</th>
+                  <th class="px-3 py-3 text-right font-medium">Actions</th>
                 </tr>
-            </thead>
-            <tbody id="preorder-orders-tbody" class="divide-y divide-gray-200">
-                ${preorderOrderRows || '<tr><td class="px-3 py-8 text-center text-gray-500 text-sm" colspan="6">No pre-order orders</td></tr>'}
-            </tbody>
-        </table>
-    </div>
-</div>
+              </thead>
+              <tbody id="preorder-orders-tbody" class="divide-y divide-gray-200">
+                ${preorderOrderRows}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </section>
- 
-    `;
+`;
 };
 
 // Initialize order search event listeners
