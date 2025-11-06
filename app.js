@@ -1372,28 +1372,21 @@ window.loginUser = async function() {
             const [userId, userData] = userEntry;
             
             // If there's a pending password update, try new password first
-            if (userData.pendingPasswordUpdate) {
-                if (password === userData.pendingPasswordUpdate) {
-                    // User is logging in with new password
-                    // Clear the pending update
-                    await updateFirebase(`users/${userId}`, {
-                        pendingPasswordUpdate: null
-                    });
-                    
-                    // Continue with normal login process using new password
-                    // Note: Firebase Auth password needs to be updated separately
-                    // For security, we'll require re-authentication
-                    showModal(
-                        'Password Updated',
-                        `<div class="space-y-3">
-                            <p class="text-gray-700">Your password has been successfully updated!</p>
-                            <p class="text-sm text-gray-600">For security reasons, please log in again with your new password.</p>
-                        </div>`,
-                        `<button onclick="hideModal(); openAuth('login')" class="px-4 py-2 bg-lime-600 text-white rounded">Continue</button>`
-                    );
-                    return;
-                }
-            }
+            if (userData.passwordResetRequested) {
+    const resetTime = new Date(userData.passwordResetRequestedAt);
+    const now = new Date();
+    const hoursSinceReset = (now - resetTime) / (1000 * 60 * 60);
+    
+    if (hoursSinceReset < 24) {
+        // Clear the flag after 24 hours
+        if (hoursSinceReset >= 1) {
+            await updateFirebase(`users/${userId}`, {
+                passwordResetRequested: false,
+                passwordResetRequestedAt: null
+            });
+        }
+    }
+}
         }
         
         const userCredential = await signInWithEmailAndPassword(auth, email, password);
@@ -1555,7 +1548,7 @@ window.sendPasswordResetCode = async function() {
     try {
         console.log('🔍 Looking for user with email:', email);
         
-        // ✅ NEW: Get Firebase Auth user first, then match with database
+        // Get all users from database
         const usersData = await getFromFirebase('users');
         console.log('📊 Users data loaded:', usersData ? 'Yes' : 'No');
         
@@ -1568,48 +1561,10 @@ window.sendPasswordResetCode = async function() {
             return;
         }
         
-        // Find user by email (check multiple possible locations)
-        let userEntry = null;
-        
-        // Method 1: Check root level email
-        userEntry = Object.entries(usersData).find(([uid, userData]) => 
+        // Find user by email
+        const userEntry = Object.entries(usersData).find(([uid, userData]) => 
             userData.email?.toLowerCase() === email
         );
-        
-        // Method 2: If not found, try to find by Firebase Auth UID
-        // This is a fallback for users created before email was stored properly
-        if (!userEntry) {
-            console.log('⚠️ Email not found at root level, checking auth...');
-            
-            // Try to sign in temporarily to get the UID
-            try {
-                const { signInWithEmailAndPassword } = await import("https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js");
-                
-                // This will fail if password is wrong, but that's okay - we just need to know if the account exists
-                await signInWithEmailAndPassword(auth, email, 'test-password-to-check-existence');
-                
-            } catch (authError) {
-                console.log('Auth error:', authError.code);
-                
-                if (authError.code === 'auth/user-not-found') {
-                    if (errorDiv) {
-                        errorDiv.textContent = 'No account found with this email address';
-                        errorDiv.classList.remove('hidden');
-                    }
-                    return;
-                } else if (authError.code === 'auth/wrong-password' || authError.code === 'auth/invalid-credential') {
-                    // ✅ Account exists! Now find it in database by checking all users
-                    console.log('✅ Firebase Auth account exists, finding in database...');
-                    
-                    // Get the UID from auth state
-                    const user = auth.currentUser;
-                    if (user) {
-                        userEntry = [user.uid, usersData[user.uid]];
-                        console.log('✅ Found user by auth UID:', user.uid);
-                    }
-                }
-            }
-        }
         
         if (!userEntry) {
             console.error('❌ No user found with email:', email);
@@ -1633,7 +1588,7 @@ window.sendPasswordResetCode = async function() {
             return;
         }
         
-        console.log('🔐 Generating reset code...');
+        console.log('🔢 Generating reset code...');
         
         // Generate reset code
         const resetCode = generateVerificationCode();
@@ -1641,18 +1596,11 @@ window.sendPasswordResetCode = async function() {
         
         console.log('💾 Saving reset code to database...');
         
-        // ✅ Save email if it doesn't exist
-        const updates = {
+        // Save reset code
+        await updateFirebase(`users/${userId}`, {
             passwordResetCode: resetCode,
             passwordResetExpiry: codeExpiry
-        };
-        
-        if (!userData.email) {
-            updates.email = email; // ✅ Add email to database if missing
-            console.log('💾 Adding missing email to user record');
-        }
-        
-        await updateFirebase(`users/${userId}`, updates);
+        });
         
         console.log('📧 Sending email...');
         
@@ -1883,51 +1831,118 @@ window.resetPassword = async function(email, userId) {
     }
     
     try {
-        // Update password in Firebase Auth
-        const userCredential = await signInWithEmailAndPassword(auth, email, newPassword.trim());
-        await signOut(auth);
+        console.log('🔄 Starting password reset process...');
         
-        // If we reach here, we need to actually update the password
-        // First, sign in with a temporary method to get the user
-        const tempSignIn = await signInWithEmailAndPassword(auth, email, 'temp-check');
-        await signOut(auth);
+        // Import necessary Firebase Auth functions
+        const { sendPasswordResetEmail: firebaseSendPasswordResetEmail } = await import("https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js");
         
-    } catch (authError) {
-        // Expected error - now update the password
-        try {
-            // Sign in with old credentials (we'll use email verification to allow this)
-            const userData = await getFromFirebase(`users/${userId}`);
-            
-            // Import updatePassword from Firebase
-            const { updatePassword, signInWithEmailAndPassword: signIn } = await import("https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js");
-            
-            // Create new user account with new password (Firebase doesn't allow direct password update without current password)
-            // So we'll store a flag and handle it on next login
-            await updateFirebase(`users/${userId}`, {
-                passwordResetCode: null,
-                passwordResetExpiry: null,
-                pendingPasswordUpdate: newPassword,
-                passwordUpdatedAt: new Date().toISOString()
-            });
-            
-            hideModal();
-            showModal('Password Reset Successful', `
-                <div class="text-center space-y-3">
-                    <div class="text-5xl text-green-600">✓</div>
-                    <p class="text-gray-700">Your password has been reset successfully!</p>
-                    <p class="text-sm text-gray-600">You can now log in with your new password.</p>
-                </div>
-            `, `
-                <button onclick="hideModal(); openAuth('login')" class="px-4 py-2 bg-lime-600 text-white rounded">Go to Login</button>
-            `);
-            
-        } catch (error) {
-            console.error('Password reset error:', error);
-            if (errorDiv) {
-                errorDiv.textContent = 'Failed to reset password. Please try again.';
-                errorDiv.classList.remove('hidden');
-            }
+        // Get user data to verify
+        const userData = await getFromFirebase(`users/${userId}`);
+        
+        if (!userData) {
+            throw new Error('User not found');
         }
+        
+        console.log('📧 Sending Firebase password reset email...');
+        
+        // Use Firebase's built-in password reset email
+        // This is more reliable than trying to update password directly
+        await firebaseSendPasswordResetEmail(auth, email);
+        
+        console.log('✅ Firebase password reset email sent');
+        
+        // Clear the reset code from database
+        await updateFirebase(`users/${userId}`, {
+            passwordResetCode: null,
+            passwordResetExpiry: null,
+            passwordResetRequested: true,
+            passwordResetRequestedAt: new Date().toISOString()
+        });
+        
+        hideModal();
+        showModal('Password Reset Email Sent', `
+            <div class="text-center space-y-3">
+                <div class="text-5xl text-green-600">✓</div>
+                <p class="text-gray-700">We've sent a password reset link to:</p>
+                <p class="text-sm text-gray-800 font-semibold">${email}</p>
+                <div class="bg-blue-50 p-3 rounded border-l-4 border-blue-500 text-left">
+                    <p class="text-sm text-blue-900">
+                        <strong>Next Steps:</strong><br>
+                        1. Check your email inbox<br>
+                        2. Click the reset link in the email<br>
+                        3. Set your new password<br>
+                        4. Return here to log in
+                    </p>
+                </div>
+                <p class="text-xs text-gray-600">
+                    The link expires in 1 hour. If you don't see the email, check your spam folder.
+                </p>
+            </div>
+        `, `<button onclick="hideModal(); openAuth('login')" class="px-4 py-2 bg-lime-600 text-white rounded">Go to Login</button>`);
+        
+    } catch (error) {
+        console.error('❌ Password reset error:', error);
+        console.error('Error code:', error.code);
+        console.error('Error message:', error.message);
+        
+        let errorMessage = 'Failed to reset password. Please try again.';
+        
+        if (error.code === 'auth/user-not-found') {
+            errorMessage = 'Account not found. Please check your email address.';
+        } else if (error.code === 'auth/invalid-email') {
+            errorMessage = 'Invalid email address.';
+        } else if (error.code === 'auth/too-many-requests') {
+            errorMessage = 'Too many attempts. Please try again later.';
+        }
+        
+        if (errorDiv) {
+            errorDiv.textContent = errorMessage;
+            errorDiv.classList.remove('hidden');
+        }
+    }
+};
+
+// Alternative: Direct password update (requires user to be signed in)
+window.updateUserPassword = async function(email, newPassword) {
+    try {
+        // Import updatePassword from Firebase
+        const { updatePassword, signInWithEmailAndPassword: firebaseSignIn, sendPasswordResetEmail: firebaseSendReset } = await import("https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js");
+        
+        // Get current auth user
+        const currentUser = auth.currentUser;
+        
+        if (!currentUser || currentUser.email !== email) {
+            // User not signed in, use email reset method
+            await firebaseSendReset(auth, email);
+            return {
+                success: true,
+                method: 'email',
+                message: 'Password reset email sent'
+            };
+        }
+        
+        // User is signed in, can update directly
+        await updatePassword(currentUser, newPassword);
+        
+        return {
+            success: true,
+            method: 'direct',
+            message: 'Password updated successfully'
+        };
+        
+    } catch (error) {
+        console.error('Password update error:', error);
+        
+        if (error.code === 'auth/requires-recent-login') {
+            // User needs to re-authenticate first
+            return {
+                success: false,
+                requiresReauth: true,
+                message: 'Please log in again to change your password'
+            };
+        }
+        
+        throw error;
     }
 };
 
