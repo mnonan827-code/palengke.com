@@ -351,17 +351,29 @@ window.toggleMobileMenu = function() {
     const mobileMenu = document.getElementById('mobile-menu');
     const mobileMenuBtn = document.getElementById('mobile-menu-btn');
     
-    mobileMenu.classList.toggle('hidden');
-    mobileMenu.classList.toggle('active');
+    if (!mobileMenu || !mobileMenuBtn) return;
     
-    // Update icon
-    const icon = mobileMenuBtn.querySelector('i');
-    if (mobileMenu.classList.contains('hidden')) {
-        icon.setAttribute('data-lucide', 'menu');
+    const isHidden = mobileMenu.classList.contains('hidden');
+    
+    if (isHidden) {
+        // Open menu
+        mobileMenu.classList.remove('hidden');
+        mobileMenu.classList.add('active');
     } else {
-        icon.setAttribute('data-lucide', 'x');
+        // Close menu
+        mobileMenu.classList.add('hidden');
+        mobileMenu.classList.remove('active');
     }
-    lucide.createIcons();
+    
+    // Update icon with proper check
+    setTimeout(() => {
+        const icon = mobileMenuBtn.querySelector('i');
+        if (icon) {
+            const shouldShowX = !mobileMenu.classList.contains('hidden');
+            icon.setAttribute('data-lucide', shouldShowX ? 'x' : 'menu');
+            lucide.createIcons();
+        }
+    }, 50);
 };
 
 window.closeMobileMenu = function() {
@@ -3355,23 +3367,20 @@ window.updateAuthArea = function() {
 };
 
 // Initialize user dropdown functionality
+// Initialize user dropdown functionality
 function initUserDropdown() {
     const btn = document.getElementById('user-menu-btn');
     const menu = document.getElementById('user-menu');
     const wrapper = document.querySelector('.user-menu-wrapper');
     
     if (!btn || !menu || !wrapper) {
-        console.log('Dropdown elements not found');
+        console.log('User dropdown elements not found');
         return;
     }
 
     console.log('Initializing user dropdown...');
 
-    // Remove any existing listeners by cloning
-    const newBtn = btn.cloneNode(true);
-    btn.parentNode.replaceChild(newBtn, btn);
-
-    // Create or get overlay
+    // Create overlay if it doesn't exist
     let overlay = document.getElementById('user-menu-overlay');
     if (!overlay) {
         overlay = document.createElement('div');
@@ -3380,12 +3389,23 @@ function initUserDropdown() {
         document.body.appendChild(overlay);
     }
 
-    // Toggle dropdown on button click
+    // Remove existing listeners by replacing the button
+    const newBtn = btn.cloneNode(true);
+    btn.parentNode.replaceChild(newBtn, btn);
+
+    // Add click listener to button
     newBtn.addEventListener('click', function(e) {
         e.preventDefault();
         e.stopPropagation();
         console.log('User menu button clicked');
-        toggleUserMenu();
+        
+        const isOpen = menu.classList.contains('show');
+        
+        if (isOpen) {
+            closeUserMenu();
+        } else {
+            openUserMenu();
+        }
     });
 
     // Close on overlay click
@@ -3765,6 +3785,9 @@ setTimeout(() => {
     if (searchInput && window.APP_STATE.searchQuery) {
         searchInput.value = window.APP_STATE.searchQuery;
     }
+    
+    // ← ADD THIS LINE
+    reinitializeButtons();
 };
 
 window.switchTo = function(v) {
@@ -4356,8 +4379,6 @@ window.initializeOrderSearchListeners = function() {
     
     // ===== REGULAR ORDERS SEARCH =====
     const orderSearchInput = document.getElementById('order-search-input');
-    const orderClearBtn = document.getElementById('clear-order-search-btn');
-    const orderClearButton = document.getElementById('clear-order-search-button');
     
     if (orderSearchInput) {
         console.log('✅ Found order search input');
@@ -4369,40 +4390,20 @@ window.initializeOrderSearchListeners = function() {
         // Set to empty initially
         newOrderInput.value = '';
         
-        // Add input listener
+        // Debounced search handler
+        let orderSearchTimeout;
         newOrderInput.addEventListener('input', function(e) {
-            const query = e.target.value;
-            orderSearchValue = query;
-            orderSearchCursor = e.target.selectionStart;
-            handleOrderSearch(query, 'regular');
+            clearTimeout(orderSearchTimeout);
+            orderSearchTimeout = setTimeout(() => {
+                const query = e.target.value;
+                handleOrderSearch(query, 'regular');
+            }, 300);
         });
         
         // Prevent Enter key
         newOrderInput.addEventListener('keydown', function(e) {
             if (e.key === 'Enter') e.preventDefault();
         });
-        
-        // Clear button (X icon)
-        if (orderClearBtn) {
-            const newOrderClearBtn = orderClearBtn.cloneNode(true);
-            orderClearBtn.parentNode.replaceChild(newOrderClearBtn, orderClearBtn);
-            
-            newOrderClearBtn.addEventListener('click', function(e) {
-                e.preventDefault();
-                clearOrderSearch('regular');
-            });
-        }
-        
-        // Clear button (outside)
-        if (orderClearButton) {
-            const newOrderClearButton = orderClearButton.cloneNode(true);
-            orderClearButton.parentNode.replaceChild(newOrderClearButton, orderClearButton);
-            
-            newOrderClearButton.addEventListener('click', function(e) {
-                e.preventDefault();
-                clearOrderSearch('regular');
-            });
-        }
         
         // Initialize counts
         const regularOrders = window.APP_STATE.orders.filter(o => !o.type || o.type !== 'pre-order');
@@ -4411,8 +4412,6 @@ window.initializeOrderSearchListeners = function() {
     
     // ===== PRE-ORDER ORDERS SEARCH =====
     const preorderSearchInput = document.getElementById('preorder-search-input');
-    const preorderClearBtn = document.getElementById('clear-preorder-search-btn');
-    const preorderClearButton = document.getElementById('clear-preorder-search-button');
     
     if (preorderSearchInput) {
         console.log('✅ Found preorder search input');
@@ -4424,12 +4423,14 @@ window.initializeOrderSearchListeners = function() {
         // Set to empty initially
         newPreorderInput.value = '';
         
-        // Add input listener
+        // Debounced search handler
+        let preorderSearchTimeout;
         newPreorderInput.addEventListener('input', function(e) {
-            const query = e.target.value;
-            preorderSearchValue = query;
-            preorderSearchCursor = e.target.selectionStart;
-            handleOrderSearch(query, 'preorder');
+            clearTimeout(preorderSearchTimeout);
+            preorderSearchTimeout = setTimeout(() => {
+                const query = e.target.value;
+                handleOrderSearch(query, 'preorder');
+            }, 300);
         });
         
         // Prevent Enter key
@@ -4437,35 +4438,61 @@ window.initializeOrderSearchListeners = function() {
             if (e.key === 'Enter') e.preventDefault();
         });
         
-        // Clear button (X icon)
-        if (preorderClearBtn) {
-            const newPreorderClearBtn = preorderClearBtn.cloneNode(true);
-            preorderClearBtn.parentNode.replaceChild(newPreorderClearBtn, preorderClearBtn);
-            
-            newPreorderClearBtn.addEventListener('click', function(e) {
-                e.preventDefault();
-                clearOrderSearch('preorder');
-            });
-        }
-        
-        // Clear button (outside)
-        if (preorderClearButton) {
-            const newPreorderClearButton = preorderClearButton.cloneNode(true);
-            preorderClearButton.parentNode.replaceChild(newPreorderClearButton, preorderClearButton);
-            
-            newPreorderClearButton.addEventListener('click', function(e) {
-                e.preventDefault();
-                clearOrderSearch('preorder');
-            });
-        }
-        
         // Initialize counts
         const preorderOrders = window.APP_STATE.orders.filter(o => o.type === 'pre-order');
         updateOrderSearchResultsCount(preorderOrders.length, preorderOrders.length, 'preorder');
     }
     
+    // Setup clear buttons
+    setupClearButtons();
+    
     setTimeout(() => icons(), 50);
 };
+
+// Helper function to setup clear buttons
+function setupClearButtons() {
+    // Regular orders clear button
+    const orderClearBtn = document.getElementById('clear-order-search-btn');
+    if (orderClearBtn) {
+        const newOrderClearBtn = orderClearBtn.cloneNode(true);
+        orderClearBtn.parentNode.replaceChild(newOrderClearBtn, orderClearBtn);
+        newOrderClearBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            clearOrderSearch('regular');
+        });
+    }
+    
+    const orderClearButton = document.getElementById('clear-order-search-button');
+    if (orderClearButton) {
+        const newOrderClearButton = orderClearButton.cloneNode(true);
+        orderClearButton.parentNode.replaceChild(newOrderClearButton, orderClearButton);
+        newOrderClearButton.addEventListener('click', function(e) {
+            e.preventDefault();
+            clearOrderSearch('regular');
+        });
+    }
+    
+    // Pre-order orders clear button
+    const preorderClearBtn = document.getElementById('clear-preorder-search-btn');
+    if (preorderClearBtn) {
+        const newPreorderClearBtn = preorderClearBtn.cloneNode(true);
+        preorderClearBtn.parentNode.replaceChild(newPreorderClearBtn, preorderClearBtn);
+        newPreorderClearBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            clearOrderSearch('preorder');
+        });
+    }
+    
+    const preorderClearButton = document.getElementById('clear-preorder-search-button');
+    if (preorderClearButton) {
+        const newPreorderClearButton = preorderClearButton.cloneNode(true);
+        preorderClearButton.parentNode.replaceChild(newPreorderClearButton, preorderClearButton);
+        newPreorderClearButton.addEventListener('click', function(e) {
+            e.preventDefault();
+            clearOrderSearch('preorder');
+        });
+    }
+}
 
 
 // NEW FUNCTION: Render User Verification Page
@@ -4715,6 +4742,44 @@ function setupEventListeners() {
         }
     });
 }
+
+// Re-initialize button listeners after DOM updates
+window.reinitializeButtons = function() {
+    setupSearchClearButton();
+    const orderSearchInput = document.getElementById('order-search-input');
+    const preorderSearchInput = document.getElementById('preorder-search-input');
+    
+    if (orderSearchInput || preorderSearchInput) {
+        initializeOrderSearchListeners();
+    }
+};
+
+// Setup search clear button
+function setupSearchClearButton() {
+    const clearBtn = document.getElementById('clear-search-btn');
+    const searchInput = document.getElementById('search-input');
+    
+    if (clearBtn && searchInput) {
+        // Remove old listener
+        const newClearBtn = clearBtn.cloneNode(true);
+        clearBtn.parentNode.replaceChild(newClearBtn, clearBtn);
+        
+        // Add new listener
+        newClearBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            clearSearch();
+        });
+        
+        // Update visibility based on input
+        if (searchInput.value) {
+            newClearBtn.classList.remove('hidden');
+        } else {
+            newClearBtn.classList.add('hidden');
+        }
+    }
+}
+
+
 
 // Auth state listener
 onAuthStateChanged(auth, async (user) => {
