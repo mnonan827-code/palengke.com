@@ -1,10 +1,10 @@
 // Email Service Configuration
 // REPLACE THESE WITH YOUR ACTUAL EMAILJS CREDENTIALS
 const EMAIL_CONFIG = {
-    serviceId: 'service_kmbhxwd',     // ← REPLACE with your Service ID
-    templateId: 'template_nmuqtvr',   // ← REPLACE with your Template ID
+    serviceId: 'service_kmbhxwd',
+    templateId: 'template_nmuqtvr',
     resetTemplateId: 'template_4av8o1v',
-    publicKey: 'W9t0FVxxE5r6HqbFN'     // ← REPLACE with your Public Key
+    publicKey: 'W9t0FVxxE5r6HqbFN'
 };
 
 // Initialize EmailJS when page loads

@@ -1316,39 +1316,6 @@ showVerificationModal(email, password);
     }
 };
 
-// Add this after the sendVerificationCodeEmail function
-
-// Send password reset code email
-window.sendPasswordResetEmail = async function(toEmail, toName, resetCode) {
-    if (typeof emailjs === 'undefined') {
-        console.error('EmailJS not loaded');
-        throw new Error('Email service not available. Please refresh the page.');
-    }
-
-    try {
-        const templateParams = {
-            to_email: toEmail,
-            to_name: toName,
-            reset_code: resetCode,
-            message: `Your password reset code is: ${resetCode}. This code will expire in 15 minutes. If you did not request this, please ignore this email.`
-        };
-
-        console.log('Sending password reset email to:', toEmail);
-        
-        const response = await emailjs.send(
-    EMAIL_CONFIG.serviceId,
-    EMAIL_CONFIG.resetTemplateId,  // Change this
-    templateParams
-);
-
-        console.log('Password reset email sent successfully:', response.status, response.text);
-        return true;
-    } catch (error) {
-        console.error('Password reset email send failed:', error);
-        throw new Error('Failed to send password reset email. Please try again.');
-    }
-};
-
 window.loginUser = async function() {
     const email = document.getElementById('login-email')?.value?.trim()?.toLowerCase();
     const password = document.getElementById('login-password')?.value;
@@ -1362,33 +1329,6 @@ window.loginUser = async function() {
     }
 
     try {
-        // Check if user has pending password update
-        const usersData = await getFromFirebase('users');
-        const userEntry = Object.entries(usersData || {}).find(([uid, userData]) => 
-            userData.email === email
-        );
-        
-        if (userEntry) {
-            const [userId, userData] = userEntry;
-            
-            // If there's a pending password update, try new password first
-            if (userData.passwordResetRequested) {
-    const resetTime = new Date(userData.passwordResetRequestedAt);
-    const now = new Date();
-    const hoursSinceReset = (now - resetTime) / (1000 * 60 * 60);
-    
-    if (hoursSinceReset < 24) {
-        // Clear the flag after 24 hours
-        if (hoursSinceReset >= 1) {
-            await updateFirebase(`users/${userId}`, {
-                passwordResetRequested: false,
-                passwordResetRequestedAt: null
-            });
-        }
-    }
-}
-        }
-        
         const userCredential = await signInWithEmailAndPassword(auth, email, password);
         const user = userCredential.user;
         const userData = await getFromFirebase(`users/${user.uid}`);
@@ -1426,14 +1366,14 @@ window.loginUser = async function() {
         }
 
         hideModal();
-        updateAuthArea();
-        renderMain();
+updateAuthArea();
+renderMain();
 
-        showModal(
-            'Logged in',
-            `Welcome back, <b>${window.APP_STATE.currentUser.name}</b>!`,
-            `<button onclick="hideModal(); renderMain()" class="px-4 py-2 bg-lime-600 text-white rounded">OK</button>`
-        );
+showModal(
+    'Logged in',
+    `Welcome back, <b>${window.APP_STATE.currentUser.name}</b>!`,
+    `<button onclick="hideModal(); renderMain()" class="px-4 py-2 bg-lime-600 text-white rounded">OK</button>`
+);
 
     } catch (error) {
         console.error('Login error:', error);
@@ -1459,577 +1399,10 @@ window.loginUser = async function() {
     }
 };
 
-// Show forgot password modal
-// Show forgot password modal
-// Show forgot password modal - UPDATED VERSION
-window.showForgotPasswordModal = function() {
-    console.log('🔓 Opening Forgot Password modal...');
-    
-    hideModal(); // Close login modal first
-    
-    // Small delay to ensure modal closes first
-    setTimeout(() => {
-        showModal('Forgot Password', `
-            <div class="space-y-4">
-                <p class="text-gray-700">Enter your registered email address and we'll send you a verification code to reset your password.</p>
-                
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
-                    <input 
-                        id="forgot-email" 
-                        type="email" 
-                        placeholder="your@email.com" 
-                        class="w-full p-2 border rounded focus:ring-2 focus:ring-lime-500" 
-                        required 
-                        autocomplete="email"
-                    />
-                </div>
-                
-                <div id="forgot-error" class="text-red-600 text-sm font-semibold hidden"></div>
-            </div>
-        `, `
-            <button onclick="hideModal(); openAuth('login')" class="px-4 py-2 bg-gray-100 rounded hover:bg-gray-200">Back to Login</button>
-            <button id="send-reset-btn" onclick="sendPasswordResetCode()" class="px-4 py-2 bg-lime-600 text-white rounded hover:bg-lime-700">Send Reset Code</button>
-        `);
-        
-        setTimeout(() => {
-            const emailInput = document.getElementById('forgot-email');
-            const errorDiv = document.getElementById('forgot-error');
-            
-            console.log('📝 Input field found:', emailInput ? 'Yes' : 'No');
-            console.log('🚨 Error div found:', errorDiv ? 'Yes' : 'No');
-            
-            if (emailInput) {
-                emailInput.focus();
-                
-                // Add Enter key handler
-                emailInput.addEventListener('keypress', function(e) {
-                    if (e.key === 'Enter') {
-                        e.preventDefault();
-                        console.log('⌨️ Enter pressed, sending reset code...');
-                        sendPasswordResetCode();
-                    }
-                });
-            }
-        }, 100);
-    }, 100);
-};
-
-// Send password reset code
-// Send password reset code
-window.sendPasswordResetCode = async function() {
-    const email = document.getElementById('forgot-email')?.value?.trim()?.toLowerCase();
-    const errorDiv = document.getElementById('forgot-error');
-    
-    // Clear previous errors
-    if (errorDiv) {
-        errorDiv.textContent = '';
-        errorDiv.classList.add('hidden');
-    }
-    
-    if (!email) {
-        if (errorDiv) {
-            errorDiv.textContent = 'Please enter your email address';
-            errorDiv.classList.remove('hidden');
-        }
-        return;
-    }
-    
-    // Validate email format
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-        if (errorDiv) {
-            errorDiv.textContent = 'Please enter a valid email address';
-            errorDiv.classList.remove('hidden');
-        }
-        return;
-    }
-    
-    try {
-        console.log('🔍 Looking for user with email:', email);
-        
-        // Get all users from database
-        const usersData = await getFromFirebase('users');
-        console.log('📊 Users data loaded:', usersData ? 'Yes' : 'No');
-        
-        if (!usersData) {
-            console.error('❌ No users data found in database');
-            if (errorDiv) {
-                errorDiv.textContent = 'Database error. Please contact support.';
-                errorDiv.classList.remove('hidden');
-            }
-            return;
-        }
-        
-        // Find user by email
-        const userEntry = Object.entries(usersData).find(([uid, userData]) => 
-            userData.email?.toLowerCase() === email
-        );
-        
-        if (!userEntry) {
-            console.error('❌ No user found with email:', email);
-            if (errorDiv) {
-                errorDiv.textContent = 'No account found with this email address';
-                errorDiv.classList.remove('hidden');
-            }
-            return;
-        }
-        
-        const [userId, userData] = userEntry;
-        console.log('✅ User found:', userId, userData.name);
-        
-        // Check if user is admin
-        if (userData.role === 'admin') {
-            console.log('⚠️ Admin account detected');
-            if (errorDiv) {
-                errorDiv.textContent = 'Password reset is not available for admin accounts. Please contact system administrator.';
-                errorDiv.classList.remove('hidden');
-            }
-            return;
-        }
-        
-        console.log('🔢 Generating reset code...');
-        
-        // Generate reset code
-        const resetCode = generateVerificationCode();
-        const codeExpiry = Date.now() + (15 * 60 * 1000); // 15 minutes
-        
-        console.log('💾 Saving reset code to database...');
-        
-        // Save reset code
-        await updateFirebase(`users/${userId}`, {
-            passwordResetCode: resetCode,
-            passwordResetExpiry: codeExpiry
-        });
-        
-        console.log('📧 Sending email...');
-        
-        // Send email
-        await sendPasswordResetEmail(email, userData.name, resetCode);
-        
-        console.log('✅ Password reset code sent successfully');
-        
-        hideModal();
-        showPasswordResetVerification(email);
-        
-    } catch (error) {
-        console.error('❌ Password reset error:', error);
-        console.error('Error details:', {
-            message: error.message,
-            code: error.code,
-            stack: error.stack
-        });
-        
-        if (errorDiv) {
-            errorDiv.textContent = 'An error occurred while processing your request. Please try again.';
-            errorDiv.classList.remove('hidden');
-        }
-    }
-};
-
-// Show password reset verification modal
-window.showPasswordResetVerification = function(email) {
-    showModal('Enter Reset Code', `
-        <div class="space-y-4">
-            <p class="text-gray-700">We've sent a 6-digit reset code to:</p>
-            <p class="font-semibold text-lime-700">${email}</p>
-            <p class="text-sm text-gray-600">Enter the code below (expires in 15 minutes):</p>
-            
-            <div class="flex justify-center gap-2">
-                <input id="reset-code-1" type="text" maxlength="1" class="w-12 h-12 text-center text-2xl font-bold border-2 rounded-lg focus:border-lime-600" />
-                <input id="reset-code-2" type="text" maxlength="1" class="w-12 h-12 text-center text-2xl font-bold border-2 rounded-lg focus:border-lime-600" />
-                <input id="reset-code-3" type="text" maxlength="1" class="w-12 h-12 text-center text-2xl font-bold border-2 rounded-lg focus:border-lime-600" />
-                <input id="reset-code-4" type="text" maxlength="1" class="w-12 h-12 text-center text-2xl font-bold border-2 rounded-lg focus:border-lime-600" />
-                <input id="reset-code-5" type="text" maxlength="1" class="w-12 h-12 text-center text-2xl font-bold border-2 rounded-lg focus:border-lime-600" />
-                <input id="reset-code-6" type="text" maxlength="1" class="w-12 h-12 text-center text-2xl font-bold border-2 rounded-lg focus:border-lime-600" />
-            </div>
-            
-            <div id="reset-code-error" class="text-red-600 text-sm text-center hidden"></div>
-            
-            <div class="text-center">
-                <button onclick="resendPasswordResetCode('${email}')" class="text-sm text-lime-600 underline">Didn't receive code? Resend</button>
-            </div>
-        </div>
-    `, `
-        <button onclick="hideModal(); openAuth('login')" class="px-4 py-2 bg-gray-100 rounded">Cancel</button>
-        <button onclick="verifyPasswordResetCode('${email}')" class="px-4 py-2 bg-lime-600 text-white rounded">Verify Code</button>
-    `);
-    
-    setupResetCodeInputs();
-};
-
-// Setup reset code input auto-advance
-window.setupResetCodeInputs = function() {
-    const inputs = ['reset-code-1', 'reset-code-2', 'reset-code-3', 'reset-code-4', 'reset-code-5', 'reset-code-6'];
-    
-    inputs.forEach((id, index) => {
-        const input = document.getElementById(id);
-        if (!input) return;
-
-        input.addEventListener('input', function(e) {
-            const value = e.target.value;
-            
-            if (!/^\d*$/.test(value)) {
-                e.target.value = '';
-                return;
-            }
-
-            if (value && index < inputs.length - 1) {
-                document.getElementById(inputs[index + 1]).focus();
-            }
-        });
-
-        input.addEventListener('keydown', function(e) {
-            if (e.key === 'Backspace' && !e.target.value && index > 0) {
-                document.getElementById(inputs[index - 1]).focus();
-            }
-        });
-
-        if (index === 0) {
-            setTimeout(() => input.focus(), 100);
-        }
-    });
-};
-
-// Verify password reset code
-window.verifyPasswordResetCode = async function(email) {
-    const code1 = document.getElementById('reset-code-1')?.value || '';
-    const code2 = document.getElementById('reset-code-2')?.value || '';
-    const code3 = document.getElementById('reset-code-3')?.value || '';
-    const code4 = document.getElementById('reset-code-4')?.value || '';
-    const code5 = document.getElementById('reset-code-5')?.value || '';
-    const code6 = document.getElementById('reset-code-6')?.value || '';
-    
-    const enteredCode = code1 + code2 + code3 + code4 + code5 + code6;
-    const errorDiv = document.getElementById('reset-code-error');
-
-    if (enteredCode.length !== 6) {
-        if (errorDiv) {
-            errorDiv.textContent = 'Please enter all 6 digits';
-            errorDiv.classList.remove('hidden');
-        }
-        return;
-    }
-
-    try {
-        // Get user data
-        const usersData = await getFromFirebase('users');
-        const userEntry = Object.entries(usersData).find(([uid, userData]) => 
-            userData.email === email
-        );
-        
-        if (!userEntry) {
-            if (errorDiv) {
-                errorDiv.textContent = 'User not found';
-                errorDiv.classList.remove('hidden');
-            }
-            return;
-        }
-        
-        const [userId, userData] = userEntry;
-        
-        // Verify code
-        if (userData.passwordResetCode !== enteredCode) {
-            if (errorDiv) {
-                errorDiv.textContent = 'Invalid reset code';
-                errorDiv.classList.remove('hidden');
-            }
-            return;
-        }
-        
-        // Check if code expired
-        if (Date.now() > userData.passwordResetExpiry) {
-            if (errorDiv) {
-                errorDiv.textContent = 'Reset code has expired';
-                errorDiv.classList.remove('hidden');
-            }
-            return;
-        }
-        
-        // Code is valid, show new password form
-        hideModal();
-        showNewPasswordForm(email, userId);
-        
-    } catch (error) {
-        console.error('Verification error:', error);
-        if (errorDiv) {
-            errorDiv.textContent = 'Verification failed. Please try again.';
-            errorDiv.classList.remove('hidden');
-        }
-    }
-};
-
-// Show new password form
-window.showNewPasswordForm = function(email, userId) {
-    showModal('Set New Password', `
-        <div class="space-y-4">
-            <p class="text-gray-700">Create a new password for your account:</p>
-            <p class="text-sm text-gray-600 font-semibold">${email}</p>
-            
-            <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">New Password</label>
-                <input 
-                    id="new-password" 
-                    type="password" 
-                    placeholder="Enter new password (min. 6 characters)" 
-                    class="w-full p-2 border rounded focus:ring-2 focus:ring-lime-500" 
-                    required 
-                />
-            </div>
-            
-            <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Confirm New Password</label>
-                <input 
-                    id="confirm-password" 
-                    type="password" 
-                    placeholder="Re-enter new password" 
-                    class="w-full p-2 border rounded focus:ring-2 focus:ring-lime-500" 
-                    required 
-                />
-            </div>
-            
-            <div id="password-error" class="text-red-600 text-sm hidden"></div>
-        </div>
-    `, `
-        <button onclick="hideModal(); openAuth('login')" class="px-4 py-2 bg-gray-100 rounded">Cancel</button>
-        <button onclick="resetPassword('${email}', '${userId}')" class="px-4 py-2 bg-lime-600 text-white rounded hover:bg-lime-700">Reset Password</button>
-    `);
-    
-    setTimeout(() => {
-        document.getElementById('new-password').focus();
-    }, 100);
-};
-
-// Reset password
-window.resetPassword = async function(email, userId) {
-    const newPassword = document.getElementById('new-password')?.value;
-    const confirmPassword = document.getElementById('confirm-password')?.value;
-    const errorDiv = document.getElementById('password-error');
-    
-    if (!newPassword || !confirmPassword) {
-        if (errorDiv) {
-            errorDiv.textContent = 'Please fill in both password fields';
-            errorDiv.classList.remove('hidden');
-        }
-        return;
-    }
-    
-    if (newPassword.length < 6) {
-        if (errorDiv) {
-            errorDiv.textContent = 'Password must be at least 6 characters';
-            errorDiv.classList.remove('hidden');
-        }
-        return;
-    }
-    
-    if (newPassword !== confirmPassword) {
-        if (errorDiv) {
-            errorDiv.textContent = 'Passwords do not match';
-            errorDiv.classList.remove('hidden');
-        }
-        return;
-    }
-    
-    try {
-        console.log('🔄 Starting password reset process...');
-        
-        // Import necessary Firebase Auth functions
-        const { sendPasswordResetEmail: firebaseSendPasswordResetEmail } = await import("https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js");
-        
-        // Get user data to verify
-        const userData = await getFromFirebase(`users/${userId}`);
-        
-        if (!userData) {
-            throw new Error('User not found');
-        }
-        
-        console.log('📧 Sending Firebase password reset email...');
-        
-        // Use Firebase's built-in password reset email
-        // This is more reliable than trying to update password directly
-        await firebaseSendPasswordResetEmail(auth, email);
-        
-        console.log('✅ Firebase password reset email sent');
-        
-        // Clear the reset code from database
-        await updateFirebase(`users/${userId}`, {
-            passwordResetCode: null,
-            passwordResetExpiry: null,
-            passwordResetRequested: true,
-            passwordResetRequestedAt: new Date().toISOString()
-        });
-        
-        hideModal();
-        showModal('Password Reset Email Sent', `
-            <div class="text-center space-y-3">
-                <div class="text-5xl text-green-600">✓</div>
-                <p class="text-gray-700">We've sent a password reset link to:</p>
-                <p class="text-sm text-gray-800 font-semibold">${email}</p>
-                <div class="bg-blue-50 p-3 rounded border-l-4 border-blue-500 text-left">
-                    <p class="text-sm text-blue-900">
-                        <strong>Next Steps:</strong><br>
-                        1. Check your email inbox<br>
-                        2. Click the reset link in the email<br>
-                        3. Set your new password<br>
-                        4. Return here to log in
-                    </p>
-                </div>
-                <p class="text-xs text-gray-600">
-                    The link expires in 1 hour. If you don't see the email, check your spam folder.
-                </p>
-            </div>
-        `, `<button onclick="hideModal(); openAuth('login')" class="px-4 py-2 bg-lime-600 text-white rounded">Go to Login</button>`);
-        
-    } catch (error) {
-        console.error('❌ Password reset error:', error);
-        console.error('Error code:', error.code);
-        console.error('Error message:', error.message);
-        
-        let errorMessage = 'Failed to reset password. Please try again.';
-        
-        if (error.code === 'auth/user-not-found') {
-            errorMessage = 'Account not found. Please check your email address.';
-        } else if (error.code === 'auth/invalid-email') {
-            errorMessage = 'Invalid email address.';
-        } else if (error.code === 'auth/too-many-requests') {
-            errorMessage = 'Too many attempts. Please try again later.';
-        }
-        
-        if (errorDiv) {
-            errorDiv.textContent = errorMessage;
-            errorDiv.classList.remove('hidden');
-        }
-    }
-};
-
-// Alternative: Direct password update (requires user to be signed in)
-window.updateUserPassword = async function(email, newPassword) {
-    try {
-        // Import updatePassword from Firebase
-        const { updatePassword, signInWithEmailAndPassword: firebaseSignIn, sendPasswordResetEmail: firebaseSendReset } = await import("https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js");
-        
-        // Get current auth user
-        const currentUser = auth.currentUser;
-        
-        if (!currentUser || currentUser.email !== email) {
-            // User not signed in, use email reset method
-            await firebaseSendReset(auth, email);
-            return {
-                success: true,
-                method: 'email',
-                message: 'Password reset email sent'
-            };
-        }
-        
-        // User is signed in, can update directly
-        await updatePassword(currentUser, newPassword);
-        
-        return {
-            success: true,
-            method: 'direct',
-            message: 'Password updated successfully'
-        };
-        
-    } catch (error) {
-        console.error('Password update error:', error);
-        
-        if (error.code === 'auth/requires-recent-login') {
-            // User needs to re-authenticate first
-            return {
-                success: false,
-                requiresReauth: true,
-                message: 'Please log in again to change your password'
-            };
-        }
-        
-        throw error;
-    }
-};
-
-// Resend password reset code
-window.resendPasswordResetCode = async function(email) {
-    try {
-        const usersData = await getFromFirebase('users');
-        const userEntry = Object.entries(usersData).find(([uid, userData]) => 
-            userData.email === email
-        );
-        
-        if (!userEntry) {
-            return showModal('Error', 'User not found', `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
-        }
-        
-        const [userId, userData] = userEntry;
-        
-        // Generate new reset code
-        const newResetCode = generateVerificationCode();
-        const newCodeExpiry = Date.now() + (15 * 60 * 1000);
-        
-        await updateFirebase(`users/${userId}`, {
-            passwordResetCode: newResetCode,
-            passwordResetExpiry: newCodeExpiry
-        });
-        
-        await sendPasswordResetEmail(email, userData.name, newResetCode);
-        
-        showModal(
-            'Code Resent',
-            `<p class="text-gray-700">A new reset code has been sent to <b>${email}</b></p>`,
-            `<button onclick="hideModal(); showPasswordResetVerification('${email}')" class="px-4 py-2 bg-lime-600 text-white rounded">OK</button>`
-        );
-        
-    } catch (error) {
-        console.error('Resend error:', error);
-        showModal(
-            'Error',
-            'Failed to resend reset code. Please try again.',
-            `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`
-        );
-    }
-};
-
 window.resendVerificationCode = async function(email, password) {
     // ...
     await sendVerificationCodeEmail(email, userData.name, newVerificationCode);  // ← Uses EmailJS
     // ...
-};
-
-// 🔧 TEMPORARY FIX: Update existing users with their email
-window.fixExistingUserEmails = async function() {
-    console.log('🔧 Fixing existing user emails...');
-    
-    try {
-        const usersData = await getFromFirebase('users');
-        if (!usersData) {
-            console.log('No users found');
-            return;
-        }
-        
-        let fixedCount = 0;
-        
-        for (const [uid, userData] of Object.entries(usersData)) {
-            // Check if user has auth email but not in database root
-            if (userData.email) {
-                console.log(`✅ User ${uid} already has email: ${userData.email}`);
-                continue;
-            }
-            
-            // If user has no email at root, check if they have profile email
-            if (userData.profile && !userData.email) {
-                console.log(`⚠️ User ${uid} missing email at root level`);
-                // You'll need to manually add their email
-                // For now, just log the issue
-            }
-        }
-        
-        console.log(`✅ Fixed ${fixedCount} users`);
-        showModal('Fix Complete', `Updated ${fixedCount} user records with email addresses.`, 
-            `<button onclick="hideModal()" class="px-4 py-2 bg-lime-600 text-white rounded">OK</button>`);
-        
-    } catch (error) {
-        console.error('❌ Error fixing user emails:', error);
-        showModal('Error', 'Failed to fix user emails: ' + error.message,
-            `<button onclick="hideModal()" class="px-4 py-2 bg-red-600 text-white rounded">OK</button>`);
-    }
 };
 
 window.logoutUser = async function() {
@@ -2524,34 +1897,27 @@ window.saveUserProfile = async function() {
         const homeAddress = addressParts.join(', ');
 
         const profileData = {
-    fullName,
-    birthday,
-    age,
-    unit,
-    building: building || '',
-    street,
-    barangay,
-    homeAddress,
-    idType,
-    idUrl,
-    verified: false,
-    denied: false,
-    denialReason: null,
-    deniedAt: null,
-    deniedBy: null,
-    submittedAt: new Date().toISOString()
-};
-
-// ✅ NEW: Also save email at the user root level for easier lookup
-await updateFirebase(`users/${window.APP_STATE.currentUser.uid}`, {
-    email: window.APP_STATE.currentUser.email, // Save email here too
-    profile: profileData
-});
+            fullName,
+            birthday,
+            age,
+            unit,
+            building: building || '',
+            street,
+            barangay,
+            homeAddress,
+            idType,
+            idUrl,
+            verified: false,
+            denied: false,  // ✅ Clear denial status
+            denialReason: null,  // ✅ Clear denial reason
+            deniedAt: null,  // ✅ Clear denial timestamp
+            deniedBy: null,  // ✅ Clear who denied it
+            submittedAt: new Date().toISOString()
+        };
 
         await updateFirebase(`users/${window.APP_STATE.currentUser.uid}`, {
-    email: window.APP_STATE.currentUser.email,
-    profile: profileData
-});
+            profile: profileData
+        });
 
         hideModal();
         showModal('Profile Saved', `
@@ -4100,10 +3466,7 @@ window.openAuth = function(mode = 'login') {
         <form id="login-form" class="grid gap-3">
             <input id="login-email" type="email" placeholder="Email" class="p-2 border rounded" required />
             <input id="login-password" type="password" placeholder="Password" class="p-2 border rounded" required />
-            <div class="text-right">
-                <button type="button" onclick="showForgotPasswordModal()" class="text-sm text-lime-600 hover:text-lime-700 underline">Forgot Password?</button>
-            </div>
-        </form>
+          </form>
     `, `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">Cancel</button>
         <button onclick="loginUser()" class="px-4 py-2 bg-lime-600 text-white rounded">Log in</button>`);
     } else {
@@ -5316,25 +4679,6 @@ window.addEventListener('keydown', (e) => {
     }
 
 });
-
-// 🔧 MANUAL FIX: Add email to user record
-window.manuallyFixUserEmail = async function(email, userId) {
-    try {
-        console.log(`🔧 Fixing user ${userId} with email ${email}`);
-        
-        await updateFirebase(`users/${userId}`, {
-            email: email.toLowerCase()
-        });
-        
-        console.log('✅ Email added successfully');
-        alert('Email added to your account. Try forgot password again!');
-        
-    } catch (error) {
-        console.error('❌ Failed to add email:', error);
-        alert('Failed to add email. Error: ' + error.message);
-    }
-};
-
 
 console.log('validateAndPlaceOrder exists:', typeof window.validateAndPlaceOrder);
 console.log('CAINTA_BARANGAYS:', CAINTA_BARANGAYS);
