@@ -3,6 +3,7 @@
 const EMAIL_CONFIG = {
     serviceId: 'service_kmbhxwd',     // ← REPLACE with your Service ID
     templateId: 'template_nmuqtvr',   // ← REPLACE with your Template ID
+    resetTemplateId: 'template_4av8o1v',
     publicKey: 'W9t0FVxxE5r6HqbFN'     // ← REPLACE with your Public Key
 };
 
