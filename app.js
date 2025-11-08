@@ -932,44 +932,44 @@ window.openAdminChatModal = function(threadId) {
     const messages = thread.messages ? Object.values(thread.messages) : [];
     
     const messagesHtml = messages.map(msg => {
-    // ✅ NEW: Handle system messages
-    if (msg.isSystemMessage) {
+        // ✅ Handle system messages
+        if (msg.isSystemMessage) {
+            return `
+                <div class="text-center my-3">
+                    <div class="inline-block px-4 py-2 bg-gray-100 text-gray-600 rounded-full text-xs border border-gray-300">
+                        ${escapeHtml(msg.text)}
+                    </div>
+                </div>
+            `;
+        }
+        
+        const isAdmin = msg.role === 'admin';
+        const isAutoResponse = msg.isAutoResponse || false;
+        
+        const msgClass = isAdmin 
+            ? (isAutoResponse 
+                ? 'bg-blue-50 text-gray-800 self-end rounded-br-none border border-blue-200' 
+                : 'bg-lime-600 text-white self-end rounded-br-none')
+            : 'bg-gray-200 text-gray-800 self-start rounded-tl-none';
+        
+        const nameText = isAdmin ? (isAutoResponse ? 'Admin (Auto) 🤖' : 'Admin') : thread.customerName;
+        
+        // ✅ FIXED: Proper line break handling for all messages
+        const formattedText = isAutoResponse 
+            ? `<pre class="chat-message-text">${escapeHtml(msg.text)}</pre>`
+            : `<div class="chat-message-text">${escapeHtml(msg.text).replace(/\n/g, '<br>')}</div>`;
+        
         return `
-            <div class="text-center my-3">
-                <div class="inline-block px-4 py-2 bg-gray-100 text-gray-600 rounded-full text-xs border border-gray-300">
-                    ${escapeHtml(msg.text)}
+            <div class="chat-message-item ${isAdmin ? 'items-end' : 'items-start'} mb-3">
+                <div class="text-xs ${isAutoResponse ? 'text-blue-600 font-semibold' : 'text-gray-500'} mb-1">
+                    ${nameText} - ${new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </div>
+                <div class="${msgClass} chat-message-bubble">
+                    ${formattedText}
                 </div>
             </div>
         `;
-    }
-    
-    const isAdmin = msg.role === 'admin';
-    const isAutoResponse = msg.isAutoResponse || false;
-    
-    const msgClass = isAdmin 
-        ? (isAutoResponse 
-            ? 'bg-blue-50 text-gray-800 self-end rounded-br-none border border-blue-200' 
-            : 'bg-lime-600 text-white self-end rounded-br-none')
-        : 'bg-gray-200 text-gray-800 self-start rounded-tl-none';
-    
-    const nameText = isAdmin ? (isAutoResponse ? 'Admin (Auto) 🤖' : 'Admin') : thread.customerName;
-    
-    // ✅ FIXED: Proper line break handling for all messages
-    const formattedText = isAutoResponse 
-        ? `<pre class="chat-message-text">${escapeHtml(msg.text)}</pre>`
-        : `<div class="chat-message-text">${escapeHtml(msg.text).replace(/\n/g, '<br>')}</div>`;
-    
-    return `
-        <div class="chat-message-item ${isAdmin ? 'items-end' : 'items-start'} mb-3">
-            <div class="text-xs ${isAutoResponse ? 'text-blue-600 font-semibold' : 'text-gray-500'} mb-1">
-                ${nameText} - ${new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-            </div>
-            <div class="${msgClass} chat-message-bubble">
-                ${formattedText}
-            </div>
-        </div>
-    `;
-}).join('');
+    }).join('');
 
     const modalTitle = `Chat with ${thread.customerName || thread.id}`;
     const modalContent = `
@@ -994,18 +994,18 @@ window.openAdminChatModal = function(threadId) {
     `;
     
     const modalActions = `
-    <button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded hover:bg-gray-200">Close</button>
-    ${thread.status !== 'resolved' ? 
-        `<button onclick="endChatConversation('${thread.id}')" class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700">
-            <span class="flex items-center gap-2">
-                <i data-lucide="x-circle" class="w-4 h-4"></i>
-                End Conversation
-            </span>
-        </button>` 
-        : ''}
-`;
+        <button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded hover:bg-gray-200">Close</button>
+        ${thread.status !== 'resolved' ? 
+            `<button onclick="endChatConversation('${thread.id}')" class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700">
+                <span class="flex items-center gap-2">
+                    <i data-lucide="x-circle" class="w-4 h-4"></i>
+                    End Conversation
+                </span>
+            </button>` 
+            : ''}
+    `;
 
-showModal(modalTitle, modalContent, modalActions, true);
+    showModal(modalTitle, modalContent, modalActions, true);
 
     const modalOverlay = document.getElementById('modal-overlay');
     modalOverlay.setAttribute('data-chat-id', thread.id);
@@ -1124,7 +1124,7 @@ window.renderAdminChatDropdown = function() {
 
     const chatItems = window.APP_STATE.chats.map(chat => {
     const isUnread = chat.unreadAdmin;
-    const isResolved = chat.status === 'resolved'; // ✅ NEW
+    const isResolved = chat.status === 'resolved';
     const lastMsgTime = new Date(chat.lastMessageAt).toLocaleString('en-US', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short' });
     
     return `
@@ -1133,21 +1133,16 @@ window.renderAdminChatDropdown = function() {
                 <div class="font-semibold text-gray-800 truncate ${isUnread ? 'font-extrabold text-lime-700' : ''}">
                     ${chat.customerName || chat.id}
                     ${isUnread ? '<span class="text-xs text-red-500 ml-2">NEW</span>' : ''}
-                    ${isResolved ? '<span class="text-xs text-gray-500 ml-2">✓ RESOLVED</span>' : ''} <!-- ✅ NEW -->
+                    ${isResolved ? '<span class="text-xs text-gray-500 ml-2">✓ RESOLVED</span>' : ''}
                 </div>
-                <div class="flex-grow min-w-0">
-                    <div class="font-semibold text-gray-800 truncate ${isUnread ? 'font-extrabold text-lime-700' : ''}">
-                        ${chat.customerName || chat.id}
-                        ${isUnread ? '<span class="text-xs text-red-500 ml-2">NEW</span>' : ''}
-                    </div>
-                    <p class="text-sm text-gray-500 truncate">${chat.lastMessageText || 'No messages yet.'}</p>
-                </div>
-                <div class="flex-shrink-0 text-xs text-gray-400">
-                    ${lastMsgTime}
-                </div>
-            </button>
-        `;
-    }).join('');
+                <p class="text-sm text-gray-500 truncate">${chat.lastMessageText || 'No messages yet.'}</p>
+            </div>
+            <div class="flex-shrink-0 text-xs text-gray-400">
+                ${lastMsgTime}
+            </div>
+        </button>
+    `;
+}).join('');
 
     chatDropdownContent.innerHTML = chatItems;
     lucide.createIcons();
