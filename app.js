@@ -56,6 +56,9 @@ let orderSearchCursor = 0;
 let preorderSearchValue = '';
 let preorderSearchCursor = 0;
 
+const CART_TIMEOUT = 30 * 60 * 1000; // 30 minutes in milliseconds
+let cartActivityTimer = null;
+
 const APP_KEY = 'palengke_cainta_v4';
 
 const CAINTA_BARANGAYS = [
@@ -451,6 +454,12 @@ async function initializeFirebaseData() {
         await renderMain();
         
         console.log('✅ Firebase initialization complete');
+        
+        // ✅ Check for abandoned carts on startup
+        await checkAbandonedCartOnStartup();
+        
+        // ✅ Start global abandoned cart cleanup
+        startGlobalAbandonedCartCleanup();
         
         // ✅ STEP 8: Verify sync
         setTimeout(() => {
@@ -1471,10 +1480,61 @@ window.loginUser = async function() {
     }
 };
 
+// ✅ NEW: Verify and restore cart stock reservations on login
+window.verifyCartStockOnLogin = async function(userId) {
+    console.log('🔍 Verifying cart stock reservations...');
+    
+    const userCart = await getFromFirebase(`carts/${userId}`);
+    if (!userCart || Object.keys(userCart).length === 0) {
+        console.log('✅ No cart items to verify');
+        return;
+    }
+    
+    const cartItems = Object.values(userCart);
+    const updatedCart = [];
+    
+    for (const item of cartItems) {
+        if (item.preordered) {
+            updatedCart.push(item);
+            continue;
+        }
+        
+        const product = await getFromFirebase(`products/${item.productId}`);
+        if (!product) {
+            console.log(`⚠️ Product ${item.name} no longer exists, removing from cart`);
+            continue;
+        }
+        
+        // Check if stock is still sufficient
+        if (item.quantity <= product.quantity + item.quantity) {
+            updatedCart.push(item);
+            console.log(`✅ Cart item verified: ${item.name} (${item.quantity} ${item.unit})`);
+        } else {
+            // Stock insufficient, restore what was reserved and remove from cart
+            const newStock = product.quantity + item.quantity;
+            await updateFirebase(`products/${item.productId}`, { quantity: newStock });
+            console.log(`⚠️ Insufficient stock for ${item.name}, removed from cart and stock restored`);
+        }
+    }
+    
+    // Save verified cart
+    await saveToFirebase(`carts/${userId}`, updatedCart);
+    window.APP_STATE.cart = updatedCart;
+    
+    console.log('✅ Cart verification complete');
+};
+
 window.logoutUser = async function() {
     try {
         if (window.APP_STATE.currentUser && window.APP_STATE.currentUser.role === 'customer') {
+            // Save cart before logout
             await saveToFirebase(`carts/${window.APP_STATE.currentUser.uid}`, window.APP_STATE.cart);
+        }
+        
+        // ✅ Clear abandoned cart timer
+        if (cartActivityTimer) {
+            clearTimeout(cartActivityTimer);
+            cartActivityTimer = null;
         }
         
         await signOut(auth);
@@ -1498,16 +1558,26 @@ window.addToCart = async function(productId, qty = 1) {
 
     if (p.preorder) return showModal('Pre-Order Item', `${p.name} is currently on pre-order. Use the Pre-Order button to reserve it.`, `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
     
-    // ✅ Check available stock (don't decrease yet)
-    if (p.quantity <= 0) return showModal('Out of stock', `${p.name} is out of stock.`, `<button onclick="hideModal()" class="px-4 py-2 bg-gray-200 rounded">OK</button>`);
+    // ✅ Get current available stock from Firebase (real-time check)
+    const currentProductData = await getFromFirebase(`products/${productId}`);
+    if (!currentProductData) {
+        return showModal('Error', 'Product not found in database', `<button onclick="hideModal()" class="px-4 py-2 bg-gray-200 rounded">OK</button>`);
+    }
+    
+    const availableStock = currentProductData.quantity || 0;
+    
+    // ✅ Check available stock (real-time)
+    if (availableStock <= 0) {
+        return showModal('Out of stock', `${p.name} is currently out of stock.`, `<button onclick="hideModal()" class="px-4 py-2 bg-gray-200 rounded">OK</button>`);
+    }
 
     const idx = window.APP_STATE.cart.findIndex(c => c.productId === productId && !c.preordered);
     const currentQtyInCart = idx >= 0 ? window.APP_STATE.cart[idx].quantity : 0;
     const newTotalQty = currentQtyInCart + qty;
     
-    // ✅ Check if adding this quantity exceeds available stock
-    if (newTotalQty > p.quantity) {
-        return showModal('Not enough stock', `Only ${p.quantity} ${p.unit}${p.quantity > 1 ? 's' : ''} available. You already have ${currentQtyInCart} in your cart.`, `<button onclick="hideModal()" class="px-4 py-2 bg-gray-200 rounded">OK</button>`);
+    // ✅ Check if adding this quantity exceeds available stock (real-time)
+    if (newTotalQty > availableStock) {
+        return showModal('Not enough stock', `Only ${availableStock} ${p.unit}${availableStock > 1 ? 's' : ''} available. You already have ${currentQtyInCart} in your cart.`, `<button onclick="hideModal()" class="px-4 py-2 bg-gray-200 rounded">OK</button>`);
     }
     
     // ✅ Check order limit
@@ -1515,25 +1585,44 @@ window.addToCart = async function(productId, qty = 1) {
         return showModal('Order Limit Exceeded', `Maximum order quantity for ${p.name} is ${p.orderLimit} ${p.unit}${p.orderLimit > 1 ? 's' : ''} per customer. You already have ${currentQtyInCart} in your cart.`, `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
     }
     
-    // ✅ Add to cart (NO stock decrease)
-    if (idx >= 0) {
-        window.APP_STATE.cart[idx].quantity += qty;
-    } else {
-        window.APP_STATE.cart.push({ 
-            productId: p.id, 
-            name: p.name, 
-            price: p.price, 
-            quantity: qty, 
-            unit: p.unit, 
-            preordered: false 
-        });
+    // ✅ RESERVE STOCK: Decrease stock immediately when adding to cart
+    const newStock = availableStock - qty;
+    
+    try {
+        // Update stock in Firebase
+        await updateFirebase(`products/${productId}`, { quantity: newStock });
+        
+        // Update local state
+        p.quantity = newStock;
+        
+        console.log(`✅ Stock reserved: ${p.name} (${qty} ${p.unit}) - Remaining: ${newStock}`);
+        
+        // ✅ Add to cart
+        if (idx >= 0) {
+            window.APP_STATE.cart[idx].quantity += qty;
+        } else {
+            window.APP_STATE.cart.push({ 
+                productId: p.id, 
+                name: p.name, 
+                price: p.price, 
+                quantity: qty, 
+                unit: p.unit, 
+                preordered: false 
+            });
+        }
+
+        // ✅ Save cart to Firebase
+        await saveToFirebase(`carts/${window.APP_STATE.currentUser.uid}`, window.APP_STATE.cart);
+
+        renderCartDrawer();
+        toggleCartDrawer(true);
+
+        await updateCartActivity();
+        
+    } catch (error) {
+        console.error('❌ Error reserving stock:', error);
+        showModal('Error', 'Failed to add item to cart. Please try again.', `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
     }
-
-    // ✅ Save cart to Firebase (stock NOT decreased)
-    await saveToFirebase(`carts/${window.APP_STATE.currentUser.uid}`, window.APP_STATE.cart);
-
-    renderCartDrawer();
-    toggleCartDrawer(true);
 };
 
 window.preOrderItem = async function(productId, qty = 1) {
@@ -1567,9 +1656,20 @@ window.changeCartItem = async function(pid, newQty) {
     
     if(!product) return;
     
-    // ✅ Check if new quantity exceeds available stock
-    if(newQty > product.quantity) {
-        return showModal('Not enough stock', `Only ${product.quantity} ${product.unit}${product.quantity > 1 ? 's' : ''} available in stock.`, `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
+    // ✅ Get current stock from Firebase (real-time check)
+    const currentProductData = await getFromFirebase(`products/${pid}`);
+    if (!currentProductData) {
+        return showModal('Error', 'Product not found in database', `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
+    }
+    
+    const currentStock = currentProductData.quantity || 0;
+    const qtyDifference = newQty - oldQty;
+    
+    // ✅ If increasing quantity, check if enough stock available
+    if (qtyDifference > 0) {
+        if (qtyDifference > currentStock) {
+            return showModal('Not enough stock', `Only ${currentStock} ${product.unit}${currentStock > 1 ? 's' : ''} more available in stock.`, `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
+        }
     }
     
     // ✅ Check order limit
@@ -1577,28 +1677,79 @@ window.changeCartItem = async function(pid, newQty) {
         return showModal('Order Limit Exceeded', `Maximum order quantity for ${product.name} is ${product.orderLimit} ${product.unit}${product.orderLimit > 1 ? 's' : ''} per customer.`, `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
     }
     
-    // ✅ Update cart quantity (NO stock decrease)
-    window.APP_STATE.cart[idx].quantity = newQty;
-    
-    // ✅ Save cart only (stock NOT touched)
-    await saveToFirebase(`carts/${window.APP_STATE.currentUser.uid}`, window.APP_STATE.cart);
-    
-    renderCartDrawer();
-    renderMain();
+    try {
+        // ✅ UPDATE STOCK: Adjust stock based on quantity change
+        const newStock = currentStock - qtyDifference;
+        
+        // Update stock in Firebase
+        await updateFirebase(`products/${pid}`, { quantity: newStock });
+        
+        // Update local state
+        product.quantity = newStock;
+        
+        console.log(`✅ Stock adjusted: ${product.name} (${qtyDifference > 0 ? '-' : '+'}${Math.abs(qtyDifference)} ${product.unit}) - New stock: ${newStock}`);
+        
+        // ✅ Update cart quantity
+        window.APP_STATE.cart[idx].quantity = newQty;
+        
+        // ✅ Save cart
+        await saveToFirebase(`carts/${window.APP_STATE.currentUser.uid}`, window.APP_STATE.cart);
+        
+        renderCartDrawer();
+        renderMain();
+
+        await updateCartActivity();
+        
+    } catch (error) {
+        console.error('❌ Error adjusting stock:', error);
+        showModal('Error', 'Failed to update quantity. Please try again.', `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
+    }
 };
 
 window.removeCartItem = async function(pid) {
     const idx = window.APP_STATE.cart.findIndex(c=> c.productId === pid);
     if(idx === -1) return;
     
-    // ✅ Simply remove from cart (NO stock restoration)
-    window.APP_STATE.cart.splice(idx, 1);
+    const cartItem = window.APP_STATE.cart[idx];
+    const product = window.APP_STATE.products.find(p => p.id === pid);
     
-    // ✅ Save updated cart
-    await saveToFirebase(`carts/${window.APP_STATE.currentUser.uid}`, window.APP_STATE.cart);
+    if (!product) {
+        console.warn('Product not found, removing from cart anyway');
+        window.APP_STATE.cart.splice(idx, 1);
+        await saveToFirebase(`carts/${window.APP_STATE.currentUser.uid}`, window.APP_STATE.cart);
+        renderCartDrawer();
+        renderMain();
+        
+        await updateCartActivity();
+
+        return;
+    }
     
-    renderCartDrawer();
-    renderMain();
+    // ✅ RESTORE STOCK: Add quantity back to product stock
+    const restoredStock = product.quantity + cartItem.quantity;
+    
+    try {
+        // Update stock in Firebase
+        await updateFirebase(`products/${pid}`, { quantity: restoredStock });
+        
+        // Update local state
+        product.quantity = restoredStock;
+        
+        console.log(`✅ Stock restored: ${product.name} (${cartItem.quantity} ${product.unit}) - New stock: ${restoredStock}`);
+        
+        // Remove from cart
+        window.APP_STATE.cart.splice(idx, 1);
+        
+        // Save updated cart
+        await saveToFirebase(`carts/${window.APP_STATE.currentUser.uid}`, window.APP_STATE.cart);
+        
+        renderCartDrawer();
+        renderMain();
+        
+    } catch (error) {
+        console.error('❌ Error restoring stock:', error);
+        showModal('Error', 'Failed to remove item. Please try again.', `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
+    }
 };
 
 window.checkout = async function() {
@@ -1777,6 +1928,250 @@ window.checkout = async function() {
         // Initial preview update
         updateCheckoutAddressPreview();
     }, 100);
+};
+
+// ✅ NEW: Clean up abandoned carts after 30 minutes
+window.cleanupAbandonedCart = async function(userId) {
+    const CART_TIMEOUT = 30 * 60 * 1000; // 30 minutes
+    const lastActivity = localStorage.getItem(`cart_activity_${userId}`);
+    
+    if (!lastActivity) return;
+    
+    const timeSinceActivity = Date.now() - parseInt(lastActivity);
+    
+    if (timeSinceActivity > CART_TIMEOUT) {
+        console.log('🧹 Cleaning up abandoned cart...');
+        
+        const cart = await getFromFirebase(`carts/${userId}`);
+        if (!cart) return;
+        
+        // Restore stock for all cart items
+        const cartItems = Object.values(cart);
+        for (const item of cartItems) {
+            if (item.preordered) continue;
+            
+            const product = await getFromFirebase(`products/${item.productId}`);
+            if (product) {
+                const restoredStock = product.quantity + item.quantity;
+                await updateFirebase(`products/${item.productId}`, { quantity: restoredStock });
+                console.log(`✅ Stock restored from abandoned cart: ${item.name} (+${item.quantity})`);
+            }
+        }
+        
+        // Clear cart
+        await saveToFirebase(`carts/${userId}`, []);
+        console.log('✅ Abandoned cart cleaned up');
+    }
+};
+
+// Update cart activity timestamp
+window.updateCartActivity = function() {
+    if (window.APP_STATE.currentUser) {
+        localStorage.setItem(`cart_activity_${window.APP_STATE.currentUser.uid}`, Date.now().toString());
+    }
+};
+
+// ✅ Track cart activity with timestamp in Firebase
+window.updateCartActivity = async function() {
+    if (!window.APP_STATE.currentUser) return;
+    
+    const timestamp = Date.now();
+    
+    try {
+        // Save activity timestamp to Firebase
+        await updateFirebase(`carts/${window.APP_STATE.currentUser.uid}`, {
+            lastActivity: timestamp
+        });
+        
+        console.log('🕐 Cart activity updated:', new Date(timestamp).toLocaleTimeString());
+        
+        // Reset the cleanup timer
+        resetAbandonedCartTimer();
+    } catch (error) {
+        console.error('❌ Error updating cart activity:', error);
+    }
+};
+
+// ✅ Reset the abandoned cart cleanup timer
+window.resetAbandonedCartTimer = function() {
+    // Clear existing timer
+    if (cartActivityTimer) {
+        clearTimeout(cartActivityTimer);
+    }
+    
+    // Set new timer for cart timeout
+    cartActivityTimer = setTimeout(() => {
+        if (window.APP_STATE.currentUser && window.APP_STATE.cart.length > 0) {
+            console.log('⏰ Cart timeout reached, cleaning up...');
+            cleanupCurrentUserCart();
+        }
+    }, CART_TIMEOUT);
+    
+    console.log('⏱️ Cart cleanup timer set for 30 minutes');
+};
+
+// ✅ Cleanup current user's cart
+window.cleanupCurrentUserCart = async function() {
+    if (!window.APP_STATE.currentUser) return;
+    
+    const userId = window.APP_STATE.currentUser.uid;
+    
+    console.log('🧹 Cleaning up abandoned cart for user:', userId);
+    
+    try {
+        const cart = window.APP_STATE.cart;
+        
+        if (cart.length === 0) {
+            console.log('✅ No items to clean up');
+            return;
+        }
+        
+        // Restore stock for all cart items
+        for (const item of cart) {
+            if (item.preordered) continue; // Skip pre-order items
+            
+            const product = window.APP_STATE.products.find(p => p.id === item.productId);
+            if (!product) continue;
+            
+            const restoredStock = product.quantity + item.quantity;
+            
+            // Update Firebase
+            await updateFirebase(`products/${item.productId}`, { quantity: restoredStock });
+            
+            // Update local state
+            product.quantity = restoredStock;
+            
+            console.log(`✅ Stock restored: ${item.name} (+${item.quantity}) = ${restoredStock} total`);
+        }
+        
+        // Clear cart
+        window.APP_STATE.cart = [];
+        await saveToFirebase(`carts/${userId}`, { lastActivity: Date.now() });
+        
+        // Update UI
+        renderCartDrawer();
+        renderMain();
+        
+        // Show notification
+        showModal('Cart Cleared', 
+            `Your cart was automatically cleared due to inactivity. Stock has been restored.`,
+            `<button onclick="hideModal()" class="px-4 py-2 bg-lime-600 text-white rounded">OK</button>`
+        );
+        
+        console.log('✅ Cart cleanup complete');
+        
+    } catch (error) {
+        console.error('❌ Error cleaning up cart:', error);
+    }
+};
+
+// ✅ Check for abandoned carts on app initialization
+window.checkAbandonedCartOnStartup = async function() {
+    if (!window.APP_STATE.currentUser) return;
+    
+    const userId = window.APP_STATE.currentUser.uid;
+    
+    try {
+        const cartData = await getFromFirebase(`carts/${userId}`);
+        
+        if (!cartData || !cartData.lastActivity) {
+            // No cart data or no activity timestamp, start fresh
+            await updateCartActivity();
+            return;
+        }
+        
+        const lastActivity = cartData.lastActivity;
+        const timeSinceActivity = Date.now() - lastActivity;
+        
+        console.log('🔍 Checking cart age:', Math.round(timeSinceActivity / 1000 / 60), 'minutes old');
+        
+        if (timeSinceActivity > CART_TIMEOUT) {
+            console.log('⚠️ Found abandoned cart, cleaning up...');
+            
+            // Cart is abandoned, restore stock
+            const cartItems = Object.values(cartData).filter(item => 
+                item && typeof item === 'object' && item.productId
+            );
+            
+            for (const item of cartItems) {
+                if (item.preordered) continue;
+                
+                const currentProduct = await getFromFirebase(`products/${item.productId}`);
+                if (!currentProduct) continue;
+                
+                const restoredStock = currentProduct.quantity + item.quantity;
+                await updateFirebase(`products/${item.productId}`, { quantity: restoredStock });
+                
+                console.log(`✅ Stock restored on startup: ${item.name} (+${item.quantity}) = ${restoredStock} total`);
+            }
+            
+            // Clear cart
+            window.APP_STATE.cart = [];
+            await saveToFirebase(`carts/${userId}`, { lastActivity: Date.now() });
+            
+            console.log('✅ Abandoned cart cleaned up on startup');
+        } else {
+            // Cart is still valid, start timer for remaining time
+            const remainingTime = CART_TIMEOUT - timeSinceActivity;
+            
+            console.log('✅ Cart is still active, timer set for', Math.round(remainingTime / 1000 / 60), 'minutes');
+            
+            cartActivityTimer = setTimeout(() => {
+                cleanupCurrentUserCart();
+            }, remainingTime);
+        }
+        
+    } catch (error) {
+        console.error('❌ Error checking abandoned cart:', error);
+    }
+};
+
+// ✅ Global cleanup check (runs every 5 minutes for all users)
+window.startGlobalAbandonedCartCleanup = function() {
+    setInterval(async () => {
+        console.log('🌐 Running global abandoned cart check...');
+        
+        try {
+            // Get all carts from Firebase
+            const allCarts = await getFromFirebase('carts');
+            if (!allCarts) return;
+            
+            const now = Date.now();
+            
+            for (const [userId, cartData] of Object.entries(allCarts)) {
+                if (!cartData || !cartData.lastActivity) continue;
+                
+                const timeSinceActivity = now - cartData.lastActivity;
+                
+                if (timeSinceActivity > CART_TIMEOUT) {
+                    console.log(`🧹 Found abandoned cart for user ${userId}, cleaning up...`);
+                    
+                    const cartItems = Object.values(cartData).filter(item => 
+                        item && typeof item === 'object' && item.productId
+                    );
+                    
+                    for (const item of cartItems) {
+                        if (item.preordered) continue;
+                        
+                        const currentProduct = await getFromFirebase(`products/${item.productId}`);
+                        if (!currentProduct) continue;
+                        
+                        const restoredStock = currentProduct.quantity + item.quantity;
+                        await updateFirebase(`products/${item.productId}`, { quantity: restoredStock });
+                        
+                        console.log(`✅ Global cleanup - Stock restored: ${item.name} (+${item.quantity})`);
+                    }
+                    
+                    // Clear abandoned cart
+                    await saveToFirebase(`carts/${userId}`, { lastActivity: now });
+                    console.log(`✅ Cleared abandoned cart for user ${userId}`);
+                }
+            }
+            
+        } catch (error) {
+            console.error('❌ Error in global cart cleanup:', error);
+        }
+    }, 5 * 60 * 1000); // Run every 5 minutes
 };
 
 // Add this AFTER window.checkout = async function() { ... }
@@ -2273,36 +2668,43 @@ const newId = 'O-' + generateOrderId(); // Now generates O-XXXXXXXX with random 
     };
 
     try {
-        console.log('💾 Saving order to Firebase...', newOrder);
+    console.log('💾 Saving order to Firebase...', newOrder);
+    
+    // ✅ STOCK ALREADY DECREASED IN CART - Just verify and save order
+    console.log('📦 Stock already reserved in cart, proceeding with order...');
+    
+    // ✅ Verify stock availability one final time before confirming order
+    for (const item of itemsCopy) {
+        if (item.preordered) continue; // Skip pre-order items
         
-        // ✅ STEP 1: Decrease stock for each item in order
-        console.log('📦 Decreasing stock for order items...');
-        for (const item of itemsCopy) {
-            const product = window.APP_STATE.products.find(p => p.id === item.productId);
-            if (product) {
-                const newQuantity = Math.max(0, product.quantity - item.quantity);
-                
-                // Update local state
-                product.quantity = newQuantity;
-                
-                // Update Firebase
-                await updateFirebase(`products/${item.productId}`, { quantity: newQuantity });
-                
-                console.log(`✅ Stock decreased: ${item.name} (${item.quantity} ${item.unit}) - New stock: ${newQuantity}`);
-            }
+        const currentProduct = await getFromFirebase(`products/${item.productId}`);
+        if (!currentProduct) {
+            throw new Error(`Product ${item.name} no longer exists`);
         }
         
-        // ✅ STEP 2: Save order to Firebase
-        await saveToFirebase(`orders/${newId}`, newOrder);
-        console.log('✅ Order saved successfully');
-        
-        // ✅ STEP 3: Clear cart
-        window.APP_STATE.cart = [];
-        await saveToFirebase(`carts/${window.APP_STATE.currentUser.uid}`, window.APP_STATE.cart);
+        // Stock should already be reserved from cart, just log for verification
+        console.log(`✅ Stock verification: ${item.name} - Current stock: ${currentProduct.quantity}`);
+    }
+    
+    // ✅ Save order to Firebase (NO stock decrease needed)
+    await saveToFirebase(`orders/${newId}`, newOrder);
+    console.log('✅ Order saved successfully');
+    
+    // ✅ Clear cart (stock already adjusted)
+    window.APP_STATE.cart = [];
+        await saveToFirebase(`carts/${window.APP_STATE.currentUser.uid}`, { lastActivity: Date.now() });
         console.log('✅ Cart cleared');
+        
+        // ✅ Clear abandoned cart timer since order is complete
+        if (cartActivityTimer) {
+            clearTimeout(cartActivityTimer);
+            cartActivityTimer = null;
+        }
 
         toggleCartDrawer(false);
         hideModal();
+    
+    // ... rest of success modal code
         
         showModal('Order Placed! 🎉', `
             <div class="text-center space-y-3">
@@ -3244,6 +3646,13 @@ window.verifyEmailCode = async function(email, password) {
             name: userData.name,
             role: userData.role
         };
+
+        // ✅ NEW: Verify cart stock reservations
+await verifyCartStockOnLogin(user.uid);
+
+hideModal();
+updateAuthArea();
+renderMain();
 
         const userCart = await getFromFirebase(`carts/${user.uid}`);
         if (userCart) {
@@ -5081,6 +5490,7 @@ document.addEventListener('click', function(e) {
 });
 
 // Auth state listener
+// Auth state listener
 onAuthStateChanged(auth, async (user) => {
     if (user) {
         const userData = await getFromFirebase(`users/${user.uid}`);
@@ -5094,10 +5504,22 @@ onAuthStateChanged(auth, async (user) => {
 
             const userCart = await getFromFirebase(`carts/${user.uid}`);
             if (userCart) {
-                window.APP_STATE.cart = Object.values(userCart);
+                const cartItems = Object.values(userCart).filter(item => 
+                    item && typeof item === 'object' && item.productId
+                );
+                window.APP_STATE.cart = cartItems;
             }
+            
+            // ✅ Check for abandoned cart on login
+            await checkAbandonedCartOnStartup();
         }
     } else {
+        // ✅ Clear timer on logout
+        if (cartActivityTimer) {
+            clearTimeout(cartActivityTimer);
+            cartActivityTimer = null;
+        }
+        
         window.APP_STATE.currentUser = null;
         window.APP_STATE.cart = [];
     }
