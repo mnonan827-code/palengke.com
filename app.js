@@ -994,16 +994,14 @@ window.openAdminChatModal = function(threadId) {
     `;
     
     const modalActions = `
-        <button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded hover:bg-gray-200">Close</button>
-        ${thread.status !== 'resolved' ? 
-            `<button onclick="endChatConversation('${thread.id}')" class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700">
-                <span class="flex items-center gap-2">
-                    <i data-lucide="x-circle" class="w-4 h-4"></i>
-                    End Conversation
-                </span>
-            </button>` 
-            : ''}
-    `;
+    <button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded hover:bg-gray-200">Close</button>
+    ${!thread.conversationEnded ? 
+        `<button onclick="endChatConversation('${thread.id}')" class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 flex items-center gap-2">
+            <i data-lucide="x-circle" class="w-4 h-4"></i>
+            <span>End Conversation</span>
+        </button>` 
+        : ''}
+`;
 
     showModal(modalTitle, modalContent, modalActions, true);
 

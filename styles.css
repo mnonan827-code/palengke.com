@@ -3313,3 +3313,34 @@ pre.chat-message-text {
     color: #6b7280;
     border: 1px dashed #d1d5db;
 }
+
+/* ==========================================
+   🔴 End Conversation Button Styling
+   ========================================== */
+
+button[onclick^="endChatConversation"] {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    min-height: 44px;
+    transition: all 0.2s ease;
+}
+
+button[onclick^="endChatConversation"]:hover {
+    background: #dc2626 !important;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(220, 38, 38, 0.3);
+}
+
+button[onclick^="endChatConversation"]:active {
+    transform: translateY(0);
+}
+
+/* Mobile responsiveness */
+@media (max-width: 640px) {
+    #modal .bg-gray-50 button[onclick^="endChatConversation"] {
+        width: 100%;
+        justify-content: center;
+    }
+}
