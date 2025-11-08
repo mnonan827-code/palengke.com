@@ -1303,14 +1303,24 @@ window.signupUser = async function() {
         await saveToFirebase(`users/${user.uid}`, userData);
 
         await sendVerificationCodeEmail(email, name, verificationCode);
-await signOut(auth);
+await signOut(auth); // ✅ IMPORTANT: Sign out immediately after signup
 
-// Show Data Privacy Act modal
-await signOut(auth);
-
-// Go directly to verification modal
 hideModal();
-showVerificationModal(email, password);
+
+// ✅ Show success message FIRST, then verification modal
+showModal(
+    '✅ Account Created!',
+    `
+    <div class="text-center space-y-3">
+        <div class="text-5xl">📧</div>
+        <p class="text-gray-700">Welcome, <b>${name}</b>!</p>
+        <p class="text-sm text-gray-600">A verification code has been sent to:</p>
+        <p class="font-semibold text-lime-700">${email}</p>
+        <p class="text-xs text-gray-500 mt-2">Please verify your email to complete registration</p>
+    </div>
+    `,
+    `<button onclick="hideModal(); showVerificationModal('${email}', '${password}')" class="px-4 py-2 bg-lime-600 text-white rounded">✅ Verify Email Now</button>`
+);
 
 
     } catch (error) {
@@ -1344,8 +1354,11 @@ window.loginUser = async function() {
     }
 
     try {
+        // ✅ STEP 1: Sign in to Firebase Auth
         const userCredential = await signInWithEmailAndPassword(auth, email, password);
         const user = userCredential.user;
+        
+        // ✅ STEP 2: Get user data from database
         const userData = await getFromFirebase(`users/${user.uid}`);
 
         if (!userData) {
@@ -1353,21 +1366,65 @@ window.loginUser = async function() {
             return showModal('Error', 'User data not found.', `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
         }
 
+        // ✅ STEP 3: CHECK EMAIL VERIFICATION STATUS
         if (!userData.emailVerified) {
             await signOut(auth);
-            return showModal(
-                'Email Not Verified',
-                `
-                <div class="space-y-3">
-                    <p class="text-gray-700">Please verify your email before logging in.</p>
-                    <p class="text-sm text-gray-600">Check your inbox for the verification code.</p>
-                </div>
-                `,
-                `<button onclick="hideModal(); showVerificationModal('${email}', '${password}')" class="px-4 py-2 bg-lime-600 text-white rounded">Enter Verification Code</button>
-                 <button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">Cancel</button>`
-            );
+            
+            // Check if verification code is expired
+            const now = Date.now();
+            const isExpired = !userData.verificationCodeExpiry || now > userData.verificationCodeExpiry;
+            
+            if (isExpired) {
+                // Generate new code if expired
+                const newVerificationCode = generateVerificationCode();
+                const newCodeExpiry = Date.now() + (15 * 60 * 1000); // 15 minutes
+                
+                await updateFirebase(`users/${user.uid}`, {
+                    verificationCode: newVerificationCode,
+                    verificationCodeExpiry: newCodeExpiry
+                });
+                
+                // Send new verification email
+                await sendVerificationCodeEmail(email, userData.name, newVerificationCode);
+                
+                return showModal(
+                    '📧 Email Not Verified',
+                    `
+                    <div class="space-y-3">
+                        <div class="bg-yellow-50 p-3 rounded-lg border-l-4 border-yellow-500">
+                            <p class="text-yellow-800 font-semibold">⚠️ Your email is not verified yet</p>
+                        </div>
+                        <p class="text-gray-700">A new verification code has been sent to:</p>
+                        <p class="font-semibold text-lime-700">${email}</p>
+                        <p class="text-sm text-gray-600">Please check your inbox and enter the 6-digit code to verify your account.</p>
+                        <p class="text-xs text-gray-500">Code expires in 15 minutes</p>
+                    </div>
+                    `,
+                    `<button onclick="hideModal(); showVerificationModal('${email}', '${password}')" class="px-4 py-2 bg-lime-600 text-white rounded">✅ Enter Verification Code</button>
+                     <button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">Cancel</button>`
+                );
+            } else {
+                // Code still valid
+                return showModal(
+                    '📧 Email Not Verified',
+                    `
+                    <div class="space-y-3">
+                        <div class="bg-yellow-50 p-3 rounded-lg border-l-4 border-yellow-500">
+                            <p class="text-yellow-800 font-semibold">⚠️ Your email is not verified yet</p>
+                        </div>
+                        <p class="text-gray-700">Please verify your email before logging in.</p>
+                        <p class="text-sm text-gray-600">Check your inbox for the 6-digit verification code sent to:</p>
+                        <p class="font-semibold text-lime-700">${email}</p>
+                    </div>
+                    `,
+                    `<button onclick="hideModal(); showVerificationModal('${email}', '${password}')" class="px-4 py-2 bg-lime-600 text-white rounded">✅ Enter Verification Code</button>
+                     <button onclick="resendVerificationCode('${email}', '${password}')" class="px-4 py-2 bg-blue-600 text-white rounded">📧 Resend Code</button>
+                     <button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">Cancel</button>`
+                );
+            }
         }
 
+        // ✅ STEP 4: If verified, proceed with login
         window.APP_STATE.currentUser = {
             uid: user.uid,
             email: user.email,
@@ -1381,14 +1438,14 @@ window.loginUser = async function() {
         }
 
         hideModal();
-updateAuthArea();
-renderMain();
+        updateAuthArea();
+        renderMain();
 
-showModal(
-    'Logged in',
-    `Welcome back, <b>${window.APP_STATE.currentUser.name}</b>!`,
-    `<button onclick="hideModal(); renderMain()" class="px-4 py-2 bg-lime-600 text-white rounded">OK</button>`
-);
+        showModal(
+            '✅ Logged in',
+            `Welcome back, <b>${window.APP_STATE.currentUser.name}</b>!`,
+            `<button onclick="hideModal(); renderMain()" class="px-4 py-2 bg-lime-600 text-white rounded">OK</button>`
+        );
 
     } catch (error) {
         console.error('Login error:', error);
@@ -1412,12 +1469,6 @@ showModal(
             `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`
         );
     }
-};
-
-window.resendVerificationCode = async function(email, password) {
-    // ...
-    await sendVerificationCodeEmail(email, userData.name, newVerificationCode);  // ← Uses EmailJS
-    // ...
 };
 
 window.logoutUser = async function() {
@@ -3630,14 +3681,21 @@ function showUserMenu() {
 
 window.openAuth = function(mode = 'login') {
     if(mode === 'login') {
-        showModal('Log in', `
-        <form id="login-form" class="grid gap-3">
-            <input id="login-email" type="email" placeholder="Email" class="p-2 border rounded" required />
-            <input id="login-password" type="password" placeholder="Password" class="p-2 border rounded" required />
-          </form>
-    `, `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">Cancel</button>
-        <button onclick="loginUser()" class="px-4 py-2 bg-lime-600 text-white rounded">Log in</button>`);
-    } else {
+    showModal('Log in', `
+    <form id="login-form" class="grid gap-3">
+        <input id="login-email" type="email" placeholder="Email" class="p-2 border rounded" required />
+        <input id="login-password" type="password" placeholder="Password" class="p-2 border rounded" required />
+        
+        <div class="bg-blue-50 p-3 rounded-lg border-l-4 border-blue-500 text-xs">
+            <p class="text-blue-800">
+                <b>📧 Email verification required</b><br>
+                New users must verify their email before logging in.
+            </p>
+        </div>
+      </form>
+`, `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">Cancel</button>
+    <button onclick="loginUser()" class="px-4 py-2 bg-lime-600 text-white rounded">Log in</button>`);
+} else {
         showModal('Sign up (Customer)', `
         <form id="signup-form" class="grid gap-3">
             <input id="signup-name" placeholder="Full name" class="p-2 border rounded" required />
