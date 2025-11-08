@@ -550,12 +550,15 @@ window.sendChatMessage = async function(threadId, sender, messageText, role) {
             await push(messageListRef, newMessage);
             
             const initialChatData = {
-                customerName: window.APP_STATE.currentUser ? window.APP_STATE.currentUser.name : 'Guest',
-                customerUid: window.APP_STATE.currentUser ? window.APP_STATE.currentUser.uid : null,
-                status: 'open',
-                autoResponseSent: false,
-                ...updates
-            };
+    customerName: window.APP_STATE.currentUser ? window.APP_STATE.currentUser.name : 'Guest',
+    customerUid: window.APP_STATE.currentUser ? window.APP_STATE.currentUser.uid : null,
+    status: 'open',
+    conversationEnded: false, // ✅ NEW: Track if conversation was ended
+    conversationEndedAt: null, // ✅ NEW: Track when conversation was ended
+    conversationEndedBy: null, // ✅ NEW: Track who ended the conversation
+    autoResponseSent: false,
+    ...updates
+};
             await update(chatRef, initialChatData);
             
             if (role === 'customer') {
@@ -570,12 +573,24 @@ window.sendChatMessage = async function(threadId, sender, messageText, role) {
             await push(messageListRef, newMessage);
             await update(chatRef, updates);
             
-            if (role === 'customer' && !chatData.autoResponseSent) {
-                console.log('🤖 Sending auto-response to existing thread...');
-                setTimeout(() => {
-                    window.sendAutoAdminResponse(threadId);
-                }, 1500);
-            }
+            // ✅ UPDATED: Check if conversation was ended before sending auto-response
+if (role === 'customer' && (!chatData.autoResponseSent || chatData.conversationEnded)) {
+    console.log('🤖 Sending auto-response to existing/restarted thread...');
+    
+    // If conversation was ended, reset the flag
+    if (chatData.conversationEnded) {
+        await update(chatRef, {
+            conversationEnded: false,
+            conversationEndedAt: null,
+            conversationEndedBy: null,
+            autoResponseSent: false
+        });
+    }
+    
+    setTimeout(() => {
+        window.sendAutoAdminResponse(threadId);
+    }, 1500);
+}
         }
         
         console.log('✅ Message sent successfully');
@@ -657,6 +672,84 @@ Once we have your details, we'll check right away and get back to you as soon as
     }
 };
 
+// ✅ NEW FUNCTION: End conversation
+window.endChatConversation = async function(threadId) {
+    if (!window.APP_STATE.currentUser || window.APP_STATE.currentUser.role !== 'admin') {
+        return showModal('Forbidden', 'Admin access required.', `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
+    }
+    
+    showModal(
+        'End Conversation',
+        `
+        <div class="space-y-3">
+            <div class="bg-yellow-50 p-3 rounded-lg border-l-4 border-yellow-500">
+                <p class="text-yellow-800 text-sm">
+                    <strong>⚠️ Are you sure?</strong><br>
+                    Ending this conversation will:
+                </p>
+                <ul class="list-disc pl-5 mt-2 text-sm text-yellow-700 space-y-1">
+                    <li>Mark the conversation as resolved</li>
+                    <li>Send an automated welcome message when the customer messages again</li>
+                    <li>Create a new conversation thread for future messages</li>
+                </ul>
+            </div>
+        </div>
+        `,
+        `
+        <button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded hover:bg-gray-200">Cancel</button>
+        <button onclick="confirmEndConversation('${threadId}')" class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700">End Conversation</button>
+        `
+    );
+};
+
+// ✅ NEW FUNCTION: Confirm end conversation
+window.confirmEndConversation = async function(threadId) {
+    try {
+        const chatRef = ref(database, `chats/${threadId}`);
+        const timestamp = new Date().toISOString();
+        
+        // Send a system message to notify conversation has ended
+        const systemMessage = {
+            id: uid(),
+            sender: 'System',
+            text: '--- Conversation ended by admin ---',
+            role: 'system',
+            timestamp: timestamp,
+            isSystemMessage: true
+        };
+        
+        const messageListRef = ref(database, `chats/${threadId}/messages`);
+        await push(messageListRef, systemMessage);
+        
+        // Update conversation status
+        await update(chatRef, {
+            conversationEnded: true,
+            conversationEndedAt: timestamp,
+            conversationEndedBy: window.APP_STATE.currentUser.email,
+            status: 'resolved',
+            autoResponseSent: false // Reset so auto-response sends again
+        });
+        
+        hideModal();
+        
+        showModal(
+            '✅ Conversation Ended',
+            `
+            <div class="text-center space-y-3">
+                <div class="text-5xl">✅</div>
+                <p class="text-gray-700">The conversation has been ended successfully.</p>
+                <p class="text-sm text-gray-600">When the customer messages again, they will receive a new automated welcome message.</p>
+            </div>
+            `,
+            `<button onclick="hideModal(); renderMain();" class="px-4 py-2 bg-lime-600 text-white rounded">OK</button>`
+        );
+        
+    } catch (error) {
+        console.error('❌ Error ending conversation:', error);
+        showModal('Error', 'Failed to end conversation. Please try again.', `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
+    }
+};
+
 // Update unread status
 window.markChatAsRead = async function(threadId, role) {
     const field = role === 'customer' ? 'unreadCustomer' : 'unreadAdmin';
@@ -689,6 +782,17 @@ window.renderCustomerChatWindow = function() {
     }
 
 const messagesHtml = messages.map(msg => {
+    // ✅ NEW: Handle system messages
+    if (msg.isSystemMessage) {
+        return `
+            <div class="text-center my-3">
+                <div class="inline-block px-4 py-2 bg-gray-100 text-gray-600 rounded-full text-xs border border-gray-300">
+                    ${escapeHtml(msg.text)}
+                </div>
+            </div>
+        `;
+    }
+    
     const isCustomer = msg.role === 'customer';
     const isAutoResponse = msg.isAutoResponse || false;
     
@@ -828,6 +932,17 @@ window.openAdminChatModal = function(threadId) {
     const messages = thread.messages ? Object.values(thread.messages) : [];
     
     const messagesHtml = messages.map(msg => {
+    // ✅ NEW: Handle system messages
+    if (msg.isSystemMessage) {
+        return `
+            <div class="text-center my-3">
+                <div class="inline-block px-4 py-2 bg-gray-100 text-gray-600 rounded-full text-xs border border-gray-300">
+                    ${escapeHtml(msg.text)}
+                </div>
+            </div>
+        `;
+    }
+    
     const isAdmin = msg.role === 'admin';
     const isAutoResponse = msg.isAutoResponse || false;
     
@@ -878,7 +993,19 @@ window.openAdminChatModal = function(threadId) {
         </div>
     `;
     
-    showModal(modalTitle, modalContent, `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">Close</button>`, true); 
+    const modalActions = `
+    <button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded hover:bg-gray-200">Close</button>
+    ${thread.status !== 'resolved' ? 
+        `<button onclick="endChatConversation('${thread.id}')" class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700">
+            <span class="flex items-center gap-2">
+                <i data-lucide="x-circle" class="w-4 h-4"></i>
+                End Conversation
+            </span>
+        </button>` 
+        : ''}
+`;
+
+showModal(modalTitle, modalContent, modalActions, true);
 
     const modalOverlay = document.getElementById('modal-overlay');
     modalOverlay.setAttribute('data-chat-id', thread.id);
@@ -996,11 +1123,18 @@ window.renderAdminChatDropdown = function() {
     }
 
     const chatItems = window.APP_STATE.chats.map(chat => {
-        const isUnread = chat.unreadAdmin;
-        const lastMsgTime = new Date(chat.lastMessageAt).toLocaleString('en-US', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short' });
-        
-        return `
-            <button onclick="window.openAdminChatModal('${chat.id}'); window.toggleAdminChatDropdown();" class="flex items-center gap-3 p-3 w-full text-left border-b hover:bg-gray-50 transition ${isUnread ? 'bg-lime-50' : ''}">
+    const isUnread = chat.unreadAdmin;
+    const isResolved = chat.status === 'resolved'; // ✅ NEW
+    const lastMsgTime = new Date(chat.lastMessageAt).toLocaleString('en-US', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short' });
+    
+    return `
+        <button onclick="window.openAdminChatModal('${chat.id}'); window.toggleAdminChatDropdown();" class="flex items-center gap-3 p-3 w-full text-left border-b hover:bg-gray-50 transition ${isUnread ? 'bg-lime-50' : ''} ${isResolved ? 'opacity-60' : ''}">
+            <div class="flex-grow min-w-0">
+                <div class="font-semibold text-gray-800 truncate ${isUnread ? 'font-extrabold text-lime-700' : ''}">
+                    ${chat.customerName || chat.id}
+                    ${isUnread ? '<span class="text-xs text-red-500 ml-2">NEW</span>' : ''}
+                    ${isResolved ? '<span class="text-xs text-gray-500 ml-2">✓ RESOLVED</span>' : ''} <!-- ✅ NEW -->
+                </div>
                 <div class="flex-grow min-w-0">
                     <div class="font-semibold text-gray-800 truncate ${isUnread ? 'font-extrabold text-lime-700' : ''}">
                         ${chat.customerName || chat.id}
