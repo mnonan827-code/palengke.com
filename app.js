@@ -1497,27 +1497,39 @@ window.addToCart = async function(productId, qty = 1) {
     if (!window.APP_STATE.currentUser) return showModal('Login required', 'Please log in or create an account to add items to your cart.', `<button onclick="hideModal(); openAuth('login')" class="px-4 py-2 bg-lime-600 text-white rounded">Log in</button><button onclick="hideModal(); openAuth('signup')" class="px-4 py-2 bg-white border rounded">Sign up</button>`);
 
     if (p.preorder) return showModal('Pre-Order Item', `${p.name} is currently on pre-order. Use the Pre-Order button to reserve it.`, `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
+    
+    // ✅ Check available stock (don't decrease yet)
     if (p.quantity <= 0) return showModal('Out of stock', `${p.name} is out of stock.`, `<button onclick="hideModal()" class="px-4 py-2 bg-gray-200 rounded">OK</button>`);
 
     const idx = window.APP_STATE.cart.findIndex(c => c.productId === productId && !c.preordered);
     const currentQtyInCart = idx >= 0 ? window.APP_STATE.cart[idx].quantity : 0;
     const newTotalQty = currentQtyInCart + qty;
     
-    // Check order limit
+    // ✅ Check if adding this quantity exceeds available stock
+    if (newTotalQty > p.quantity) {
+        return showModal('Not enough stock', `Only ${p.quantity} ${p.unit}${p.quantity > 1 ? 's' : ''} available. You already have ${currentQtyInCart} in your cart.`, `<button onclick="hideModal()" class="px-4 py-2 bg-gray-200 rounded">OK</button>`);
+    }
+    
+    // ✅ Check order limit
     if(p.orderLimit && newTotalQty > p.orderLimit) {
         return showModal('Order Limit Exceeded', `Maximum order quantity for ${p.name} is ${p.orderLimit} ${p.unit}${p.orderLimit > 1 ? 's' : ''} per customer. You already have ${currentQtyInCart} in your cart.`, `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
     }
     
+    // ✅ Add to cart (NO stock decrease)
     if (idx >= 0) {
-        if (p.quantity < qty) return showModal('Not enough stock', `Only ${p.quantity} ${p.unit} left in stock.`, `<button onclick="hideModal()" class="px-4 py-2 bg-gray-200 rounded">OK</button>`);
         window.APP_STATE.cart[idx].quantity += qty;
     } else {
-        window.APP_STATE.cart.push({ productId: p.id, name: p.name, price: p.price, quantity: qty, unit: p.unit, preordered: false });
+        window.APP_STATE.cart.push({ 
+            productId: p.id, 
+            name: p.name, 
+            price: p.price, 
+            quantity: qty, 
+            unit: p.unit, 
+            preordered: false 
+        });
     }
 
-    p.quantity = Math.max(0, p.quantity - qty);
-    await updateFirebase(`products/${p.id}`, { quantity: p.quantity });
-
+    // ✅ Save cart to Firebase (stock NOT decreased)
     await saveToFirebase(`carts/${window.APP_STATE.currentUser.uid}`, window.APP_STATE.cart);
 
     renderCartDrawer();
@@ -1551,29 +1563,25 @@ window.changeCartItem = async function(pid, newQty) {
     if(newQty <= 0) return removeCartItem(pid);
     
     const oldQty = window.APP_STATE.cart[idx].quantity;
-    const diff = newQty - oldQty;
     const product = window.APP_STATE.products.find(p=> p.id === pid);
     
     if(!product) return;
     
-    // Check order limit
+    // ✅ Check if new quantity exceeds available stock
+    if(newQty > product.quantity) {
+        return showModal('Not enough stock', `Only ${product.quantity} ${product.unit}${product.quantity > 1 ? 's' : ''} available in stock.`, `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
+    }
+    
+    // ✅ Check order limit
     if(product.orderLimit && newQty > product.orderLimit) {
         return showModal('Order Limit Exceeded', `Maximum order quantity for ${product.name} is ${product.orderLimit} ${product.unit}${product.orderLimit > 1 ? 's' : ''} per customer.`, `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
     }
     
-    // Check stock availability
-    if(diff > 0 && product.quantity < diff) {
-        return showModal('Not enough stock', `Only ${product.quantity} ${product.unit} left in stock.`, `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
-    }
-    
-    if(product) {
-        product.quantity = Math.max(0, product.quantity - diff);
-    }
-    
+    // ✅ Update cart quantity (NO stock decrease)
     window.APP_STATE.cart[idx].quantity = newQty;
     
+    // ✅ Save cart only (stock NOT touched)
     await saveToFirebase(`carts/${window.APP_STATE.currentUser.uid}`, window.APP_STATE.cart);
-    await updateFirebase(`products/${pid}`, { quantity: product.quantity });
     
     renderCartDrawer();
     renderMain();
@@ -1582,14 +1590,13 @@ window.changeCartItem = async function(pid, newQty) {
 window.removeCartItem = async function(pid) {
     const idx = window.APP_STATE.cart.findIndex(c=> c.productId === pid);
     if(idx === -1) return;
-    const item = window.APP_STATE.cart[idx];
-    const product = window.APP_STATE.products.find(p=> p.id === pid);
-    if(product) {
-        product.quantity += item.quantity;
-        await updateFirebase(`products/${pid}`, { quantity: product.quantity });
-    }
-    window.APP_STATE.cart.splice(idx,1);
+    
+    // ✅ Simply remove from cart (NO stock restoration)
+    window.APP_STATE.cart.splice(idx, 1);
+    
+    // ✅ Save updated cart
     await saveToFirebase(`carts/${window.APP_STATE.currentUser.uid}`, window.APP_STATE.cart);
+    
     renderCartDrawer();
     renderMain();
 };
@@ -1601,6 +1608,40 @@ window.checkout = async function() {
 
     if(!window.APP_STATE.currentUser){
         return showModal('Login required', 'Please log in or create an account to place your order.', `<button onclick="hideModal(); openAuth('login')" class="px-4 py-2 bg-lime-600 text-white rounded">Log in</button><button onclick="hideModal(); openAuth('signup')" class="px-4 py-2 bg-white border rounded">Sign up</button>`);
+    }
+
+    // ✅ NEW: Validate stock availability before showing checkout form
+    console.log('🔍 Validating stock availability...');
+    const unavailableItems = [];
+    
+    for (const cartItem of window.APP_STATE.cart) {
+        if (cartItem.preordered) continue; // Skip pre-order items
+        
+        const product = window.APP_STATE.products.find(p => p.id === cartItem.productId);
+        if (!product) {
+            unavailableItems.push(`${cartItem.name} - Product no longer available`);
+            continue;
+        }
+        
+        if (product.quantity < cartItem.quantity) {
+            unavailableItems.push(`${cartItem.name} - Only ${product.quantity} ${product.unit}${product.quantity > 1 ? 's' : ''} available (you have ${cartItem.quantity} in cart)`);
+        }
+    }
+    
+    if (unavailableItems.length > 0) {
+        return showModal(
+            '⚠️ Stock Unavailable', 
+            `
+            <div class="space-y-3">
+                <p class="text-gray-700">Some items in your cart are no longer available or have insufficient stock:</p>
+                <ul class="list-disc pl-5 space-y-1 text-sm text-red-600">
+                    ${unavailableItems.map(item => `<li>${item}</li>`).join('')}
+                </ul>
+                <p class="text-sm text-gray-600">Please remove these items or reduce quantities before checking out.</p>
+            </div>
+            `, 
+            `<button onclick="hideModal()" class="px-4 py-2 bg-lime-600 text-white rounded">Update Cart</button>`
+        );
     }
 
     // ✅ NEW: Check if user has completed profile
@@ -2232,13 +2273,33 @@ const newId = 'O-' + generateOrderId(); // Now generates O-XXXXXXXX with random 
     };
 
     try {
-        console.log('Saving order to Firebase...', newOrder);
-        await saveToFirebase(`orders/${newId}`, newOrder);
-        console.log('Order saved successfully');
+        console.log('💾 Saving order to Firebase...', newOrder);
         
+        // ✅ STEP 1: Decrease stock for each item in order
+        console.log('📦 Decreasing stock for order items...');
+        for (const item of itemsCopy) {
+            const product = window.APP_STATE.products.find(p => p.id === item.productId);
+            if (product) {
+                const newQuantity = Math.max(0, product.quantity - item.quantity);
+                
+                // Update local state
+                product.quantity = newQuantity;
+                
+                // Update Firebase
+                await updateFirebase(`products/${item.productId}`, { quantity: newQuantity });
+                
+                console.log(`✅ Stock decreased: ${item.name} (${item.quantity} ${item.unit}) - New stock: ${newQuantity}`);
+            }
+        }
+        
+        // ✅ STEP 2: Save order to Firebase
+        await saveToFirebase(`orders/${newId}`, newOrder);
+        console.log('✅ Order saved successfully');
+        
+        // ✅ STEP 3: Clear cart
         window.APP_STATE.cart = [];
         await saveToFirebase(`carts/${window.APP_STATE.currentUser.uid}`, window.APP_STATE.cart);
-        console.log('Cart cleared');
+        console.log('✅ Cart cleared');
 
         toggleCartDrawer(false);
         hideModal();
