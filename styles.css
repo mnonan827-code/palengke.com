@@ -2141,30 +2141,44 @@ thead.bg-gray-50 th {
   }
 }
 
-/* Search animation */
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(-5px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}/* ==========================================
-   🔍 Search Bar Styles
-   ========================================== */
-
-#search-section {
-  transition: all 0.3s ease;
-}
-
-#search-input {
+#clear-search-btn {
   transition: all 0.2s ease;
 }
 
-#search-input:focus {
-  box-shadow: 0 0 0 3px rgba(132, 204, 22, 0.1);
+#clear-search-btn:hover {
+  transform: scale(1.1);
+}
+
+#search-results-count {
+  animation: fadeIn 0.3s ease;
+}
+
+/* Search highlight effect */
+.search-highlight {
+  background: rgba(132, 204, 22, 0.1);
+  padding: 0.125rem 0.25rem;
+  border-radius: 0.25rem;
+}
+
+/* Mobile search improvements */
+@media (max-width: 640px) {
+  #search-section {
+    padding: 0.75rem;
+  }
+  
+  #search-input {
+    font-size: 16px; /* Prevents zoom on iOS */
+  }
+  
+  #search-section .flex {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  #search-section button {
+    width: 100%;
+    margin-top: 0.5rem;
+  }
 }
 
 #clear-search-btn {
@@ -2207,32 +2221,6 @@ thead.bg-gray-50 th {
   }
 }
 
-/* Search animation */
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(-5px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}/* ==========================================
-   🔍 Search Bar Styles
-   ========================================== */
-
-#search-section {
-  transition: all 0.3s ease;
-}
-
-#search-input {
-  transition: all 0.2s ease;
-}
-
-#search-input:focus {
-  box-shadow: 0 0 0 3px rgba(132, 204, 22, 0.1);
-}
-
 #clear-search-btn {
   transition: all 0.2s ease;
 }
@@ -2271,98 +2259,6 @@ thead.bg-gray-50 th {
     width: 100%;
     margin-top: 0.5rem;
   }
-}
-
-/* Search animation */
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(-5px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}/* ==========================================
-   🔍 Search Bar Styles
-   ========================================== */
-
-#search-section {
-  transition: all 0.3s ease;
-}
-
-#search-input {
-  transition: all 0.2s ease;
-}
-
-#search-input:focus {
-  box-shadow: 0 0 0 3px rgba(132, 204, 22, 0.1);
-}
-
-#clear-search-btn {
-  transition: all 0.2s ease;
-}
-
-#clear-search-btn:hover {
-  transform: scale(1.1);
-}
-
-#search-results-count {
-  animation: fadeIn 0.3s ease;
-}
-
-/* Search highlight effect */
-.search-highlight {
-  background: rgba(132, 204, 22, 0.1);
-  padding: 0.125rem 0.25rem;
-  border-radius: 0.25rem;
-}
-
-/* Mobile search improvements */
-@media (max-width: 640px) {
-  #search-section {
-    padding: 0.75rem;
-  }
-  
-  #search-input {
-    font-size: 16px; /* Prevents zoom on iOS */
-  }
-  
-  #search-section .flex {
-    flex-direction: column;
-    align-items: stretch;
-  }
-  
-  #search-section button {
-    width: 100%;
-    margin-top: 0.5rem;
-  }
-}
-
-/* Search animation */
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(-5px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}/* ==========================================
-   🔍 Search Bar Styles
-   ========================================== */
-
-#search-section {
-  transition: all 0.3s ease;
-}
-
-#search-input {
-  transition: all 0.2s ease;
-}
-
-#search-input:focus {
-  box-shadow: 0 0 0 3px rgba(132, 204, 22, 0.1);
 }
 
 #clear-search-btn {
@@ -2799,15 +2695,6 @@ body.user-menu-open {
     z-index: 1000; 
 }
 
-/* Custom scrollbar for chat messages */
-.custom-scroll::-webkit-scrollbar {
-    width: 6px;
-}
-.custom-scroll::-webkit-scrollbar-thumb {
-    /* Use a color related to your theme (lime-600) */
-    background: rgba(132, 204, 22, 0.5); 
-    border-radius: 6px;
-}
 
 /* Admin chat modal size override for better chat view */
 .admin-chat-container {

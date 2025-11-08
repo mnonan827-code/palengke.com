@@ -102,46 +102,6 @@ window.safeIconInit = function() {
     }
 };
 
-// 🔥 TEST FUNCTION - Add this temporarily
-window.testFirebaseChat = async function() {
-    console.log('🧪 Testing Firebase Chat Connection...');
-    
-    try {
-        // Test write
-        const testRef = ref(database, 'chats/TEST-CHAT-123');
-        await set(testRef, {
-            test: 'Hello World',
-            timestamp: new Date().toISOString()
-        });
-        console.log('✅ Write test passed');
-        
-        // Test read
-        const snapshot = await get(testRef);
-        if (snapshot.exists()) {
-            console.log('✅ Read test passed:', snapshot.val());
-        } else {
-            console.log('❌ Read test failed: no data');
-        }
-        
-        // Test listener
-        console.log('🎧 Testing real-time listener...');
-        onValue(testRef, (snapshot) => {
-            if (snapshot.exists()) {
-                console.log('✅ Listener test passed:', snapshot.val());
-            }
-        });
-        
-        // Update to trigger listener
-        setTimeout(async () => {
-            await update(testRef, { test: 'Updated!' });
-            console.log('📝 Updated test data');
-        }, 1000);
-        
-    } catch (error) {
-        console.error('❌ Firebase test failed:', error);
-    }
-};
-
 // Debounce utility function
 window.debounce = function(func, wait) {
     let timeout;
@@ -1964,13 +1924,6 @@ window.cleanupAbandonedCart = async function(userId) {
     }
 };
 
-// Update cart activity timestamp
-window.updateCartActivity = function() {
-    if (window.APP_STATE.currentUser) {
-        localStorage.setItem(`cart_activity_${window.APP_STATE.currentUser.uid}`, Date.now().toString());
-    }
-};
-
 // ✅ Track cart activity with timestamp in Firebase
 window.updateCartActivity = async function() {
     if (!window.APP_STATE.currentUser) return;
@@ -2174,27 +2127,6 @@ window.startGlobalAbandonedCartCleanup = function() {
     }, 5 * 60 * 1000); // Run every 5 minutes
 };
 
-// Add this AFTER window.checkout = async function() { ... }
-
-// Debug wrapper to ensure checkout is accessible
-window.ensureCheckoutWorks = function() {
-    console.log('🔍 Checking checkout button...');
-    const btn = document.getElementById('checkout-btn');
-    
-    if (!btn) {
-        console.error('❌ Checkout button not found');
-        return false;
-    }
-    
-    console.log('✅ Checkout button exists');
-    
-    // Test click
-    btn.addEventListener('click', function(e) {
-        console.log('🖱️ Checkout button clicked!');
-    });
-    
-    return true;
-};
 // HTML escape function to prevent XSS
 window.escapeHtml = function(text) {
     const map = {
@@ -3488,13 +3420,7 @@ window.viewDeleteLogs = async function() {
 window.$ = function(sel){ return document.querySelector(sel); };
 window.$all = function(sel){ return Array.from(document.querySelectorAll(sel)); };
 window.formatPeso = function(n){ return '₱' + Number(n).toLocaleString('en-PH', {minimumFractionDigits:2, maximumFractionDigits:2}); };
-// ✅ FIXED: Generate uniform numeric Order ID
-window.generateOrderId = function() {
-    // Generate 8-digit numeric ID with timestamp + random
-    const timestamp = Date.now().toString().slice(-5); // Last 5 digits of timestamp
-    const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0'); // 3 random digits
-    return timestamp + random; // Results in 8 digits total
-};
+
 
 // ✅ RECOMMENDED: Generate uniform 8-digit numeric Order ID
 window.generateOrderId = function() {
@@ -3518,10 +3444,6 @@ window.uid = function() {
     return Date.now().toString(36) + Math.random().toString(36).substring(2);
 };
 
-// Keep original uid for other purposes (chat IDs, etc.)
-window.uid = function() { 
-    return Date.now().toString(36) + Math.random().toString(36).substring(2);
-};
 
 // ADD THESE NEW FUNCTIONS:
 
@@ -5600,47 +5522,6 @@ window.browsToShop = function() {
     closeMobileMenu();
     renderMain();
     window.scrollTo({ top: 0, behavior: 'smooth' });
-};
-
-// ✅ BUTTON FUNCTIONALITY TESTER
-window.testAllButtons = function() {
-    const results = {
-        working: [],
-        broken: [],
-        missing: []
-    };
-    
-    const buttonsToTest = [
-        { id: 'view-store', fn: 'switchTo', params: ['shop'] },
-        { id: 'view-orders', fn: 'switchTo', params: ['orders'] },
-        { id: 'cart-btn', fn: 'toggleCartDrawer', params: [] },
-        { id: 'browse-products', fn: 'switchTo', params: ['shop'] },
-        { id: 'how-it-works', fn: 'toggleHowItWorks', params: [] },
-        { id: 'checkout-btn', fn: 'checkout', params: [] },
-        { id: 'close-cart', fn: 'toggleCartDrawer', params: [false] },
-        { id: 'mobile-menu-btn', fn: 'toggleMobileMenu', params: [] },
-        { id: 'user-menu-btn', fn: 'toggleUserMenu', params: [] },
-    ];
-    
-    buttonsToTest.forEach(test => {
-        const element = document.getElementById(test.id);
-        if (!element) {
-            results.missing.push(test.id);
-            return;
-        }
-        
-        if (typeof window[test.fn] === 'function') {
-            results.working.push(test.id);
-        } else {
-            results.broken.push({ id: test.id, fn: test.fn });
-        }
-    });
-    
-    console.log('✅ Working Buttons:', results.working);
-    console.log('❌ Broken Buttons:', results.broken);
-    console.log('⚠️ Missing Buttons:', results.missing);
-    
-    return results;
 };
 
 // ✅ Format Order ID consistently
