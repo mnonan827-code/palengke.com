@@ -437,12 +437,17 @@ async function initializeFirebaseData() {
 }
 
 async function seedInitialData() {
+    // ✅ Generate initial products with proper P-XXXXXXXX format
     const initialProducts = [
-        { id: 1, name: "Fresh Tilapia", origin: "San Juan Fish Farm", farmer: { name: "Mang Jose", contact: "0917-234-5678" }, price: 150.00, quantity: 50, unit: 'kg', freshness: 95, freshnessIndicator: 'farm-fresh', imgUrl: 'https://placehold.co/600x360/4ade80/000?text=Tilapia' },
-        { id: 2, name: "Native Chicken Eggs", origin: "Brgy. San Andres Poultry", farmer: { name: "Aling Nena", contact: "0998-765-4321" }, price: 8.00, quantity: 200, unit: 'pc', freshness: 92, freshnessIndicator: 'farm-fresh', imgUrl: 'https://placehold.co/600x360/84cc16/000?text=Eggs' },
-        { id: 3, name: "Organic Lettuce", origin: "Sta. Lucia Hydroponics", farmer: { name: "Mr. Dela Cruz", contact: "0920-111-2222" }, price: 65.00, quantity: 30, unit: 'head', freshness: 88, freshnessIndicator: 'very-fresh', imgUrl: 'https://placehold.co/600x360/4ade80/000?text=Lettuce' },
-        { id: 4, name: "Ripe Bananas (Lakatan)", origin: "Cainta Farm Cooperative", farmer: { name: "Ate Sol", contact: "0905-333-4444" }, price: 50.00, quantity: 80, unit: 'kg', freshness: 85, freshnessIndicator: 'very-fresh', imgUrl: 'https://placehold.co/600x360/84cc16/000?text=Bananas' },
+        { id: window.generateUniqueId('P'), name: "Fresh Tilapia", origin: "San Juan Fish Farm", farmer: { name: "Mang Jose", contact: "0917-234-5678" }, price: 150.00, quantity: 50, unit: 'kg', freshness: 95, freshnessIndicator: 'farm-fresh', imgUrl: 'https://placehold.co/600x360/4ade80/000?text=Tilapia' },
+        { id: window.generateUniqueId('P'), name: "Native Chicken Eggs", origin: "Brgy. San Andres Poultry", farmer: { name: "Aling Nena", contact: "0998-765-4321" }, price: 8.00, quantity: 200, unit: 'pc', freshness: 92, freshnessIndicator: 'farm-fresh', imgUrl: 'https://placehold.co/600x360/84cc16/000?text=Eggs' },
+        { id: window.generateUniqueId('P'), name: "Organic Lettuce", origin: "Sta. Lucia Hydroponics", farmer: { name: "Mr. Dela Cruz", contact: "0920-111-2222" }, price: 65.00, quantity: 30, unit: 'head', freshness: 88, freshnessIndicator: 'very-fresh', imgUrl: 'https://placehold.co/600x360/4ade80/000?text=Lettuce' },
+        { id: window.generateUniqueId('P'), name: "Ripe Bananas (Lakatan)", origin: "Cainta Farm Cooperative", farmer: { name: "Ate Sol", contact: "0905-333-4444" }, price: 50.00, quantity: 80, unit: 'kg', freshness: 85, freshnessIndicator: 'very-fresh', imgUrl: 'https://placehold.co/600x360/84cc16/000?text=Bananas' },
     ];
+
+    for (const product of initialProducts) {
+        await saveToFirebase(`products/${product.id}`, product);
+    }
 
     for (const product of initialProducts) {
         await saveToFirebase(`products/${product.id}`, product);
@@ -1658,8 +1663,7 @@ window.addToCart = async function(productId, qty = 1) {
         return showModal('Out of stock', `${p.name} is currently out of stock.`, `<button onclick="hideModal()" class="px-4 py-2 bg-gray-200 rounded">OK</button>`);
     }
 
-    const idx = window.APP_STATE.cart.findIndex(c => c.productId === productId && !c.preordered);
-    const currentQtyInCart = idx >= 0 ? window.APP_STATE.cart[idx].quantity : 0;
+const idx = window.APP_STATE.cart.findIndex(c => String(c.productId) === String(productId) && !c.preordered);    const currentQtyInCart = idx >= 0 ? window.APP_STATE.cart[idx].quantity : 0;
     const newTotalQty = currentQtyInCart + qty;
     
     // ✅ Check if adding this quantity exceeds available stock (real-time)
@@ -1718,8 +1722,7 @@ window.preOrderItem = async function(productId, qty = 1) {
     if(!p.preorder) return showModal('Not pre-order', 'This product is not marked as pre-order.', `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
     if(!window.APP_STATE.currentUser) return showModal('Login required', 'Please log in or create an account to pre-order.', `<button onclick="hideModal(); openAuth('login')" class="px-4 py-2 bg-lime-600 text-white rounded">Log in</button>`);
 
-    const idx = window.APP_STATE.cart.findIndex(c => c.productId === productId && c.preordered === true);
-    if(idx >= 0){
+const idx = window.APP_STATE.cart.findIndex(c => String(c.productId) === String(productId) && c.preordered === true);    if(idx >= 0){
         window.APP_STATE.cart[idx].quantity += qty;
     } else {
         window.APP_STATE.cart.push({ productId: p.id, name: p.name, price: p.price, quantity: qty, unit: p.unit, preordered: true });
@@ -1730,8 +1733,7 @@ window.preOrderItem = async function(productId, qty = 1) {
 };
 
 window.changeCartItem = async function(pid, newQty) {
-    const idx = window.APP_STATE.cart.findIndex(c=> c.productId === pid);
-    if(idx === -1) return;
+const idx = window.APP_STATE.cart.findIndex(c=> String(c.productId) === String(pid));    if(idx === -1) return;
     
     // Ensure quantity is at least 1
     newQty = Math.max(1, parseInt(newQty) || 1);
@@ -2929,20 +2931,21 @@ window.adminSaveProduct = async function(editId = null) {
         }
         await updateFirebase(`products/${editId}`, productUpdate);
     } else {
-        const newId = Date.now();
-        const newProd = { 
-            id: newId, 
-            name, 
-            description,
-            price, 
-            quantity: qty, 
-            unit,
-            orderLimit: orderLimit,
-            origin, 
-            farmer: { name: farmer, contact }, 
-            imgUrl: imgUrl,
-            freshness: freshness,
-        };
+    // ✅ Generate product ID with P- prefix (e.g., P-25110917)
+    const newId = window.generateUniqueId('P');
+    const newProd = { 
+        id: newId, 
+        name, 
+        description,
+        price, 
+        quantity: qty, 
+        unit,
+        orderLimit: orderLimit,
+        origin, 
+        farmer: { name: farmer, contact }, 
+        imgUrl: imgUrl,
+        freshness: freshness,
+    };
         if(isPre){
             newProd.preorder = true;
             newProd.preorderDuration = Math.min(14, Math.max(7, (dur || 7)));
@@ -3015,8 +3018,7 @@ window.adminDeleteProduct = function(id) {
         return showModal('Forbidden', 'Admin access required.', `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
     }
     
-    const product = window.APP_STATE.products.find(p => p.id === id);
-    if (!product) {
+const product = window.APP_STATE.products.find(p => String(p.id) === String(id));    if (!product) {
         return showModal('Error', 'Product not found.', `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
     }
     
@@ -3040,8 +3042,7 @@ window.adminConfirmDelete = async function(id) {
         console.log('🗑️ Starting product deletion:', id);
         
         // Get product details before deletion
-        const prodToDelete = window.APP_STATE.products.find(p => p.id === id);
-        if (!prodToDelete) {
+const prodToDelete = window.APP_STATE.products.find(p => String(p.id) === String(id));        if (!prodToDelete) {
             throw new Error('Product not found');
         }
         
@@ -3061,8 +3062,7 @@ window.adminConfirmDelete = async function(id) {
                 );
                 
                 // Find if this cart has the product
-                const itemIndex = cartItems.findIndex(item => item.productId === id);
-                
+const itemIndex = cartItems.findIndex(item => String(item.productId) === String(id));                
                 if (itemIndex >= 0) {
                     const cartItem = cartItems[itemIndex];
                     
@@ -3116,8 +3116,7 @@ window.adminConfirmDelete = async function(id) {
         console.log('✅ Product deleted from Firebase');
         
         // ✅ STEP 4: Update local state
-        const productIndex = window.APP_STATE.products.findIndex(p => p.id === id);
-        if (productIndex >= 0) {
+const productIndex = window.APP_STATE.products.findIndex(p => String(p.id) === String(id));        if (productIndex >= 0) {
             window.APP_STATE.products.splice(productIndex, 1);
         }
         
@@ -3703,7 +3702,8 @@ window.getStatusDescription = function(status) {
 
 
 // ✅ RECOMMENDED: Generate uniform 8-digit numeric Order ID
-window.generateOrderId = function() {
+// ✅ Generate uniform 8-digit ID (reusable for orders and products)
+window.generateUniqueId = function(prefix = '') {
     // Get current date/time components
     const now = new Date();
     const year = now.getFullYear().toString().slice(-2); // Last 2 digits of year (25)
@@ -3715,8 +3715,15 @@ window.generateOrderId = function() {
     const random = Math.floor(Math.random() * 100).toString().padStart(2, '0');
     
     // Format: YYMMDDHHRR (Year-Month-Day-Hour-Random)
-    // Example: 25110614 = Nov 6, 2025, 14:XX with random suffix
-    return year + month + day + hours.slice(0, 1) + random;
+    // Example: 25110917 = Nov 9, 2025, 17:XX with random suffix
+    const id = year + month + day + hours.slice(0, 1) + random;
+    
+    return prefix ? `${prefix}-${id}` : id;
+};
+
+// Keep backward compatibility for orders
+window.generateOrderId = function() {
+    return window.generateUniqueId('O');
 };
 
 // Keep original uid for other purposes (chat, logs, etc.)
@@ -4730,9 +4737,9 @@ window.renderShop = function() {
     `;
 };
 
-window.showProduct = function(id) {
-    const p = window.APP_STATE.products.find(x=>x.id===id);
-    if(!p) return;
+window.adminEditProduct = function(id) {
+    if(!window.APP_STATE.currentUser || window.APP_STATE.currentUser.role !== 'admin') return showModal('Forbidden', 'Admin access required.', `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
+    const p = window.APP_STATE.products.find(x=> String(x.id) === String(id));    if(!p) return;
 
     const lowStock = p.quantity <= 5;
     const isPre = !!p.preorder;
