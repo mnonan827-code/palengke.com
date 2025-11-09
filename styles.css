@@ -1837,6 +1837,27 @@ body.modal-open header {
   background: #fecaca;
   color: #991b1b;
 }
+
+
+.level-farm-fresh {
+    background: #22c55e;
+}
+
+.level-very-fresh {
+    background: #84cc16;
+}
+
+.level-fresh {
+    background: #eab308;
+}
+
+.level-good {
+    background: #f97316;
+}
+
+.level-fair {
+    background: #ef4444;
+}
   }
 
   /* ==========================================

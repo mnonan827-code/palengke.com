@@ -4465,6 +4465,72 @@ window.updatePreorderStatuses = function() {
     }
 };
 
+// ✅ Migration function to fix existing products
+window.fixExistingProductsFreshness = async function() {
+    console.log('🔧 Fixing existing products freshness indicators...');
+    
+    const getFreshnessIndicator = (freshness) => {
+        if (!freshness) return 'fresh';
+        if (freshness >= 90) return 'farm-fresh';
+        if (freshness >= 70) return 'very-fresh';
+        if (freshness >= 50) return 'fresh';
+        if (freshness >= 30) return 'good';
+        return 'fair';
+    };
+    
+    try {
+        const productsSnapshot = await get(dbRefs.products);
+        if (!productsSnapshot.exists()) {
+            console.log('❌ No products to fix');
+            showModal('No Products', 'No products found in database.', 
+                `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
+            return;
+        }
+        
+        const products = productsSnapshot.val();
+        let fixedCount = 0;
+        let skippedCount = 0;
+        
+        for (const [id, product] of Object.entries(products)) {
+            if (product.freshness) {
+                // Always update/set the indicator based on freshness value
+                const indicator = getFreshnessIndicator(product.freshness);
+                await updateFirebase(`products/${id}`, {
+                    freshnessIndicator: indicator
+                });
+                fixedCount++;
+                console.log(`✅ Fixed product ${product.name}: ${product.freshness}% -> ${indicator}`);
+            } else {
+                // If no freshness value, set default to 100%
+                await updateFirebase(`products/${id}`, {
+                    freshness: 100,
+                    freshnessIndicator: 'farm-fresh'
+                });
+                fixedCount++;
+                console.log(`✅ Set default freshness for ${product.name}: 100% -> farm-fresh`);
+            }
+        }
+        
+        console.log(`✅ Migration complete: Fixed ${fixedCount} products, Skipped ${skippedCount} products`);
+        showModal('✅ Migration Complete', 
+            `<div class="space-y-2">
+                <p>Successfully updated freshness indicators for your products:</p>
+                <div class="bg-green-50 p-3 rounded border border-green-200">
+                    <div class="text-green-800 font-semibold">✅ ${fixedCount} products updated</div>
+                </div>
+                <p class="text-sm text-gray-600">All products now have proper freshness indicators.</p>
+            </div>`, 
+            `<button onclick="hideModal(); renderMain();" class="px-4 py-2 bg-lime-600 text-white rounded">OK</button>`
+        );
+        
+    } catch (error) {
+        console.error('❌ Migration error:', error);
+        showModal('Migration Error', 
+            `Failed to update products: ${error.message}`, 
+            `<button onclick="hideModal()" class="px-4 py-2 bg-red-600 text-white rounded">OK</button>`);
+    }
+};
+
 window.renderMain = async function() {
     
     const main = document.getElementById('main-content');
@@ -4575,12 +4641,31 @@ window.renderShop = function() {
         const rem = isPre ? computeRemainingDays(p) : null;
         const preorderBadge = isPre ? `<div class="badge bg-yellow-100 text-yellow-700">🟡 Pre-Order • ${rem>0? rem + ' days left' : 'Ending'}</div>` : '';
         
-        const freshnessBadge = p.freshness && p.freshnessIndicator ? 
-            `<div class="freshness-badge freshness-${p.freshnessIndicator}">${getFreshnessEmoji(p.freshnessIndicator)} ${p.freshness}% Fresh</div>` : '';
+        // ✅ UPDATED: Better freshness indicator logic
+        const getFreshnessIndicator = (freshness) => {
+            if (!freshness) return 'fresh';
+            if (freshness >= 90) return 'farm-fresh';
+            if (freshness >= 70) return 'very-fresh';
+            if (freshness >= 50) return 'fresh';
+            if (freshness >= 30) return 'good';
+            return 'fair';
+        };
         
+        // ✅ Set freshness indicator if not already set
+        if (p.freshness && !p.freshnessIndicator) {
+            p.freshnessIndicator = getFreshnessIndicator(p.freshness);
+        }
+        
+        // ✅ UPDATED: Show freshness badge even if only freshness value exists
+        const freshnessBadge = p.freshness ? 
+            `<div class="freshness-badge freshness-${p.freshnessIndicator || getFreshnessIndicator(p.freshness)}">
+                ${getFreshnessEmoji(p.freshnessIndicator || getFreshnessIndicator(p.freshness))} ${p.freshness}% Fresh
+            </div>` : '';
+        
+        // ✅ UPDATED: Show freshness meter
         const freshnessMeter = p.freshness ? 
             `<div class="freshness-meter mt-2">
-                <div class="freshness-meter-fill level-${p.freshnessIndicator || 'fresh'}" style="width: ${p.freshness}%"></div>
+                <div class="freshness-meter-fill level-${p.freshnessIndicator || getFreshnessIndicator(p.freshness)}" style="width: ${p.freshness}%"></div>
             </div>` : '';
 
         const isAdminViewing = window.APP_STATE.currentUser && window.APP_STATE.currentUser.role === 'admin';
@@ -4596,14 +4681,14 @@ window.renderShop = function() {
                 <div class="h-40 w-full rounded-md overflow-hidden bg-gray-50 relative">
                   <img src="${p.imgUrl}" alt="${p.name}" class="w-full h-full object-cover">
                   <div class="absolute top-3 left-3 flex flex-col gap-1">${preorderBadge}${freshnessBadge}</div>
-                  </div>
+                </div>
                 <div class="mt-3 flex-1">
                   <div class="flex items-start justify-between gap-3">
                       <div>
                         <h3 class="font-semibold text-lg text-gray-800">${p.name}</h3>
                         <div class="text-sm text-gray-500">${p.origin} • <span class="font-medium">${p.farmer.name}</span></div>
                       </div>
-                       <div class="text-right">
+                      <div class="text-right">
                         <div class="text-lime-700 font-extrabold text-lg">${formatPeso(p.price)}</div>
                         <div class="text-xs text-gray-500 text-right">${p.unit}</div>
                       </div>
@@ -4648,16 +4733,34 @@ window.showProduct = function(id) {
     const rem = isPre ? computeRemainingDays(p) : null;
     const preorderBadge = isPre ? `<div class="badge bg-yellow-100 text-yellow-700 mb-2">🟡 Pre-Order • ${rem>0 ? rem + ' days left' : 'Ending'}</div>` : '';
     
-    // Freshness display
-    const freshnessBadge = p.freshness && p.freshnessIndicator ? 
-        `<div class="freshness-badge freshness-${p.freshnessIndicator} mb-2">${getFreshnessEmoji(p.freshnessIndicator)} ${p.freshness}% Fresh</div>` : '';
+    // ✅ UPDATED: Better freshness indicator logic
+    const getFreshnessIndicator = (freshness) => {
+        if (!freshness) return 'fresh';
+        if (freshness >= 90) return 'farm-fresh';
+        if (freshness >= 70) return 'very-fresh';
+        if (freshness >= 50) return 'fresh';
+        if (freshness >= 30) return 'good';
+        return 'fair';
+    };
+    
+    // ✅ Set freshness indicator if not already set
+    if (p.freshness && !p.freshnessIndicator) {
+        p.freshnessIndicator = getFreshnessIndicator(p.freshness);
+    }
+    
+    // ✅ UPDATED: Freshness display with better fallback
+    const freshnessBadge = p.freshness ? 
+        `<div class="freshness-badge freshness-${p.freshnessIndicator || getFreshnessIndicator(p.freshness)} mb-2">
+            ${getFreshnessEmoji(p.freshnessIndicator || getFreshnessIndicator(p.freshness))} ${p.freshness}% Fresh
+        </div>` : '';
     
     const freshnessMeter = p.freshness ? 
         `<div class="mb-3">
             <div class="text-sm text-gray-600 mb-1">Freshness Level</div>
             <div class="freshness-meter">
-                <div class="freshness-meter-fill level-${p.freshnessIndicator || 'fresh'}" style="width: ${p.freshness}%"></div>
+                <div class="freshness-meter-fill level-${p.freshnessIndicator || getFreshnessIndicator(p.freshness)}" style="width: ${p.freshness}%"></div>
             </div>
+            <div class="text-xs text-gray-500 mt-1">${p.freshness}% - ${(p.freshnessIndicator || getFreshnessIndicator(p.freshness)).replace('-', ' ').toUpperCase()}</div>
         </div>` : '';
     
     const isAdminViewing = window.APP_STATE.currentUser && window.APP_STATE.currentUser.role === 'admin';
