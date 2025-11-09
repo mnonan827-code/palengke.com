@@ -3011,28 +3011,147 @@ window.adminEditProduct = function(id) {
 };
 
 window.adminDeleteProduct = function(id) {
-    if(!window.APP_STATE.currentUser || window.APP_STATE.currentUser.role !== 'admin') return showModal('Forbidden', 'Admin access required.', `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
-    showModal('Confirm delete', `Are you sure you want to delete this product?`, `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">Cancel</button>
-    <button onclick="adminConfirmDelete(${id})" class="px-4 py-2 bg-red-600 text-white rounded">Delete</button>`);
+    if(!window.APP_STATE.currentUser || window.APP_STATE.currentUser.role !== 'admin') {
+        return showModal('Forbidden', 'Admin access required.', `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
+    }
+    
+    const product = window.APP_STATE.products.find(p => p.id === id);
+    if (!product) {
+        return showModal('Error', 'Product not found.', `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
+    }
+    
+    showModal('Confirm Delete', `
+        <div class="space-y-3">
+            <p class="text-gray-700">Are you sure you want to delete <strong>${product.name}</strong>?</p>
+            <div class="bg-yellow-50 p-3 rounded-lg border-l-4 border-yellow-500">
+                <p class="text-yellow-800 text-sm">
+                    <strong>⚠️ Warning:</strong> This will remove the product and restore any reserved stock from customer carts.
+                </p>
+            </div>
+        </div>
+    `, `
+        <button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">Cancel</button>
+        <button onclick="adminConfirmDelete(${id})" class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700">Delete Product</button>
+    `);
 };
 
 window.adminConfirmDelete = async function(id) {
-    const prodToDelete = window.APP_STATE.products.find(p => p.id === id);
-    const deleteLogs = await getFromFirebase('deleteLogs') || {};
-    const logId = 'DEL-' + uid();
-    
-    deleteLogs[logId] = {
-        id: logId,
-        itemType: 'product',
-        itemId: id,
-        deletedBy: window.APP_STATE.currentUser ? window.APP_STATE.currentUser.email : 'unknown',
-        date: new Date().toLocaleString(),
-        snapshot: prodToDelete || null
-    };
-    
-    await saveToFirebase('deleteLogs', deleteLogs);
-    await remove(ref(database, `products/${id}`));
-    hideModal();
+    try {
+        console.log('🗑️ Starting product deletion:', id);
+        
+        // Get product details before deletion
+        const prodToDelete = window.APP_STATE.products.find(p => p.id === id);
+        if (!prodToDelete) {
+            throw new Error('Product not found');
+        }
+        
+        // ✅ STEP 1: Find all carts with this product and restore stock
+        console.log('📦 Checking all carts for product:', prodToDelete.name);
+        const allCartsData = await getFromFirebase('carts');
+        let totalRestoredStock = 0;
+        const affectedUsers = [];
+        
+        if (allCartsData) {
+            for (const [userId, cartData] of Object.entries(allCartsData)) {
+                if (!cartData || typeof cartData !== 'object') continue;
+                
+                // Get cart items (filter out metadata like lastActivity)
+                const cartItems = Object.values(cartData).filter(item => 
+                    item && typeof item === 'object' && item.productId
+                );
+                
+                // Find if this cart has the product
+                const itemIndex = cartItems.findIndex(item => item.productId === id);
+                
+                if (itemIndex >= 0) {
+                    const cartItem = cartItems[itemIndex];
+                    
+                    // Skip if it's a pre-order item (no stock to restore)
+                    if (!cartItem.preordered) {
+                        totalRestoredStock += cartItem.quantity;
+                        affectedUsers.push({
+                            userId,
+                            quantity: cartItem.quantity,
+                            unit: cartItem.unit
+                        });
+                        
+                        console.log(`✅ Found ${cartItem.quantity} ${cartItem.unit} in cart of user ${userId}`);
+                    }
+                    
+                    // Remove item from cart
+                    cartItems.splice(itemIndex, 1);
+                    
+                    // Update cart in Firebase
+                    await saveToFirebase(`carts/${userId}`, {
+                        ...cartItems,
+                        lastActivity: Date.now()
+                    });
+                    
+                    console.log(`🗑️ Removed product from cart of user ${userId}`);
+                }
+            }
+        }
+        
+        // ✅ STEP 2: Save deletion log with restoration info
+        const deleteLogs = await getFromFirebase('deleteLogs') || {};
+        const logId = 'DEL-' + uid();
+        
+        deleteLogs[logId] = {
+            id: logId,
+            itemType: 'product',
+            itemId: id,
+            deletedBy: window.APP_STATE.currentUser ? window.APP_STATE.currentUser.email : 'unknown',
+            date: new Date().toLocaleString(),
+            snapshot: prodToDelete,
+            stockRestored: totalRestoredStock,
+            affectedUsers: affectedUsers.length,
+            affectedUserDetails: affectedUsers
+        };
+        
+        await saveToFirebase('deleteLogs', deleteLogs);
+        console.log('📝 Deletion log saved');
+        
+        // ✅ STEP 3: Delete the product from Firebase
+        await remove(ref(database, `products/${id}`));
+        console.log('✅ Product deleted from Firebase');
+        
+        // ✅ STEP 4: Update local state
+        const productIndex = window.APP_STATE.products.findIndex(p => p.id === id);
+        if (productIndex >= 0) {
+            window.APP_STATE.products.splice(productIndex, 1);
+        }
+        
+        hideModal();
+        
+        // ✅ STEP 5: Show success message with details
+        const restoredMessage = totalRestoredStock > 0 
+            ? `<div class="mt-2 p-2 bg-blue-50 rounded border border-blue-200">
+                <p class="text-sm text-blue-800">
+                    <strong>📦 Stock Restored:</strong> ${totalRestoredStock} ${prodToDelete.unit}${totalRestoredStock > 1 ? 's' : ''} removed from ${affectedUsers.length} cart${affectedUsers.length > 1 ? 's' : ''}
+                </p>
+               </div>` 
+            : '';
+        
+        showModal('Product Deleted', `
+            <div class="text-center space-y-3">
+                <div class="text-5xl">✅</div>
+                <p class="text-gray-700"><strong>${prodToDelete.name}</strong> has been deleted successfully.</p>
+                ${restoredMessage}
+            </div>
+        `, `<button onclick="hideModal(); renderMain();" class="px-4 py-2 bg-lime-600 text-white rounded">OK</button>`);
+        
+        // Refresh the view
+        renderMain();
+        
+    } catch (error) {
+        console.error('❌ Error deleting product:', error);
+        showModal('Deletion Error', `
+            <div class="space-y-3">
+                <p class="text-red-700">Failed to delete product.</p>
+                <p class="text-sm text-gray-600">${error.message}</p>
+            </div>
+        `, `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
+    }
 };
 
 // Add this new function to verify database sync
@@ -3530,29 +3649,38 @@ window.viewDeleteLogs = async function() {
         return showModal('Deletion Logs', '<div class="text-gray-600">No deletions recorded yet.</div>', `<button onclick="hideModal()" class="px-4 py-2 bg-lime-600 text-white rounded">Close</button>`);
     }
     const tableRows = logsArray.map(l => `
-        <tr class="border-b">
-            <td class="p-2">${l.id}</td>
-            <td class="p-2">${l.itemType || ''}</td>
-            <td class="p-2">${l.itemId || ''}</td>
-            <td class="p-2">${l.deletedBy}</td>
-            <td class="p-2">${l.date}</td>
-        </tr>
-    `).join('');
-    const tableHtml = `
-        <div class="max-h-80 overflow-auto">
-          <table class="w-full text-left text-sm">
-            <thead class="bg-gray-100 text-gray-700 sticky top-0">
-              <tr>
-                <th class="p-2">Log ID</th>
-                <th class="p-2">Type</th>
-                <th class="p-2">Item ID</th>
-                <th class="p-2">Deleted By</th>
-                <th class="p-2">Date</th>
-              </tr>
-            </thead>
-            <tbody>${tableRows}</tbody>
-          </table>
-        </div>`;
+    <tr class="border-b hover:bg-gray-50">
+        <td class="p-2 text-sm">${l.id}</td>
+        <td class="p-2 text-sm">${l.itemType || 'N/A'}</td>
+        <td class="p-2 text-sm">${l.itemId || 'N/A'}</td>
+        <td class="p-2 text-sm">${l.deletedBy}</td>
+        <td class="p-2 text-sm">${l.date}</td>
+        <td class="p-2 text-sm">
+            ${l.stockRestored ? `<span class="text-green-600 font-semibold">📦 ${l.stockRestored} restored</span>` : '-'}
+        </td>
+        <td class="p-2 text-sm">
+            ${l.affectedUsers ? `<span class="text-blue-600">${l.affectedUsers} cart${l.affectedUsers > 1 ? 's' : ''}</span>` : '-'}
+        </td>
+    </tr>
+`).join('');
+
+const tableHtml = `
+    <div class="max-h-96 overflow-auto">
+      <table class="w-full text-left text-sm">
+        <thead class="bg-gray-100 text-gray-700 sticky top-0">
+          <tr>
+            <th class="p-2">Log ID</th>
+            <th class="p-2">Type</th>
+            <th class="p-2">Item ID</th>
+            <th class="p-2">Deleted By</th>
+            <th class="p-2">Date</th>
+            <th class="p-2">Stock Restored</th>
+            <th class="p-2">Carts Affected</th>
+          </tr>
+        </thead>
+        <tbody>${tableRows}</tbody>
+      </table>
+    </div>`;
     showModal('Deletion Logs', tableHtml, `<button onclick="hideModal()" class="px-4 py-2 bg-lime-600 text-white rounded">Close</button>`);
 };
 
