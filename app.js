@@ -3083,7 +3083,6 @@ window.adminViewOrder = async function(id) {
     // Get customer profile from order or from users database
     let profile = o.customerProfile || {};
     
-    // If not in order, fetch from users database
     if(!profile.idUrl && o.userId) {
         const userData = await getFromFirebase(`users/${o.userId}`);
         if(userData && userData.profile) {
@@ -3092,6 +3091,15 @@ window.adminViewOrder = async function(id) {
     }
 
     const items = o.items.map(it => `<li class="flex justify-between"><span>${it.quantity} × ${it.name} (${it.unit})</span><span>${formatPeso(it.price * it.quantity)}</span></li>`).join('');
+    
+    // Status badge color
+    const statusColor = 
+        o.status === 'Delivered' ? 'bg-green-100 text-green-800' :
+        o.status === 'Out for Delivery' ? 'bg-blue-100 text-blue-800' :
+        o.status === 'Ready to Deliver' ? 'bg-yellow-100 text-yellow-800' :
+        o.status === 'Attempt Delivery Failed' ? 'bg-red-100 text-red-800' :
+        o.status === 'Pre-Order Received' ? 'bg-orange-100 text-orange-800' :
+        'bg-gray-100 text-gray-800';
     
     showModal(`Order ${o.id}`, `
     <div class="grid gap-3">
@@ -3103,7 +3111,12 @@ window.adminViewOrder = async function(id) {
           <div><b>Contact:</b> ${o.contact}</div>
           <div><b>Address:</b> ${o.address}</div>
           <div><b>Date:</b> ${o.date}</div>
-          <div><b>Status:</b> <span class="badge bg-gray-100 text-gray-800 px-2 py-1 rounded">${o.status}</span></div>
+          <div><b>Status:</b> <span class="badge ${statusColor} px-2 py-1 rounded">${o.status}</span></div>
+          ${o.status === 'Attempt Delivery Failed' ? `
+            <div class="mt-2 p-2 bg-red-50 border border-red-200 rounded text-xs text-red-700">
+              <b>⚠️ Delivery Failed:</b> Contact customer to reschedule delivery.
+            </div>
+          ` : ''}
         </div>
       </div>
 
@@ -3129,15 +3142,15 @@ window.adminViewOrder = async function(id) {
               </div>
             ` : '<div class="text-xs text-gray-500 pt-2">No ID uploaded</div>'}
             ${!profile.verified && profile.idUrl ? `
-  <div class="pt-2 flex gap-2">
-    <button onclick="verifyCustomerProfile('${o.userId}')" class="px-3 py-1 bg-green-600 text-white rounded text-sm hover:bg-green-700">
-      ✓ Verify Profile
-    </button>
-    <button onclick="denyCustomerProfile('${o.userId}')" class="px-3 py-1 bg-red-600 text-white rounded text-sm hover:bg-red-700">
-      ✗ Deny Profile
-    </button>
-  </div>
-` : ''}
+              <div class="pt-2 flex gap-2">
+                <button onclick="verifyCustomerProfile('${o.userId}')" class="px-3 py-1 bg-green-600 text-white rounded text-sm hover:bg-green-700">
+                  ✓ Verify Profile
+                </button>
+                <button onclick="denyCustomerProfile('${o.userId}')" class="px-3 py-1 bg-red-600 text-white rounded text-sm hover:bg-red-700">
+                  ✗ Deny Profile
+                </button>
+              </div>
+            ` : ''}
           </div>
         </div>
       ` : `
@@ -3429,7 +3442,7 @@ window.adminEditOrder = function(id) {
     if(!window.APP_STATE.currentUser || window.APP_STATE.currentUser.role !== 'admin') return showModal('Forbidden', 'Admin access required.', `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
     const o = window.APP_STATE.orders.find(x=> x.id === id);
     if(!o) return;
-    const statuses = ['Preparing Order', 'Ready to Deliver', 'Out for Delivery', 'Delivered'];
+    const statuses = ['Preparing Order', 'Ready to Deliver', 'Out for Delivery', 'Delivered', 'Attempt Delivery Failed'];
     const options = statuses.map(s => `<option value="${s}" ${s === o.status ? 'selected' : ''}>${s}</option>`).join('');
     showModal(`Update ${o.id}`, `
     <div>
@@ -3547,6 +3560,18 @@ window.viewDeleteLogs = async function() {
 window.$ = function(sel){ return document.querySelector(sel); };
 window.$all = function(sel){ return Array.from(document.querySelectorAll(sel)); };
 window.formatPeso = function(n){ return '₱' + Number(n).toLocaleString('en-PH', {minimumFractionDigits:2, maximumFractionDigits:2}); };
+
+window.getStatusDescription = function(status) {
+    const descriptions = {
+        'Preparing Order': 'Your order is being prepared by the seller.',
+        'Ready to Deliver': 'Your order is ready and will be picked up by the delivery rider soon.',
+        'Out for Delivery': 'Your order is on the way to your address.',
+        'Delivered': 'Your order has been successfully delivered.',
+        'Attempt Delivery Failed': 'Delivery was attempted but failed. The rider will contact you for re-delivery.',
+        'Pre-Order Received': 'Your pre-order has been received and is being processed.'
+    };
+    return descriptions[status] || 'Order status updated.';
+};
 
 
 // ✅ RECOMMENDED: Generate uniform 8-digit numeric Order ID
@@ -4815,28 +4840,29 @@ const filteredRegularOrders = regularOrders;
 const filteredPreorderOrders = preorderOrders;
 
     const regularOrderRows = filteredRegularOrders.map(o => `
-        <tr class="hover:bg-gray-50 border-b">
-            <td class="px-3 py-2 text-sm font-mono">${o.id}</td>
-            <td class="px-3 py-2 text-sm">${o.customer}</td>
-            <td class="px-3 py-2 text-sm font-semibold">${formatPeso(o.total)}</td>
-            <td class="px-3 py-2 text-sm">
-                <span class="inline-flex items-center px-2 py-1 rounded-full text-xs ${
-                    o.status === 'Delivered' ? 'bg-green-100 text-green-800' :
-                    o.status === 'Out for Delivery' ? 'bg-blue-100 text-blue-800' :
-                    o.status === 'Ready to Deliver' ? 'bg-yellow-100 text-yellow-800' :
-                    'bg-gray-100 text-gray-800'
-                }">${o.status}</span>
-            </td>
-            <td class="px-3 py-2 text-sm hidden lg:table-cell">${o.date}</td>
-            <td class="px-3 py-2 text-sm text-right">
-                <div class="flex flex-col sm:flex-row gap-1 justify-end">
-                    <button onclick="adminViewOrder('${o.id}')" class="px-2 py-1 text-xs bg-white border rounded hover:bg-gray-50">View</button>
-                    <button onclick="adminEditOrder('${o.id}')" class="px-2 py-1 text-xs bg-lime-600 text-white rounded hover:bg-lime-700">Update</button>
-                    <button onclick="adminDeleteOrder('${o.id}')" class="px-2 py-1 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100">Delete</button>
-                </div>
-            </td>
-        </tr>
-    `).join('');
+    <tr class="hover:bg-gray-50 border-b">
+        <td class="px-3 py-2 text-sm font-mono">${o.id}</td>
+        <td class="px-3 py-2 text-sm">${o.customer}</td>
+        <td class="px-3 py-2 text-sm font-semibold">${formatPeso(o.total)}</td>
+        <td class="px-3 py-2 text-sm">
+            <span class="inline-flex items-center px-2 py-1 rounded-full text-xs ${
+                o.status === 'Delivered' ? 'bg-green-100 text-green-800' :
+                o.status === 'Out for Delivery' ? 'bg-blue-100 text-blue-800' :
+                o.status === 'Ready to Deliver' ? 'bg-yellow-100 text-yellow-800' :
+                o.status === 'Attempt Delivery Failed' ? 'bg-red-100 text-red-800' :
+                'bg-gray-100 text-gray-800'
+            }">${o.status}</span>
+        </td>
+        <td class="px-3 py-2 text-sm hidden lg:table-cell">${o.date}</td>
+        <td class="px-3 py-2 text-sm text-right">
+            <div class="flex flex-col sm:flex-row gap-1 justify-end">
+                <button onclick="adminViewOrder('${o.id}')" class="px-2 py-1 text-xs bg-white border rounded hover:bg-gray-50">View</button>
+                <button onclick="adminEditOrder('${o.id}')" class="px-2 py-1 text-xs bg-lime-600 text-white rounded hover:bg-lime-700">Update</button>
+                <button onclick="adminDeleteOrder('${o.id}')" class="px-2 py-1 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100">Delete</button>
+            </div>
+        </td>
+    </tr>
+`).join('');
 
     const preorderOrderRows = filteredPreorderOrders.map(o => `
         <tr class="hover:bg-gray-50 border-b">
@@ -4845,11 +4871,12 @@ const filteredPreorderOrders = preorderOrders;
             <td class="px-3 py-2 text-sm font-semibold">${formatPeso(o.total)}</td>
             <td class="px-3 py-2 text-sm">
                 <span class="inline-flex items-center px-2 py-1 rounded-full text-xs ${
-                    o.status === 'Delivered' ? 'bg-green-100 text-green-800' :
-                    o.status === 'Out for Delivery' ? 'bg-blue-100 text-blue-800' :
-                    o.status === 'Ready to Deliver' ? 'bg-yellow-100 text-yellow-800' :
-                    'bg-orange-100 text-orange-800'
-                }">${o.status}</span>
+    o.status === 'Delivered' ? 'bg-green-100 text-green-800' :
+    o.status === 'Out for Delivery' ? 'bg-blue-100 text-blue-800' :
+    o.status === 'Ready to Deliver' ? 'bg-yellow-100 text-yellow-800' :
+    o.status === 'Attempt Delivery Failed' ? 'bg-red-100 text-red-800' :
+    'bg-orange-100 text-orange-800'
+}">${o.status}</span>
             </td>
             <td class="px-3 py-2 text-sm hidden lg:table-cell">${o.date}</td>
             <td class="px-3 py-2 text-sm text-right">
