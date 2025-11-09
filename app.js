@@ -353,25 +353,16 @@ async function initializeFirebaseData() {
     
     try {
         // ✅ STEP 1: Load Products
-        // ✅ STEP 1: Load Products
-console.log('📦 Loading products...');
-const productsSnapshot = await get(dbRefs.products);
-if (productsSnapshot.exists()) {
-    const productsData = productsSnapshot.val();
-    // Convert to array and ensure each product has proper structure
-    window.APP_STATE.products = Object.keys(productsData).map(key => {
-        const product = productsData[key];
-        return {
-            ...product,
-            id: product.id || parseInt(key) // Ensure ID is present
-        };
-    });
-    console.log('✅ Products loaded:', window.APP_STATE.products.length);
-    console.log('📊 Product IDs:', window.APP_STATE.products.map(p => p.id));
-} else {
-    console.log('⚠️ No products found, seeding initial data...');
-    await seedInitialData();
-}
+        console.log('📦 Loading products...');
+        const productsSnapshot = await get(dbRefs.products);
+        if (productsSnapshot.exists()) {
+            const productsData = productsSnapshot.val();
+            window.APP_STATE.products = Object.values(productsData);
+            console.log('✅ Products loaded:', window.APP_STATE.products.length);
+        } else {
+            console.log('⚠️ No products found, seeding initial data...');
+            await seedInitialData();
+        }
 
         // ✅ STEP 2: Load Orders
         console.log('📋 Loading orders...');
@@ -1172,37 +1163,24 @@ function setupRealtimeListeners() {
     console.log('🎧 Setting up real-time listeners...');
 
     // ✅ PRODUCTS LISTENER
-    // ✅ PRODUCTS LISTENER
-onValue(dbRefs.products, (snapshot) => {
-    console.log('📦 Products listener triggered');
-    if (snapshot.exists()) {
-        const productsData = snapshot.val();
-        // Convert to array and ensure proper structure
-        window.APP_STATE.products = Object.keys(productsData).map(key => {
-            const product = productsData[key];
-            return {
-                ...product,
-                id: product.id || parseInt(key)
-            };
-        });
-        console.log('✅ Products updated:', window.APP_STATE.products.length);
-        console.log('📊 Updated Product IDs:', window.APP_STATE.products.map(p => p.id));
-        
-        // Re-render if on shop view
-        if (window.APP_STATE.view === 'shop') {
-            console.log('🔄 Re-rendering shop view');
-            renderMain();
+    onValue(dbRefs.products, (snapshot) => {
+        console.log('📦 Products listener triggered');
+        if (snapshot.exists()) {
+            const productsData = snapshot.val();
+            window.APP_STATE.products = Object.values(productsData);
+            console.log('✅ Products updated:', window.APP_STATE.products.length);
+            
+            // Re-render if on shop view
+            if (window.APP_STATE.view === 'shop') {
+                renderMain();
+            }
+        } else {
+            console.log('⚠️ No products in database');
+            window.APP_STATE.products = [];
         }
-    } else {
-        console.log('⚠️ No products in database');
-        window.APP_STATE.products = [];
-        if (window.APP_STATE.view === 'shop') {
-            renderMain();
-        }
-    }
-}, (error) => {
-    console.error('❌ Products listener error:', error);
-});
+    }, (error) => {
+        console.error('❌ Products listener error:', error);
+    });
 
     // ✅ ORDERS LISTENER
     onValue(dbRefs.orders, (snapshot) => {
