@@ -91,6 +91,7 @@ const dbRefs = {
     chats: ref(database, 'chats') // 🟢 ADD THIS LINE
 };
 
+
 // Helper to safely initialize Lucide icons
 window.safeIconInit = function() {
     try {
@@ -4519,6 +4520,29 @@ setTimeout(() => {
     }
 };
 
+// âœ… Add event delegation for dynamically created buttons
+document.addEventListener('click', function(e) {
+    const target = e.target;
+    
+    // Handle Edit button clicks
+    if (target.matches('button[onclick*="adminEditProduct"]')) {
+        e.preventDefault();
+        const match = target.getAttribute('onclick').match(/adminEditProduct\((\d+)\)/);
+        if (match) {
+            window.adminEditProduct(parseInt(match[1]));
+        }
+    }
+    
+    // Handle Delete button clicks
+    if (target.matches('button[onclick*="adminDeleteProduct"]')) {
+        e.preventDefault();
+        const match = target.getAttribute('onclick').match(/adminDeleteProduct\((\d+)\)/);
+        if (match) {
+            window.adminDeleteProduct(parseInt(match[1]));
+        }
+    }
+});
+
 window.switchTo = function(v) {
     window.APP_STATE.view = v;
     closeMobileMenu();
@@ -4785,11 +4809,12 @@ window.renderAdminDashboard = async function() {
     const filteredPreorder = filterProducts(preorderList);
 
     // ✅ CORRECTED: Regular Products Table Rows
+// âœ… CORRECTED: Regular Products Table Rows
 const regularRows = filteredRegular.length > 0 ? filteredRegular.map(p => `
     <tr class="hover:bg-gray-50 border-b">
-        <td class="px-3 py-2 text-sm">${p.name}</td>
-        <td class="px-3 py-2 text-sm hidden sm:table-cell">${p.origin}</td>
-        <td class="px-3 py-2 text-sm hidden md:table-cell">${p.farmer.name}</td>
+        <td class="px-3 py-2 text-sm">${escapeHtml(p.name)}</td>
+        <td class="px-3 py-2 text-sm hidden sm:table-cell">${escapeHtml(p.origin)}</td>
+        <td class="px-3 py-2 text-sm hidden md:table-cell">${escapeHtml(p.farmer.name)}</td>
         <td class="px-3 py-2 text-sm font-semibold">${formatPeso(p.price)}</td>
         <td class="px-3 py-2 text-sm">${p.quantity} ${p.unit}</td>
         <td class="px-3 py-2 text-sm hidden lg:table-cell">
@@ -4797,21 +4822,21 @@ const regularRows = filteredRegular.length > 0 ? filteredRegular.map(p => `
         </td>
         <td class="px-3 py-2 text-sm text-right">
             <div class="flex flex-col sm:flex-row gap-1 justify-end">
-                <button onclick="adminEditProduct(${p.id})" class="px-2 py-1 text-xs bg-white border rounded hover:bg-gray-50">Edit</button>
-                <button onclick="adminDeleteProduct(${p.id})" class="px-2 py-1 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100">Delete</button>
+                <button type="button" onclick="window.adminEditProduct(${p.id})" class="px-2 py-1 text-xs bg-white border rounded hover:bg-gray-50 transition-colors">Edit</button>
+                <button type="button" onclick="window.adminDeleteProduct(${p.id})" class="px-2 py-1 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100 transition-colors">Delete</button>
             </div>
         </td>
     </tr>
 `).join('') : '<tr><td class="px-3 py-8 text-center text-gray-500 text-sm" colspan="7">No regular products</td></tr>';
-
 // ✅ CORRECTED: Pre-Order Products Table Rows
+// âœ… CORRECTED: Pre-Order Products Table Rows
 const preorderRows = filteredPreorder.length > 0 ? filteredPreorder.map(p => {
     const rem = computeRemainingDays(p);
     return `
         <tr class="hover:bg-gray-50 border-b">
-            <td class="px-3 py-2 text-sm">${p.name}</td>
-            <td class="px-3 py-2 text-sm hidden sm:table-cell">${p.origin}</td>
-            <td class="px-3 py-2 text-sm hidden md:table-cell">${p.farmer.name}</td>
+            <td class="px-3 py-2 text-sm">${escapeHtml(p.name)}</td>
+            <td class="px-3 py-2 text-sm hidden sm:table-cell">${escapeHtml(p.origin)}</td>
+            <td class="px-3 py-2 text-sm hidden md:table-cell">${escapeHtml(p.farmer.name)}</td>
             <td class="px-3 py-2 text-sm font-semibold">${formatPeso(p.price)}</td>
             <td class="px-3 py-2 text-sm">${p.quantity} ${p.unit}</td>
             <td class="px-3 py-2 text-sm hidden lg:table-cell">
@@ -4822,14 +4847,13 @@ const preorderRows = filteredPreorder.length > 0 ? filteredPreorder.map(p => {
             </td>
             <td class="px-3 py-2 text-sm text-right">
                 <div class="flex flex-col sm:flex-row gap-1 justify-end">
-                    <button onclick="adminEditProduct(${p.id})" class="px-2 py-1 text-xs bg-white border rounded hover:bg-gray-50">Edit</button>
-                    <button onclick="adminDeleteProduct(${p.id})" class="px-2 py-1 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100">Delete</button>
+                    <button type="button" onclick="window.adminEditProduct(${p.id})" class="px-2 py-1 text-xs bg-white border rounded hover:bg-gray-50 transition-colors">Edit</button>
+                    <button type="button" onclick="window.adminDeleteProduct(${p.id})" class="px-2 py-1 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100 transition-colors">Delete</button>
                 </div>
             </td>
         </tr>
     `;
 }).join('') : '<tr><td class="px-3 py-8 text-center text-gray-500 text-sm" colspan="8">No pre-order products</td></tr>';
-
     // ✅ FILTER ORDERS
     // ✅ FILTER ORDERS - Reset search state when rendering dashboard
 const regularOrders = window.APP_STATE.orders.filter(o => !o.type || o.type !== 'pre-order');
@@ -5103,6 +5127,20 @@ const filteredPreorderOrders = preorderOrders;
       </div>
     </section>
 `;
+
+};
+
+// HTML escape function to prevent XSS (if not already present)
+window.escapeHtml = function(text) {
+    if (!text) return '';
+    const map = {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;'
+    };
+    return String(text).replace(/[&<>"']/g, m => map[m]);
 };
 
 // Initialize order search event listeners
