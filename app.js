@@ -88,7 +88,7 @@ const dbRefs = {
     carts: ref(database, 'carts'),
     notifications: ref(database, 'notifications'),
     deleteLogs: ref(database, 'deleteLogs'),
-    chats: ref(database, 'chats') // 🟢 ADD THIS LINE
+    chats: ref(database, 'chats')
 };
 
 // Helper to safely initialize Lucide icons
@@ -1165,24 +1165,33 @@ function setupRealtimeListeners() {
     console.log('🎧 Setting up real-time listeners...');
 
     // ✅ PRODUCTS LISTENER
-    onValue(dbRefs.products, (snapshot) => {
-        console.log('📦 Products listener triggered');
-        if (snapshot.exists()) {
-            const productsData = snapshot.val();
-            window.APP_STATE.products = Object.values(productsData);
-            console.log('✅ Products updated:', window.APP_STATE.products.length);
-            
-            // Re-render if on shop view
-            if (window.APP_STATE.view === 'shop') {
-                renderMain();
-            }
-        } else {
-            console.log('⚠️ No products in database');
-            window.APP_STATE.products = [];
+    // ✅ PRODUCTS LISTENER
+onValue(dbRefs.products, (snapshot) => {
+    console.log('📦 Products listener triggered');
+    if (snapshot.exists()) {
+        const productsData = snapshot.val();
+        window.APP_STATE.products = Object.values(productsData);
+        console.log('✅ Products updated:', window.APP_STATE.products.length);
+        
+        // ✅ NEW: Re-render if on shop view OR admin dashboard
+        if (window.APP_STATE.view === 'shop') {
+            renderMain();
+        } else if (window.APP_STATE.view === 'admin' && window.APP_STATE.currentUser?.role === 'admin') {
+            renderMain();
         }
-    }, (error) => {
-        console.error('❌ Products listener error:', error);
-    });
+    } else {
+        console.log('⚠️ No products in database');
+        window.APP_STATE.products = [];
+        
+        // ✅ NEW: Re-render even when products are empty
+        if (window.APP_STATE.view === 'shop' || 
+            (window.APP_STATE.view === 'admin' && window.APP_STATE.currentUser?.role === 'admin')) {
+            renderMain();
+        }
+    }
+}, (error) => {
+    console.error('❌ Products listener error:', error);
+});
 
     // ✅ ORDERS LISTENER
     onValue(dbRefs.orders, (snapshot) => {
@@ -2888,7 +2897,6 @@ window.adminSaveProduct = async function(editId = null) {
 
     let imgUrl = '';
     
-    // Handle image upload
     if (fileInput.files.length > 0) {
         try {
             console.log('Starting Cloudinary upload with file:', fileInput.files[0]);
@@ -2930,6 +2938,11 @@ window.adminSaveProduct = async function(editId = null) {
             delete productUpdate.preorderStart;
         }
         await updateFirebase(`products/${editId}`, productUpdate);
+        
+        // ✅ NEW: Show success message and close modal
+        hideModal();
+        showModal('✅ Product Updated', 'Product has been updated successfully.', 
+            `<button onclick="hideModal()" class="px-4 py-2 bg-lime-600 text-white rounded">OK</button>`);
     } else {
         const newId = Date.now();
         const newProd = { 
@@ -2951,8 +2964,12 @@ window.adminSaveProduct = async function(editId = null) {
             newProd.preorderStart = Date.now();
         }
         await saveToFirebase(`products/${newId}`, newProd);
+        
+        // ✅ NEW: Show success message and close modal
+        hideModal();
+        showModal('✅ Product Added', 'New product has been added successfully.', 
+            `<button onclick="hideModal()" class="px-4 py-2 bg-lime-600 text-white rounded">OK</button>`);
     }
-    hideModal();
 };
 
 window.adminEditProduct = function(id) {
@@ -3019,22 +3036,40 @@ window.adminDeleteProduct = function(id) {
 };
 
 window.adminConfirmDelete = async function(id) {
-    const prodToDelete = window.APP_STATE.products.find(p => p.id === id);
-    const deleteLogs = await getFromFirebase('deleteLogs') || {};
-    const logId = 'DEL-' + uid();
-    
-    deleteLogs[logId] = {
-        id: logId,
-        itemType: 'product',
-        itemId: id,
-        deletedBy: window.APP_STATE.currentUser ? window.APP_STATE.currentUser.email : 'unknown',
-        date: new Date().toLocaleString(),
-        snapshot: prodToDelete || null
-    };
-    
-    await saveToFirebase('deleteLogs', deleteLogs);
-    await remove(ref(database, `products/${id}`));
-    hideModal();
+    try {
+        const prodToDelete = window.APP_STATE.products.find(p => p.id === id);
+        
+        // ✅ Save to deletion logs
+        const deleteLogs = await getFromFirebase('deleteLogs') || {};
+        const logId = 'DEL-' + uid();
+        
+        deleteLogs[logId] = {
+            id: logId,
+            itemType: 'product',
+            itemId: id,
+            deletedBy: window.APP_STATE.currentUser ? window.APP_STATE.currentUser.email : 'unknown',
+            date: new Date().toLocaleString(),
+            snapshot: prodToDelete || null
+        };
+        
+        await saveToFirebase('deleteLogs', deleteLogs);
+        
+        // ✅ Delete the product
+        await remove(ref(database, `products/${id}`));
+        
+        // ✅ Close modal and show success
+        hideModal();
+        showModal('✅ Product Deleted', 'Product has been deleted successfully.', 
+            `<button onclick="hideModal()" class="px-4 py-2 bg-lime-600 text-white rounded">OK</button>`);
+        
+        // ✅ REMOVED: Don't manually update APP_STATE or call renderMain() - let the listener handle it
+        
+    } catch (error) {
+        console.error('❌ Error deleting product:', error);
+        hideModal();
+        showModal('Error', 'Failed to delete product. Please try again.', 
+            `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
+    }
 };
 
 // Add this new function to verify database sync
