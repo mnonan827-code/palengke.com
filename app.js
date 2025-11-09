@@ -131,47 +131,34 @@ window.clearSearch = function() {
 window.handleOrderSearch = function(query, type = 'regular') {
     console.log(`🔍 handleOrderSearch called: "${query}" [${type}]`);
     
-    // Update state immediately
+    // Update state
     if (type === 'regular') {
         window.APP_STATE.orderSearchQuery = query.toLowerCase().trim();
     } else {
         window.APP_STATE.preorderSearchQuery = query.toLowerCase().trim();
     }
     
-    // Update UI elements immediately (without re-rendering table)
-    const orders = type === 'regular' 
-        ? window.APP_STATE.orders.filter(o => !o.type || o.type !== 'pre-order')
-        : window.APP_STATE.orders.filter(o => o.type === 'pre-order');
-    
-    const searchQuery = type === 'regular' ? window.APP_STATE.orderSearchQuery : window.APP_STATE.preorderSearchQuery;
-    const filteredOrders = filterOrders(orders, searchQuery);
-    
-    // Update counts immediately
-    updateOrderSearchResultsCount(filteredOrders.length, orders.length, type);
-    
-    // Update clear button visibility immediately
-    const clearBtn = document.getElementById(type === 'regular' ? 'clear-order-search-btn' : 'clear-preorder-search-btn');
-    if (clearBtn) {
-        if (searchQuery) {
-            clearBtn.classList.remove('hidden');
-        } else {
-            clearBtn.classList.add('hidden');
-        }
-    }
-    
-    // ✅ NEW: Directly update table rows without full re-render
-    updateOrderTableRows(filteredOrders, type);
+    // Re-render the admin dashboard to update the table
+    renderMain();
 };
 
 window.clearOrderSearch = function(type = 'regular') {
-    const searchInput = document.getElementById(type === 'regular' ? 'order-search-input' : 'preorder-search-input');
-    if (searchInput) searchInput.value = '';
+    console.log(`🗑️ Clearing ${type} order search`);
     
+    // Clear state
     if (type === 'regular') {
         window.APP_STATE.orderSearchQuery = '';
     } else {
         window.APP_STATE.preorderSearchQuery = '';
     }
+    
+    // Clear input
+    const searchInput = document.getElementById(type === 'regular' ? 'order-search-input' : 'preorder-search-input');
+    if (searchInput) {
+        searchInput.value = '';
+    }
+    
+    // Re-render
     renderMain();
 };
 
@@ -2002,19 +1989,20 @@ window.checkout = async function() {
     `, `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">Cancel</button>
         <button type="button" onclick="validateAndPlaceOrder()" class="px-4 py-2 bg-lime-600 text-white rounded hover:bg-lime-700">Place Order</button>`);
     
-    setTimeout(() => {
-        icons();
-        
-        // Add event listeners for checkout address preview
-        const checkoutAddressFields = ['customer-unit', 'customer-building', 'customer-street', 'customer-barangay'];
-        checkoutAddressFields.forEach(fieldId => {
-            document.getElementById(fieldId)?.addEventListener('input', updateCheckoutAddressPreview);
-            document.getElementById(fieldId)?.addEventListener('change', updateCheckoutAddressPreview);
-        });
-
-        // Initial preview update
-        updateCheckoutAddressPreview();
-    }, 100);
+    // Add this to renderCartDrawer() function directly, at the end
+setTimeout(() => {
+    const checkoutBtn = document.getElementById('checkout-btn');
+    if (checkoutBtn) {
+        checkoutBtn.onclick = function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            if (!checkoutBtn.disabled) {
+                checkout();
+            }
+        };
+    }
+    lucide.createIcons();
+}, 50);
 };
 
 // ✅ NEW: Clean up abandoned carts after 30 minutes
@@ -3919,9 +3907,35 @@ window.showModal = function(titleHtml, contentHtml, actionsHtml = '') {
         </div>
     `;
     overlay.classList.remove('hidden');
-    overlay.style.display = 'flex';
-    document.body.classList.add('modal-open');
-    icons();
+overlay.style.display = 'flex';
+document.body.classList.add('modal-open');
+icons();
+reinitializeModalButtons();
+};
+
+window.reinitializeModalButtons = function() {
+    // Reinitialize all buttons inside modals that use onclick
+    const modal = document.getElementById('modal');
+    if (!modal) return;
+    
+    const buttons = modal.querySelectorAll('button[onclick]');
+    buttons.forEach(button => {
+        const onclickAttr = button.getAttribute('onclick');
+        if (onclickAttr) {
+            button.onclick = function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                // Execute the onclick code safely
+                try {
+                    eval(onclickAttr);
+                } catch (error) {
+                    console.error('Button click error:', error);
+                }
+            };
+        }
+    });
+    
+    lucide.createIcons();
 };
 
 window.hideModal = function(){ 
@@ -4471,24 +4485,8 @@ window.renderMain = async function() {
 // Re-initialize search listeners after DOM update
 setTimeout(() => {
     initializeOrderSearchListeners();
-    
-    // ✅ IMPORTANT: Clear the saved search values too
-    orderSearchValue = '';
-    orderSearchCursor = 0;
-    preorderSearchValue = '';
-    preorderSearchCursor = 0;
-    
-    // Make sure inputs are empty
-    const newOrderInput = document.getElementById('order-search-input');
-    const newPreorderInput = document.getElementById('preorder-search-input');
-    
-    if (newOrderInput) {
-        newOrderInput.value = '';
-    }
-    if (newPreorderInput) {
-        newPreorderInput.value = '';
-    }
-}, 50);
+    lucide.createIcons();
+}, 100);
         }
     }
     
@@ -4497,20 +4495,18 @@ setTimeout(() => {
         else main.innerHTML = renderOrdersPublic();
     }
     
+    setTimeout(() => {
     icons();
     updateCartBadge();
     renderCartDrawer();
-
-    setTimeout(() => {
-    const checkoutBtn = document.getElementById('checkout-btn');
-    if (checkoutBtn) {
-        checkoutBtn.onclick = function(e) {
-            e.preventDefault();
-            console.log('🛒 Checkout clicked');
-            checkout();
-        };
+    
+    // Reinitialize admin buttons if in admin view
+    if (window.APP_STATE.currentUser && 
+        window.APP_STATE.currentUser.role === 'admin' && 
+        window.APP_STATE.view === 'admin') {
+        initializeOrderSearchListeners();
     }
-}, 100);
+}, 50);
     
     // Restore search input value if exists
     const searchInput = document.getElementById('search-input');
@@ -4899,27 +4895,30 @@ const filteredPreorderOrders = preorderOrders;
       <div class="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-3">
         <h2 class="text-xl sm:text-2xl font-bold text-gray-800">Admin Dashboard</h2>
         <div class="flex flex-col sm:flex-row gap-2">
-          <button onclick="switchAdminView('verification')" class="px-3 py-2 bg-purple-600 text-white rounded text-sm sm:text-base hover:bg-purple-700">
-            👤 User Verification
+          <button 
+            type="button"
+            onclick="window.switchAdminView('verification')" 
+            class="px-3 py-2 bg-purple-600 text-white rounded text-sm sm:text-base hover:bg-purple-700 transition-all">
+            💤 User Verification
           </button>
-          <button onclick="adminAddProduct()" class="px-3 py-2 bg-lime-600 text-white rounded text-sm sm:text-base hover:bg-lime-700">Add Product</button>
-          <button onclick="adminUpdateDeliveryFee()" class="px-3 py-2 bg-blue-600 text-white rounded text-sm sm:text-base hover:bg-blue-700">Set Delivery Fee</button>
-          <button onclick="viewDeleteLogs()" class="px-3 py-2 bg-white border text-gray-700 rounded text-sm sm:text-base hover:bg-gray-50">View Deletion Logs</button>
-        </div>
-      </div>
-
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-6">
-        <div class="bg-white rounded-xl p-4 shadow-sm border">
-          <div class="text-sm text-gray-500">Total Sales (Delivered)</div>
-          <div class="text-lg sm:text-xl font-bold text-lime-700 mt-1">${formatPeso(totalSales)}</div>
-        </div>
-        <div class="bg-white rounded-xl p-4 shadow-sm border">
-          <div class="text-sm text-gray-500">Total Orders</div>
-          <div class="text-lg sm:text-xl font-bold mt-1">${window.APP_STATE.orders.length}</div>
-        </div>
-        <div class="bg-white rounded-xl p-4 shadow-sm border">
-          <div class="text-sm text-gray-500">Pending Orders</div>
-          <div class="text-lg sm:text-xl font-bold mt-1">${pending}</div>
+          <button 
+            type="button"
+            onclick="window.adminAddProduct()" 
+            class="px-3 py-2 bg-lime-600 text-white rounded text-sm sm:text-base hover:bg-lime-700 transition-all">
+            Add Product
+          </button>
+          <button 
+            type="button"
+            onclick="window.adminUpdateDeliveryFee()" 
+            class="px-3 py-2 bg-blue-600 text-white rounded text-sm sm:text-base hover:bg-blue-700 transition-all">
+            Set Delivery Fee
+          </button>
+          <button 
+            type="button"
+            onclick="window.viewDeleteLogs()" 
+            class="px-3 py-2 bg-white border text-gray-700 rounded text-sm sm:text-base hover:bg-gray-50 transition-all">
+            View Deletion Logs
+          </button>
         </div>
       </div>
 
@@ -5107,119 +5106,52 @@ const filteredPreorderOrders = preorderOrders;
 
 // Initialize order search event listeners
 window.initializeOrderSearchListeners = function() {
-    console.log('🔍 Initializing order search listeners...');
+    console.log('🔧 Initializing order search listeners...');
     
-    // ===== REGULAR ORDERS SEARCH =====
+    // Regular Orders Search
     const orderSearchInput = document.getElementById('order-search-input');
-    const orderClearBtn = document.getElementById('clear-order-search-btn');
-    const orderClearButton = document.getElementById('clear-order-search-button');
-    
     if (orderSearchInput) {
-        console.log('✅ Found order search input');
+        orderSearchInput.value = window.APP_STATE.orderSearchQuery || '';
         
-        // Remove existing listeners
-        const newOrderInput = orderSearchInput.cloneNode(true);
-        orderSearchInput.parentNode.replaceChild(newOrderInput, orderSearchInput);
-        
-        // Set to empty initially
-        newOrderInput.value = '';
-        
-        // Add input listener
-        newOrderInput.addEventListener('input', function(e) {
-            const query = e.target.value;
-            orderSearchValue = query;
-            orderSearchCursor = e.target.selectionStart;
-            handleOrderSearch(query, 'regular');
+        orderSearchInput.addEventListener('input', function(e) {
+            handleOrderSearch(e.target.value, 'regular');
         });
         
-        // Prevent Enter key
-        newOrderInput.addEventListener('keydown', function(e) {
+        orderSearchInput.addEventListener('keydown', function(e) {
             if (e.key === 'Enter') e.preventDefault();
         });
-        
-        // Clear button (X icon)
-        if (orderClearBtn) {
-            const newOrderClearBtn = orderClearBtn.cloneNode(true);
-            orderClearBtn.parentNode.replaceChild(newOrderClearBtn, orderClearBtn);
-            
-            newOrderClearBtn.addEventListener('click', function(e) {
-                e.preventDefault();
-                clearOrderSearch('regular');
-            });
-        }
-        
-        // Clear button (outside)
-        if (orderClearButton) {
-            const newOrderClearButton = orderClearButton.cloneNode(true);
-            orderClearButton.parentNode.replaceChild(newOrderClearButton, orderClearButton);
-            
-            newOrderClearButton.addEventListener('click', function(e) {
-                e.preventDefault();
-                clearOrderSearch('regular');
-            });
-        }
-        
-        // Initialize counts
-        const regularOrders = window.APP_STATE.orders.filter(o => !o.type || o.type !== 'pre-order');
-        updateOrderSearchResultsCount(regularOrders.length, regularOrders.length, 'regular');
     }
     
-    // ===== PRE-ORDER ORDERS SEARCH =====
+    // Pre-order Search
     const preorderSearchInput = document.getElementById('preorder-search-input');
-    const preorderClearBtn = document.getElementById('clear-preorder-search-btn');
-    const preorderClearButton = document.getElementById('clear-preorder-search-button');
-    
     if (preorderSearchInput) {
-        console.log('✅ Found preorder search input');
+        preorderSearchInput.value = window.APP_STATE.preorderSearchQuery || '';
         
-        // Remove existing listeners
-        const newPreorderInput = preorderSearchInput.cloneNode(true);
-        preorderSearchInput.parentNode.replaceChild(newPreorderInput, preorderSearchInput);
-        
-        // Set to empty initially
-        newPreorderInput.value = '';
-        
-        // Add input listener
-        newPreorderInput.addEventListener('input', function(e) {
-            const query = e.target.value;
-            preorderSearchValue = query;
-            preorderSearchCursor = e.target.selectionStart;
-            handleOrderSearch(query, 'preorder');
+        preorderSearchInput.addEventListener('input', function(e) {
+            handleOrderSearch(e.target.value, 'preorder');
         });
         
-        // Prevent Enter key
-        newPreorderInput.addEventListener('keydown', function(e) {
+        preorderSearchInput.addEventListener('keydown', function(e) {
             if (e.key === 'Enter') e.preventDefault();
         });
-        
-        // Clear button (X icon)
-        if (preorderClearBtn) {
-            const newPreorderClearBtn = preorderClearBtn.cloneNode(true);
-            preorderClearBtn.parentNode.replaceChild(newPreorderClearBtn, preorderClearBtn);
-            
-            newPreorderClearBtn.addEventListener('click', function(e) {
-                e.preventDefault();
-                clearOrderSearch('preorder');
-            });
-        }
-        
-        // Clear button (outside)
-        if (preorderClearButton) {
-            const newPreorderClearButton = preorderClearButton.cloneNode(true);
-            preorderClearButton.parentNode.replaceChild(newPreorderClearButton, preorderClearButton);
-            
-            newPreorderClearButton.addEventListener('click', function(e) {
-                e.preventDefault();
-                clearOrderSearch('preorder');
-            });
-        }
-        
-        // Initialize counts
-        const preorderOrders = window.APP_STATE.orders.filter(o => o.type === 'pre-order');
-        updateOrderSearchResultsCount(preorderOrders.length, preorderOrders.length, 'preorder');
     }
     
-    setTimeout(() => icons(), 50);
+    // Clear buttons
+    const orderClearBtn = document.getElementById('clear-order-search-button');
+    if (orderClearBtn) {
+        orderClearBtn.onclick = function() {
+            clearOrderSearch('regular');
+        };
+    }
+    
+    const preorderClearBtn = document.getElementById('clear-preorder-search-button');
+    if (preorderClearBtn) {
+        preorderClearBtn.onclick = function() {
+            clearOrderSearch('preorder');
+        };
+    }
+    
+    setTimeout(() => lucide.createIcons(), 50);
 };
 
 
@@ -5490,23 +5422,10 @@ if (cartBtn) {
 
 const closeCart = document.getElementById('close-cart');
 if (closeCart) {
-    // Remove existing listeners
-    const newCloseCart = closeCart.cloneNode(true);
-    closeCart.parentNode.replaceChild(newCloseCart, closeCart);
-    
-    // Add fresh listener
-    newCloseCart.addEventListener('click', function(e) {
+    // Simple single event listener
+    closeCart.onclick = function(e) {
         e.preventDefault();
         e.stopPropagation();
-        console.log('❌ Close cart button clicked');
-        toggleCartDrawer(false);
-    });
-    
-    // Also ensure onclick works
-    newCloseCart.onclick = function(e) {
-        e.preventDefault();
-        e.stopPropagation();
-        console.log('❌ Close cart (onclick) triggered');
         toggleCartDrawer(false);
     };
 }
@@ -5602,6 +5521,23 @@ onAuthStateChanged(auth, async (user) => {
     updateAuthArea();
     await renderMain();
 });
+
+// ========================================
+// 🔧 GLOBAL BUTTON CLICK HANDLER
+// ========================================
+document.addEventListener('click', function(e) {
+    const button = e.target.closest('button');
+    if (!button) return;
+    
+    const onclick = button.getAttribute('onclick');
+    if (!onclick) return;
+    
+    // Prevent default for all buttons with onclick
+    if (onclick.includes('admin') || onclick.includes('switch') || onclick.includes('view')) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
+}, true);
 
 // Initialize app
 window.addEventListener('load', () => {
