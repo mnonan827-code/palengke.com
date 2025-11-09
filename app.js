@@ -1163,24 +1163,55 @@ function setupRealtimeListeners() {
     console.log('🎧 Setting up real-time listeners...');
 
     // ✅ PRODUCTS LISTENER
-    onValue(dbRefs.products, (snapshot) => {
-        console.log('📦 Products listener triggered');
-        if (snapshot.exists()) {
-            const productsData = snapshot.val();
-            window.APP_STATE.products = Object.values(productsData);
-            console.log('✅ Products updated:', window.APP_STATE.products.length);
-            
-            // Re-render if on shop view
-            if (window.APP_STATE.view === 'shop') {
-                renderMain();
-            }
-        } else {
-            console.log('⚠️ No products in database');
-            window.APP_STATE.products = [];
+    // PRODUCTS LISTENER - normalize data so the UI always has expected fields
+onValue(dbRefs.products, (snapshot) => {
+    console.log('📦 Products listener triggered');
+    if (snapshot.exists()) {
+        const productsData = snapshot.val();
+
+        // Convert keyed object -> array and normalize each product
+        window.APP_STATE.products = Object.keys(productsData).map((key) => {
+            const item = productsData[key] || {};
+
+            // Normalize id: prefer explicit item.id, otherwise use the DB key
+            const rawId = item.id !== undefined ? item.id : key;
+            const id = !isNaN(Number(rawId)) ? Number(rawId) : String(rawId);
+
+            return {
+                // core fields with defaults
+                id: id,
+                name: item.name || 'Unnamed product',
+                description: item.description || '',
+                price: Number(item.price) || 0,
+                quantity: Number(item.quantity) || 0,
+                unit: item.unit || 'pc',
+                origin: item.origin || '',
+                farmer: item.farmer || (item.farmerName ? { name: item.farmerName, contact: item.farmerContact || '' } : { name: '', contact: '' }),
+                imgUrl: item.imgUrl || `https://placehold.co/600x360/4ade80/000?text=${encodeURIComponent(item.name || 'Product')}`,
+                freshness: item.freshness || 80,
+                freshnessIndicator: item.freshnessIndicator || 'very-fresh',
+                preorder: !!item.preorder,
+                preorderDuration: item.preorderDuration || null,
+                preorderStart: item.preorderStart || null,
+                // include anything else (so we don't lose fields)
+                ...item
+            };
+        });
+
+        console.log('✅ Products updated (normalized):', window.APP_STATE.products.length);
+
+        // Re-render shop view if user is on the marketplace
+        if (window.APP_STATE.view === 'shop') {
+            renderMain();
         }
-    }, (error) => {
-        console.error('❌ Products listener error:', error);
-    });
+    } else {
+        console.log('⚠️ No products in database');
+        window.APP_STATE.products = [];
+    }
+}, (error) => {
+    console.error('❌ Products listener error:', error);
+});
+
 
     // ✅ ORDERS LISTENER
     onValue(dbRefs.orders, (snapshot) => {
@@ -2905,7 +2936,7 @@ window.adminSaveProduct = async function(editId = null) {
     const isPre = document.getElementById('p-preorder')?.checked;
     const dur = parseInt(document.getElementById('p-preorder-duration')?.value) || null;
     
-    if(editId){
+        if (editId) {
         const productUpdate = { 
             name, 
             description,
@@ -2918,7 +2949,7 @@ window.adminSaveProduct = async function(editId = null) {
             imgUrl: imgUrl,
             freshness: freshness,
         };
-        if(isPre){
+        if (isPre) {
             productUpdate.preorder = true;
             productUpdate.preorderDuration = Math.min(14, Math.max(7, (dur || 7)));
             productUpdate.preorderStart = Date.now();
@@ -2927,7 +2958,19 @@ window.adminSaveProduct = async function(editId = null) {
             delete productUpdate.preorderDuration;
             delete productUpdate.preorderStart;
         }
+
+        // Ensure defaults before updating
+        productUpdate.imgUrl = productUpdate.imgUrl || `https://placehold.co/600x360/4ade80/000?text=${encodeURIComponent(productUpdate.name || 'Product')}`;
+        productUpdate.freshness = productUpdate.freshness || 80;
+        productUpdate.freshnessIndicator = productUpdate.freshnessIndicator || 'very-fresh';
+
         await updateFirebase(`products/${editId}`, productUpdate);
+
+        console.log('✅ Product updated:', editId);
+        hideModal();
+        // re-render marketplace and admin UI
+        renderMain();
+
     } else {
         const newId = Date.now();
         const newProd = { 
@@ -2942,15 +2985,27 @@ window.adminSaveProduct = async function(editId = null) {
             farmer: { name: farmer, contact }, 
             imgUrl: imgUrl,
             freshness: freshness,
+            freshnessIndicator: freshnessIndicator || 'very-fresh'
         };
-        if(isPre){
+        if (isPre) {
             newProd.preorder = true;
             newProd.preorderDuration = Math.min(14, Math.max(7, (dur || 7)));
             newProd.preorderStart = Date.now();
         }
+
+        // Ensure defaults for new product
+        newProd.imgUrl = newProd.imgUrl || `https://placehold.co/600x360/4ade80/000?text=${encodeURIComponent(newProd.name || 'Product')}`;
+        newProd.freshness = newProd.freshness || 80;
+        newProd.freshnessIndicator = newProd.freshnessIndicator || 'very-fresh';
+
         await saveToFirebase(`products/${newId}`, newProd);
+
+        console.log('✅ New product created:', newId);
+        hideModal();
+
+        // re-render marketplace and admin UI (immediate)
+        renderMain();
     }
-    hideModal();
 };
 
 window.adminEditProduct = function(id) {
@@ -5685,66 +5740,6 @@ window.formatOrderId = function(orderId) {
         return 'O-' + orderId;
     }
     return orderId;
-};
-
-// ✅ NEW: Manual sync verification function
-window.verifyProductSync = async function() {
-    console.log('🔍 Starting product sync verification...');
-    
-    try {
-        // Get products from Firebase
-        const snapshot = await get(dbRefs.products);
-        const firebaseProducts = snapshot.exists() ? snapshot.val() : {};
-        const firebaseCount = Object.keys(firebaseProducts).length;
-        
-        // Get products from state
-        const stateCount = window.APP_STATE.products.length;
-        
-        console.log('📊 Firebase products:', firebaseCount);
-        console.log('📊 State products:', stateCount);
-        
-        if (firebaseCount !== stateCount) {
-            console.log('⚠️ MISMATCH DETECTED!');
-            console.log('🔧 Forcing sync...');
-            
-            // Force update state
-            window.APP_STATE.products = Object.keys(firebaseProducts).map(key => {
-                const product = firebaseProducts[key];
-                return {
-                    ...product,
-                    id: product.id || parseInt(key)
-                };
-            });
-            
-            // Re-render
-            await renderMain();
-            
-            console.log('✅ Sync completed. New count:', window.APP_STATE.products.length);
-        } else {
-            console.log('✅ Products are in sync!');
-        }
-        
-        // Log product details
-        console.log('📦 Firebase Products:');
-        Object.keys(firebaseProducts).forEach(key => {
-            console.log(`  - ${firebaseProducts[key].name} (ID: ${firebaseProducts[key].id})`);
-        });
-        
-        console.log('💾 State Products:');
-        window.APP_STATE.products.forEach(p => {
-            console.log(`  - ${p.name} (ID: ${p.id})`);
-        });
-        
-        return {
-            firebase: firebaseCount,
-            state: stateCount,
-            synced: firebaseCount === stateCount
-        };
-        
-    } catch (error) {
-        console.error('❌ Verification failed:', error);
-        return null;
-    }
 };
 
 console.log('validateAndPlaceOrder exists:', typeof window.validateAndPlaceOrder);
