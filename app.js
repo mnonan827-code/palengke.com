@@ -91,9 +91,8 @@ const dbRefs = {
     chats: ref(database, 'chats') // 🟢 ADD THIS LINE
 };
 
-
 // Helper to safely initialize Lucide icons
-window.safeIcogitnInit = function() {
+window.safeIconInit = function() {
     try {
         if (window.lucide && typeof lucide.createIcons === 'function') {
             lucide.createIcons();
@@ -3084,6 +3083,7 @@ window.adminViewOrder = async function(id) {
     // Get customer profile from order or from users database
     let profile = o.customerProfile || {};
     
+    // If not in order, fetch from users database
     if(!profile.idUrl && o.userId) {
         const userData = await getFromFirebase(`users/${o.userId}`);
         if(userData && userData.profile) {
@@ -3092,15 +3092,6 @@ window.adminViewOrder = async function(id) {
     }
 
     const items = o.items.map(it => `<li class="flex justify-between"><span>${it.quantity} × ${it.name} (${it.unit})</span><span>${formatPeso(it.price * it.quantity)}</span></li>`).join('');
-    
-    // Status badge color
-    const statusColor = 
-        o.status === 'Delivered' ? 'bg-green-100 text-green-800' :
-        o.status === 'Out for Delivery' ? 'bg-blue-100 text-blue-800' :
-        o.status === 'Ready to Deliver' ? 'bg-yellow-100 text-yellow-800' :
-        o.status === 'Attempt Delivery Failed' ? 'bg-red-100 text-red-800' :
-        o.status === 'Pre-Order Received' ? 'bg-orange-100 text-orange-800' :
-        'bg-gray-100 text-gray-800';
     
     showModal(`Order ${o.id}`, `
     <div class="grid gap-3">
@@ -3112,12 +3103,7 @@ window.adminViewOrder = async function(id) {
           <div><b>Contact:</b> ${o.contact}</div>
           <div><b>Address:</b> ${o.address}</div>
           <div><b>Date:</b> ${o.date}</div>
-          <div><b>Status:</b> <span class="badge ${statusColor} px-2 py-1 rounded">${o.status}</span></div>
-          ${o.status === 'Attempt Delivery Failed' ? `
-            <div class="mt-2 p-2 bg-red-50 border border-red-200 rounded text-xs text-red-700">
-              <b>⚠️ Delivery Failed:</b> Contact customer to reschedule delivery.
-            </div>
-          ` : ''}
+          <div><b>Status:</b> <span class="badge bg-gray-100 text-gray-800 px-2 py-1 rounded">${o.status}</span></div>
         </div>
       </div>
 
@@ -3143,15 +3129,15 @@ window.adminViewOrder = async function(id) {
               </div>
             ` : '<div class="text-xs text-gray-500 pt-2">No ID uploaded</div>'}
             ${!profile.verified && profile.idUrl ? `
-              <div class="pt-2 flex gap-2">
-                <button onclick="verifyCustomerProfile('${o.userId}')" class="px-3 py-1 bg-green-600 text-white rounded text-sm hover:bg-green-700">
-                  ✓ Verify Profile
-                </button>
-                <button onclick="denyCustomerProfile('${o.userId}')" class="px-3 py-1 bg-red-600 text-white rounded text-sm hover:bg-red-700">
-                  ✗ Deny Profile
-                </button>
-              </div>
-            ` : ''}
+  <div class="pt-2 flex gap-2">
+    <button onclick="verifyCustomerProfile('${o.userId}')" class="px-3 py-1 bg-green-600 text-white rounded text-sm hover:bg-green-700">
+      ✓ Verify Profile
+    </button>
+    <button onclick="denyCustomerProfile('${o.userId}')" class="px-3 py-1 bg-red-600 text-white rounded text-sm hover:bg-red-700">
+      ✗ Deny Profile
+    </button>
+  </div>
+` : ''}
           </div>
         </div>
       ` : `
@@ -3443,7 +3429,7 @@ window.adminEditOrder = function(id) {
     if(!window.APP_STATE.currentUser || window.APP_STATE.currentUser.role !== 'admin') return showModal('Forbidden', 'Admin access required.', `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
     const o = window.APP_STATE.orders.find(x=> x.id === id);
     if(!o) return;
-    const statuses = ['Preparing Order', 'Ready to Deliver', 'Out for Delivery', 'Delivered', 'Attempt Delivery Failed'];
+    const statuses = ['Preparing Order', 'Ready to Deliver', 'Out for Delivery', 'Delivered'];
     const options = statuses.map(s => `<option value="${s}" ${s === o.status ? 'selected' : ''}>${s}</option>`).join('');
     showModal(`Update ${o.id}`, `
     <div>
@@ -3561,18 +3547,6 @@ window.viewDeleteLogs = async function() {
 window.$ = function(sel){ return document.querySelector(sel); };
 window.$all = function(sel){ return Array.from(document.querySelectorAll(sel)); };
 window.formatPeso = function(n){ return '₱' + Number(n).toLocaleString('en-PH', {minimumFractionDigits:2, maximumFractionDigits:2}); };
-
-window.getStatusDescription = function(status) {
-    const descriptions = {
-        'Preparing Order': 'Your order is being prepared by the seller.',
-        'Ready to Deliver': 'Your order is ready and will be picked up by the delivery rider soon.',
-        'Out for Delivery': 'Your order is on the way to your address.',
-        'Delivered': 'Your order has been successfully delivered.',
-        'Attempt Delivery Failed': 'Delivery was attempted but failed. The rider will contact you for re-delivery.',
-        'Pre-Order Received': 'Your pre-order has been received and is being processed.'
-    };
-    return descriptions[status] || 'Order status updated.';
-};
 
 
 // ✅ RECOMMENDED: Generate uniform 8-digit numeric Order ID
@@ -4520,29 +4494,6 @@ setTimeout(() => {
     }
 };
 
-// âœ… Add event delegation for dynamically created buttons
-document.addEventListener('click', function(e) {
-    const target = e.target;
-    
-    // Handle Edit button clicks
-    if (target.matches('button[onclick*="adminEditProduct"]')) {
-        e.preventDefault();
-        const match = target.getAttribute('onclick').match(/adminEditProduct\((\d+)\)/);
-        if (match) {
-            window.adminEditProduct(parseInt(match[1]));
-        }
-    }
-    
-    // Handle Delete button clicks
-    if (target.matches('button[onclick*="adminDeleteProduct"]')) {
-        e.preventDefault();
-        const match = target.getAttribute('onclick').match(/adminDeleteProduct\((\d+)\)/);
-        if (match) {
-            window.adminDeleteProduct(parseInt(match[1]));
-        }
-    }
-});
-
 window.switchTo = function(v) {
     window.APP_STATE.view = v;
     closeMobileMenu();
@@ -4809,12 +4760,11 @@ window.renderAdminDashboard = async function() {
     const filteredPreorder = filterProducts(preorderList);
 
     // ✅ CORRECTED: Regular Products Table Rows
-// âœ… CORRECTED: Regular Products Table Rows
 const regularRows = filteredRegular.length > 0 ? filteredRegular.map(p => `
     <tr class="hover:bg-gray-50 border-b">
-        <td class="px-3 py-2 text-sm">${escapeHtml(p.name)}</td>
-        <td class="px-3 py-2 text-sm hidden sm:table-cell">${escapeHtml(p.origin)}</td>
-        <td class="px-3 py-2 text-sm hidden md:table-cell">${escapeHtml(p.farmer.name)}</td>
+        <td class="px-3 py-2 text-sm">${p.name}</td>
+        <td class="px-3 py-2 text-sm hidden sm:table-cell">${p.origin}</td>
+        <td class="px-3 py-2 text-sm hidden md:table-cell">${p.farmer.name}</td>
         <td class="px-3 py-2 text-sm font-semibold">${formatPeso(p.price)}</td>
         <td class="px-3 py-2 text-sm">${p.quantity} ${p.unit}</td>
         <td class="px-3 py-2 text-sm hidden lg:table-cell">
@@ -4822,21 +4772,21 @@ const regularRows = filteredRegular.length > 0 ? filteredRegular.map(p => `
         </td>
         <td class="px-3 py-2 text-sm text-right">
             <div class="flex flex-col sm:flex-row gap-1 justify-end">
-                <button type="button" onclick="window.adminEditProduct(${p.id})" class="px-2 py-1 text-xs bg-white border rounded hover:bg-gray-50 transition-colors">Edit</button>
-                <button type="button" onclick="window.adminDeleteProduct(${p.id})" class="px-2 py-1 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100 transition-colors">Delete</button>
+                <button onclick="adminEditProduct(${p.id})" class="px-2 py-1 text-xs bg-white border rounded hover:bg-gray-50">Edit</button>
+                <button onclick="adminDeleteProduct(${p.id})" class="px-2 py-1 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100">Delete</button>
             </div>
         </td>
     </tr>
 `).join('') : '<tr><td class="px-3 py-8 text-center text-gray-500 text-sm" colspan="7">No regular products</td></tr>';
+
 // ✅ CORRECTED: Pre-Order Products Table Rows
-// âœ… CORRECTED: Pre-Order Products Table Rows
 const preorderRows = filteredPreorder.length > 0 ? filteredPreorder.map(p => {
     const rem = computeRemainingDays(p);
     return `
         <tr class="hover:bg-gray-50 border-b">
-            <td class="px-3 py-2 text-sm">${escapeHtml(p.name)}</td>
-            <td class="px-3 py-2 text-sm hidden sm:table-cell">${escapeHtml(p.origin)}</td>
-            <td class="px-3 py-2 text-sm hidden md:table-cell">${escapeHtml(p.farmer.name)}</td>
+            <td class="px-3 py-2 text-sm">${p.name}</td>
+            <td class="px-3 py-2 text-sm hidden sm:table-cell">${p.origin}</td>
+            <td class="px-3 py-2 text-sm hidden md:table-cell">${p.farmer.name}</td>
             <td class="px-3 py-2 text-sm font-semibold">${formatPeso(p.price)}</td>
             <td class="px-3 py-2 text-sm">${p.quantity} ${p.unit}</td>
             <td class="px-3 py-2 text-sm hidden lg:table-cell">
@@ -4847,13 +4797,14 @@ const preorderRows = filteredPreorder.length > 0 ? filteredPreorder.map(p => {
             </td>
             <td class="px-3 py-2 text-sm text-right">
                 <div class="flex flex-col sm:flex-row gap-1 justify-end">
-                    <button type="button" onclick="window.adminEditProduct(${p.id})" class="px-2 py-1 text-xs bg-white border rounded hover:bg-gray-50 transition-colors">Edit</button>
-                    <button type="button" onclick="window.adminDeleteProduct(${p.id})" class="px-2 py-1 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100 transition-colors">Delete</button>
+                    <button onclick="adminEditProduct(${p.id})" class="px-2 py-1 text-xs bg-white border rounded hover:bg-gray-50">Edit</button>
+                    <button onclick="adminDeleteProduct(${p.id})" class="px-2 py-1 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100">Delete</button>
                 </div>
             </td>
         </tr>
     `;
 }).join('') : '<tr><td class="px-3 py-8 text-center text-gray-500 text-sm" colspan="8">No pre-order products</td></tr>';
+
     // ✅ FILTER ORDERS
     // ✅ FILTER ORDERS - Reset search state when rendering dashboard
 const regularOrders = window.APP_STATE.orders.filter(o => !o.type || o.type !== 'pre-order');
@@ -4864,29 +4815,28 @@ const filteredRegularOrders = regularOrders;
 const filteredPreorderOrders = preorderOrders;
 
     const regularOrderRows = filteredRegularOrders.map(o => `
-    <tr class="hover:bg-gray-50 border-b">
-        <td class="px-3 py-2 text-sm font-mono">${o.id}</td>
-        <td class="px-3 py-2 text-sm">${o.customer}</td>
-        <td class="px-3 py-2 text-sm font-semibold">${formatPeso(o.total)}</td>
-        <td class="px-3 py-2 text-sm">
-            <span class="inline-flex items-center px-2 py-1 rounded-full text-xs ${
-                o.status === 'Delivered' ? 'bg-green-100 text-green-800' :
-                o.status === 'Out for Delivery' ? 'bg-blue-100 text-blue-800' :
-                o.status === 'Ready to Deliver' ? 'bg-yellow-100 text-yellow-800' :
-                o.status === 'Attempt Delivery Failed' ? 'bg-red-100 text-red-800' :
-                'bg-gray-100 text-gray-800'
-            }">${o.status}</span>
-        </td>
-        <td class="px-3 py-2 text-sm hidden lg:table-cell">${o.date}</td>
-        <td class="px-3 py-2 text-sm text-right">
-            <div class="flex flex-col sm:flex-row gap-1 justify-end">
-                <button onclick="adminViewOrder('${o.id}')" class="px-2 py-1 text-xs bg-white border rounded hover:bg-gray-50">View</button>
-                <button onclick="adminEditOrder('${o.id}')" class="px-2 py-1 text-xs bg-lime-600 text-white rounded hover:bg-lime-700">Update</button>
-                <button onclick="adminDeleteOrder('${o.id}')" class="px-2 py-1 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100">Delete</button>
-            </div>
-        </td>
-    </tr>
-`).join('');
+        <tr class="hover:bg-gray-50 border-b">
+            <td class="px-3 py-2 text-sm font-mono">${o.id}</td>
+            <td class="px-3 py-2 text-sm">${o.customer}</td>
+            <td class="px-3 py-2 text-sm font-semibold">${formatPeso(o.total)}</td>
+            <td class="px-3 py-2 text-sm">
+                <span class="inline-flex items-center px-2 py-1 rounded-full text-xs ${
+                    o.status === 'Delivered' ? 'bg-green-100 text-green-800' :
+                    o.status === 'Out for Delivery' ? 'bg-blue-100 text-blue-800' :
+                    o.status === 'Ready to Deliver' ? 'bg-yellow-100 text-yellow-800' :
+                    'bg-gray-100 text-gray-800'
+                }">${o.status}</span>
+            </td>
+            <td class="px-3 py-2 text-sm hidden lg:table-cell">${o.date}</td>
+            <td class="px-3 py-2 text-sm text-right">
+                <div class="flex flex-col sm:flex-row gap-1 justify-end">
+                    <button onclick="adminViewOrder('${o.id}')" class="px-2 py-1 text-xs bg-white border rounded hover:bg-gray-50">View</button>
+                    <button onclick="adminEditOrder('${o.id}')" class="px-2 py-1 text-xs bg-lime-600 text-white rounded hover:bg-lime-700">Update</button>
+                    <button onclick="adminDeleteOrder('${o.id}')" class="px-2 py-1 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100">Delete</button>
+                </div>
+            </td>
+        </tr>
+    `).join('');
 
     const preorderOrderRows = filteredPreorderOrders.map(o => `
         <tr class="hover:bg-gray-50 border-b">
@@ -4895,12 +4845,11 @@ const filteredPreorderOrders = preorderOrders;
             <td class="px-3 py-2 text-sm font-semibold">${formatPeso(o.total)}</td>
             <td class="px-3 py-2 text-sm">
                 <span class="inline-flex items-center px-2 py-1 rounded-full text-xs ${
-    o.status === 'Delivered' ? 'bg-green-100 text-green-800' :
-    o.status === 'Out for Delivery' ? 'bg-blue-100 text-blue-800' :
-    o.status === 'Ready to Deliver' ? 'bg-yellow-100 text-yellow-800' :
-    o.status === 'Attempt Delivery Failed' ? 'bg-red-100 text-red-800' :
-    'bg-orange-100 text-orange-800'
-}">${o.status}</span>
+                    o.status === 'Delivered' ? 'bg-green-100 text-green-800' :
+                    o.status === 'Out for Delivery' ? 'bg-blue-100 text-blue-800' :
+                    o.status === 'Ready to Deliver' ? 'bg-yellow-100 text-yellow-800' :
+                    'bg-orange-100 text-orange-800'
+                }">${o.status}</span>
             </td>
             <td class="px-3 py-2 text-sm hidden lg:table-cell">${o.date}</td>
             <td class="px-3 py-2 text-sm text-right">
@@ -5127,20 +5076,6 @@ const filteredPreorderOrders = preorderOrders;
       </div>
     </section>
 `;
-
-};
-
-// HTML escape function to prevent XSS (if not already present)
-window.escapeHtml = function(text) {
-    if (!text) return '';
-    const map = {
-        '&': '&amp;',
-        '<': '&lt;',
-        '>': '&gt;',
-        '"': '&quot;',
-        "'": '&#039;'
-    };
-    return String(text).replace(/[&<>"']/g, m => map[m]);
 };
 
 // Initialize order search event listeners
