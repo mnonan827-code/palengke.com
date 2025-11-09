@@ -3,7 +3,6 @@
 const EMAIL_CONFIG = {
     serviceId: 'service_kmbhxwd',
     templateId: 'template_nmuqtvr',
-    resetTemplateId: 'template_4av8o1v',
     publicKey: 'W9t0FVxxE5r6HqbFN'
 };
 
