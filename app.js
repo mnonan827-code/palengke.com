@@ -356,13 +356,15 @@ async function initializeFirebaseData() {
         console.log('📦 Loading products...');
         const productsSnapshot = await get(dbRefs.products);
         if (productsSnapshot.exists()) {
-            const productsData = productsSnapshot.val();
-            window.APP_STATE.products = Object.values(productsData);
-            console.log('✅ Products loaded:', window.APP_STATE.products.length);
-        } else {
-            console.log('⚠️ No products found, seeding initial data...');
-            await seedInitialData();
-        }
+    const productsData = productsSnapshot.val();
+    window.APP_STATE.products = Object.values(productsData);
+    console.log('✅ Products loaded:', window.APP_STATE.products.length);
+} else {
+    console.log('⚠️ No products found in database.');
+    window.APP_STATE.products = []; // leave empty
+    // ❌ Do NOT seed initial data automatically anymore
+}
+
 
         // ✅ STEP 2: Load Orders
         console.log('📋 Loading orders...');
