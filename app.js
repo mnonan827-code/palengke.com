@@ -353,16 +353,25 @@ async function initializeFirebaseData() {
     
     try {
         // ✅ STEP 1: Load Products
-        console.log('📦 Loading products...');
-        const productsSnapshot = await get(dbRefs.products);
-        if (productsSnapshot.exists()) {
-            const productsData = productsSnapshot.val();
-            window.APP_STATE.products = Object.values(productsData);
-            console.log('✅ Products loaded:', window.APP_STATE.products.length);
-        } else {
-            console.log('⚠️ No products found, seeding initial data...');
-            await seedInitialData();
-        }
+        // ✅ STEP 1: Load Products
+console.log('📦 Loading products...');
+const productsSnapshot = await get(dbRefs.products);
+if (productsSnapshot.exists()) {
+    const productsData = productsSnapshot.val();
+    // Convert to array and ensure each product has proper structure
+    window.APP_STATE.products = Object.keys(productsData).map(key => {
+        const product = productsData[key];
+        return {
+            ...product,
+            id: product.id || parseInt(key) // Ensure ID is present
+        };
+    });
+    console.log('✅ Products loaded:', window.APP_STATE.products.length);
+    console.log('📊 Product IDs:', window.APP_STATE.products.map(p => p.id));
+} else {
+    console.log('⚠️ No products found, seeding initial data...');
+    await seedInitialData();
+}
 
         // ✅ STEP 2: Load Orders
         console.log('📋 Loading orders...');
@@ -1163,24 +1172,37 @@ function setupRealtimeListeners() {
     console.log('🎧 Setting up real-time listeners...');
 
     // ✅ PRODUCTS LISTENER
-    onValue(dbRefs.products, (snapshot) => {
-        console.log('📦 Products listener triggered');
-        if (snapshot.exists()) {
-            const productsData = snapshot.val();
-            window.APP_STATE.products = Object.values(productsData);
-            console.log('✅ Products updated:', window.APP_STATE.products.length);
-            
-            // Re-render if on shop view
-            if (window.APP_STATE.view === 'shop') {
-                renderMain();
-            }
-        } else {
-            console.log('⚠️ No products in database');
-            window.APP_STATE.products = [];
+    // ✅ PRODUCTS LISTENER
+onValue(dbRefs.products, (snapshot) => {
+    console.log('📦 Products listener triggered');
+    if (snapshot.exists()) {
+        const productsData = snapshot.val();
+        // Convert to array and ensure proper structure
+        window.APP_STATE.products = Object.keys(productsData).map(key => {
+            const product = productsData[key];
+            return {
+                ...product,
+                id: product.id || parseInt(key)
+            };
+        });
+        console.log('✅ Products updated:', window.APP_STATE.products.length);
+        console.log('📊 Updated Product IDs:', window.APP_STATE.products.map(p => p.id));
+        
+        // Re-render if on shop view
+        if (window.APP_STATE.view === 'shop') {
+            console.log('🔄 Re-rendering shop view');
+            renderMain();
         }
-    }, (error) => {
-        console.error('❌ Products listener error:', error);
-    });
+    } else {
+        console.log('⚠️ No products in database');
+        window.APP_STATE.products = [];
+        if (window.APP_STATE.view === 'shop') {
+            renderMain();
+        }
+    }
+}, (error) => {
+    console.error('❌ Products listener error:', error);
+});
 
     // ✅ ORDERS LISTENER
     onValue(dbRefs.orders, (snapshot) => {
@@ -5685,6 +5707,66 @@ window.formatOrderId = function(orderId) {
         return 'O-' + orderId;
     }
     return orderId;
+};
+
+// ✅ NEW: Manual sync verification function
+window.verifyProductSync = async function() {
+    console.log('🔍 Starting product sync verification...');
+    
+    try {
+        // Get products from Firebase
+        const snapshot = await get(dbRefs.products);
+        const firebaseProducts = snapshot.exists() ? snapshot.val() : {};
+        const firebaseCount = Object.keys(firebaseProducts).length;
+        
+        // Get products from state
+        const stateCount = window.APP_STATE.products.length;
+        
+        console.log('📊 Firebase products:', firebaseCount);
+        console.log('📊 State products:', stateCount);
+        
+        if (firebaseCount !== stateCount) {
+            console.log('⚠️ MISMATCH DETECTED!');
+            console.log('🔧 Forcing sync...');
+            
+            // Force update state
+            window.APP_STATE.products = Object.keys(firebaseProducts).map(key => {
+                const product = firebaseProducts[key];
+                return {
+                    ...product,
+                    id: product.id || parseInt(key)
+                };
+            });
+            
+            // Re-render
+            await renderMain();
+            
+            console.log('✅ Sync completed. New count:', window.APP_STATE.products.length);
+        } else {
+            console.log('✅ Products are in sync!');
+        }
+        
+        // Log product details
+        console.log('📦 Firebase Products:');
+        Object.keys(firebaseProducts).forEach(key => {
+            console.log(`  - ${firebaseProducts[key].name} (ID: ${firebaseProducts[key].id})`);
+        });
+        
+        console.log('💾 State Products:');
+        window.APP_STATE.products.forEach(p => {
+            console.log(`  - ${p.name} (ID: ${p.id})`);
+        });
+        
+        return {
+            firebase: firebaseCount,
+            state: stateCount,
+            synced: firebaseCount === stateCount
+        };
+        
+    } catch (error) {
+        console.error('❌ Verification failed:', error);
+        return null;
+    }
 };
 
 console.log('validateAndPlaceOrder exists:', typeof window.validateAndPlaceOrder);
