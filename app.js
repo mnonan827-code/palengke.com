@@ -1165,24 +1165,40 @@ function setupRealtimeListeners() {
     console.log('🎧 Setting up real-time listeners...');
 
     // ✅ PRODUCTS LISTENER
-    onValue(dbRefs.products, (snapshot) => {
-        console.log('📦 Products listener triggered');
-        if (snapshot.exists()) {
-            const productsData = snapshot.val();
-            window.APP_STATE.products = Object.values(productsData);
-            console.log('✅ Products updated:', window.APP_STATE.products.length);
-            
-            // Re-render if on shop view
-            if (window.APP_STATE.view === 'shop') {
-                renderMain();
-            }
-        } else {
-            console.log('⚠️ No products in database');
-            window.APP_STATE.products = [];
-        }
-    }, (error) => {
-        console.error('❌ Products listener error:', error);
-    });
+    // ✅ Real-time Products Listener (handles add, edit, delete, and full removal)
+onValue(dbRefs.products, (snapshot) => {
+    console.log("📦 Realtime update: products changed");
+
+    if (snapshot.exists()) {
+        const productsData = snapshot.val();
+
+        // Normalize & store
+        window.APP_STATE.products = Object.keys(productsData).map((id) => ({
+            id,
+            ...productsData[id],
+        }));
+
+        console.log(`✅ ${window.APP_STATE.products.length} products loaded`);
+    } else {
+        console.log("⚠️ No products in database — all deleted.");
+        window.APP_STATE.products = [];
+    }
+
+    // 🔁 Update both Admin and Marketplace UIs immediately
+    if (window.APP_STATE.view === "admin") {
+        if (typeof renderAdminProducts === "function") renderAdminProducts();
+    }
+    if (window.APP_STATE.view === "shop") {
+        renderMain();
+    }
+
+    // Always refresh product counts or search UI
+    window.updateSearchResultsCount(
+        window.APP_STATE.products.length,
+        window.APP_STATE.products.length
+    );
+});
+
 
     // ✅ ORDERS LISTENER
     onValue(dbRefs.orders, (snapshot) => {
@@ -3012,11 +3028,24 @@ window.adminEditProduct = function(id) {
          <button onclick="adminSaveProduct(${id})" class="px-4 py-2 bg-lime-600 text-white rounded">Save</button>`);
 };
 
-window.adminDeleteProduct = function(id) {
-    if(!window.APP_STATE.currentUser || window.APP_STATE.currentUser.role !== 'admin') return showModal('Forbidden', 'Admin access required.', `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
-    showModal('Confirm delete', `Are you sure you want to delete this product?`, `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">Cancel</button>
-    <button onclick="adminConfirmDelete(${id})" class="px-4 py-2 bg-red-600 text-white rounded">Delete</button>`);
+window.adminDeleteProduct = async function (id) {
+    const confirmDelete = confirm("Are you sure you want to delete this product?");
+    if (!confirmDelete) return;
+
+    try {
+        await remove(ref(database, `products/${id}`));
+        console.log(`🗑️ Product ${id} deleted`);
+
+        // No need to manually refresh — real-time listener updates automatically
+        showModal("Deleted", "Product deleted successfully.", 
+            `<button onclick="hideModal()" class="px-4 py-2 bg-lime-600 text-white rounded">OK</button>`);
+    } catch (error) {
+        console.error("❌ Error deleting product:", error);
+        showModal("Error", "Failed to delete product. Please try again.",
+            `<button onclick="hideModal()" class="px-4 py-2 bg-red-600 text-white rounded">OK</button>`);
+    }
 };
+
 
 window.adminConfirmDelete = async function(id) {
     const prodToDelete = window.APP_STATE.products.find(p => p.id === id);
