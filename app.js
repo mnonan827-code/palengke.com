@@ -93,7 +93,7 @@ const dbRefs = {
 
 
 // Helper to safely initialize Lucide icons
-window.safeIconInit = function() {
+window.safeIcogitnInit = function() {
     try {
         if (window.lucide && typeof lucide.createIcons === 'function') {
             lucide.createIcons();
