@@ -51,6 +51,11 @@ window.APP_STATE = {
     chats: [], // 🟢 ADD THIS LINE
 };
 
+let orderSearchValue = '';
+let orderSearchCursor = 0;
+let preorderSearchValue = '';
+let preorderSearchCursor = 0;
+
 const CART_TIMEOUT = 30 * 60 * 1000; // 30 minutes in milliseconds
 let cartActivityTimer = null;
 
@@ -83,20 +88,8 @@ const dbRefs = {
     carts: ref(database, 'carts'),
     notifications: ref(database, 'notifications'),
     deleteLogs: ref(database, 'deleteLogs'),
-    chats: ref(database, 'chats')
+    chats: ref(database, 'chats') // 🟢 ADD THIS LINE
 };
-
-// ✅ NEW: Debounced render to prevent blinking
-window.debouncedRender = (function() {
-    let timeout;
-    return function(callback) {
-        clearTimeout(timeout);
-        timeout = setTimeout(() => {
-            if (callback) callback();
-            renderMain();
-        }, 50);
-    };
-})();
 
 // Helper to safely initialize Lucide icons
 window.safeIconInit = function() {
@@ -123,25 +116,10 @@ window.debounce = function(func, wait) {
 };
 
 // Search functionality
-window.handleSearch = debounce(function(query) {
-    const trimmedQuery = query.toLowerCase().trim();
-    window.APP_STATE.searchQuery = trimmedQuery;
-    
-    // Update UI immediately without full re-render
-    const filteredProducts = filterProducts(window.APP_STATE.products);
-    updateSearchResultsCount(filteredProducts.length, window.APP_STATE.products.length);
-    
-    // Show/hide clear button
-    const clearBtn = document.getElementById('clear-search-btn');
-    if (clearBtn) {
-        clearBtn.classList.toggle('hidden', !trimmedQuery);
-    }
-    
-    // Only re-render if on shop view
-    if (window.APP_STATE.view === 'shop') {
-        renderMain();
-    }
-}, 300); // 300ms debounce
+window.handleSearch = function(query) {
+    window.APP_STATE.searchQuery = query.toLowerCase().trim();
+    renderMain();
+};
 
 window.clearSearch = function() {
     const searchInput = document.getElementById('search-input');
@@ -347,68 +325,44 @@ window.toggleMobileMenu = function() {
     const mobileMenu = document.getElementById('mobile-menu');
     const mobileMenuBtn = document.getElementById('mobile-menu-btn');
     
-    if (!mobileMenu || !mobileMenuBtn) return;
+    mobileMenu.classList.toggle('hidden');
+    mobileMenu.classList.toggle('active');
     
-    const isOpen = mobileMenu.classList.contains('active');
-    
-    if (isOpen) {
-        // Close menu
-        mobileMenu.classList.remove('active');
-        mobileMenu.classList.add('hidden');
-        document.body.classList.remove('mobile-menu-open');
-        
-        // Update icon
-        const icon = mobileMenuBtn.querySelector('i');
-        if (icon) {
-            icon.setAttribute('data-lucide', 'menu');
-        }
+    // Update icon
+    const icon = mobileMenuBtn.querySelector('i');
+    if (mobileMenu.classList.contains('hidden')) {
+        icon.setAttribute('data-lucide', 'menu');
     } else {
-        // Open menu
-        mobileMenu.classList.remove('hidden');
-        mobileMenu.classList.add('active');
-        document.body.classList.add('mobile-menu-open');
-        
-        // Update icon
-        const icon = mobileMenuBtn.querySelector('i');
-        if (icon) {
-            icon.setAttribute('data-lucide', 'x');
-        }
+        icon.setAttribute('data-lucide', 'x');
     }
-    
     lucide.createIcons();
 };
 
 window.closeMobileMenu = function() {
     const mobileMenu = document.getElementById("mobile-menu");
-    const mobileMenuBtn = document.getElementById('mobile-menu-btn');
-    
     if (mobileMenu) {
-        mobileMenu.classList.remove("active");
-        mobileMenu.classList.add("hidden");
-        document.body.classList.remove("mobile-menu-open");
-        
-        // Update icon
-        if (mobileMenuBtn) {
-            const icon = mobileMenuBtn.querySelector('i');
-            if (icon) {
-                icon.setAttribute('data-lucide', 'menu');
-                lucide.createIcons();
-            }
-        }
+      mobileMenu.setAttribute("aria-hidden", "true");
+      mobileMenu.classList.remove("active");
+      document.body.classList.remove("mobile-menu-open");
     }
-};
+  };
+  
 
 async function initializeFirebaseData() {
+    console.log('🚀 Initializing Firebase data...');
     
     try {
         // ✅ STEP 1: Load Products
+        console.log('📦 Loading products...');
         const productsSnapshot = await get(dbRefs.products);
         if (productsSnapshot.exists()) {
     const productsData = productsSnapshot.val();
     window.APP_STATE.products = Object.values(productsData);
+    console.log('✅ Products loaded:', window.APP_STATE.products.length);
 } else {
     console.log('⚠️ No products found in database.');
-    window.APP_STATE.products = [];
+    window.APP_STATE.products = []; // leave empty
+    // ❌ Do NOT seed initial data automatically anymore
 }
 
 
@@ -482,6 +436,22 @@ async function initializeFirebaseData() {
             stack: error.stack
         });
     }
+}
+
+async function seedInitialData() {
+    const initialProducts = [
+        { id: 1, name: "Fresh Tilapia", origin: "San Juan Fish Farm", farmer: { name: "Mang Jose", contact: "0917-234-5678" }, price: 150.00, quantity: 50, unit: 'kg', freshness: 95, freshnessIndicator: 'farm-fresh', imgUrl: 'https://placehold.co/600x360/4ade80/000?text=Tilapia' },
+        { id: 2, name: "Native Chicken Eggs", origin: "Brgy. San Andres Poultry", farmer: { name: "Aling Nena", contact: "0998-765-4321" }, price: 8.00, quantity: 200, unit: 'pc', freshness: 92, freshnessIndicator: 'farm-fresh', imgUrl: 'https://placehold.co/600x360/84cc16/000?text=Eggs' },
+        { id: 3, name: "Organic Lettuce", origin: "Sta. Lucia Hydroponics", farmer: { name: "Mr. Dela Cruz", contact: "0920-111-2222" }, price: 65.00, quantity: 30, unit: 'head', freshness: 88, freshnessIndicator: 'very-fresh', imgUrl: 'https://placehold.co/600x360/4ade80/000?text=Lettuce' },
+        { id: 4, name: "Ripe Bananas (Lakatan)", origin: "Cainta Farm Cooperative", farmer: { name: "Ate Sol", contact: "0905-333-4444" }, price: 50.00, quantity: 80, unit: 'kg', freshness: 85, freshnessIndicator: 'very-fresh', imgUrl: 'https://placehold.co/600x360/84cc16/000?text=Bananas' },
+    ];
+
+    for (const product of initialProducts) {
+        await saveToFirebase(`products/${product.id}`, product);
+    }
+    window.APP_STATE.products = initialProducts;
+
+    await createDefaultAdmin();
 }
 
 async function createDefaultAdmin() {
@@ -814,7 +784,7 @@ window.renderCustomerChatWindow = function() {
     }
 
 const messagesHtml = messages.map(msg => {
-    // System messages
+    // ✅ NEW: Handle system messages
     if (msg.isSystemMessage) {
         return `
             <div class="text-center my-3">
@@ -836,22 +806,17 @@ const messagesHtml = messages.map(msg => {
     
     const nameText = isCustomer ? senderName : (isAutoResponse ? 'Admin (Auto) 🤖' : 'Admin');
     
-    // Process message text - preserve line breaks properly
-    let formattedText;
-    if (isAutoResponse) {
-        formattedText = `<pre class="chat-message-text" style="font-family: inherit; white-space: pre-wrap; margin: 0; padding: 0;">${escapeHtml(msg.text)}</pre>`;
-    } else {
-        // Replace newlines with <br> tags
-        const textWithBreaks = escapeHtml(msg.text).replace(/\n/g, '<br>');
-        formattedText = `<div class="chat-message-text">${textWithBreaks}</div>`;
-    }
+    // ✅ FIXED: Proper line break handling for all messages
+    const formattedText = isAutoResponse 
+        ? `<pre class="chat-message-text">${escapeHtml(msg.text)}</pre>`
+        : `<div class="chat-message-text">${escapeHtml(msg.text).replace(/\n/g, '<br>')}</div>`;
     
     return `
-        <div class="chat-message-item flex flex-col ${isCustomer ? 'items-end' : 'items-start'} mb-3">
+        <div class="chat-message-item ${isCustomer ? 'items-end' : 'items-start'} mb-3">
             <div class="text-xs ${isAutoResponse ? 'text-blue-600 font-semibold' : 'text-gray-500'} mb-1">
                 ${nameText} - ${new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </div>
-            <div class="${msgClass} max-w-xs p-3 rounded-xl shadow-sm">
+            <div class="${msgClass} chat-message-bubble">
                 ${formattedText}
             </div>
         </div>
@@ -1200,41 +1165,24 @@ function setupRealtimeListeners() {
     console.log('🎧 Setting up real-time listeners...');
 
     // ✅ PRODUCTS LISTENER
-    // ✅ PRODUCTS LISTENER
-// ✅ PRODUCTS LISTENER - IMPROVED
-onValue(dbRefs.products, (snapshot) => {
-    console.log('📦 Products listener triggered');
-    
-    const oldProducts = window.APP_STATE.products;
-    
-    if (snapshot.exists()) {
-        const productsData = snapshot.val();
-        window.APP_STATE.products = Object.values(productsData);
-        console.log('✅ Products updated:', window.APP_STATE.products.length);
-        
-        // Check if products actually changed
-        const hasChanged = JSON.stringify(oldProducts) !== JSON.stringify(window.APP_STATE.products);
-        
-        if (hasChanged) {
-            // Re-render if on shop view OR admin dashboard
+    onValue(dbRefs.products, (snapshot) => {
+        console.log('📦 Products listener triggered');
+        if (snapshot.exists()) {
+            const productsData = snapshot.val();
+            window.APP_STATE.products = Object.values(productsData);
+            console.log('✅ Products updated:', window.APP_STATE.products.length);
+            
+            // Re-render if on shop view
             if (window.APP_STATE.view === 'shop') {
                 renderMain();
-            } else if (window.APP_STATE.view === 'admin' && window.APP_STATE.currentUser?.role === 'admin') {
-                renderMain();
             }
+        } else {
+            console.log('⚠️ No products in database');
+            window.APP_STATE.products = [];
         }
-    } else {
-        console.log('⚠️ No products in database');
-        window.APP_STATE.products = [];
-        
-        if (window.APP_STATE.view === 'shop' || 
-            (window.APP_STATE.view === 'admin' && window.APP_STATE.currentUser?.role === 'admin')) {
-            renderMain();
-        }
-    }
-}, (error) => {
-    console.error('❌ Products listener error:', error);
-});
+    }, (error) => {
+        console.error('❌ Products listener error:', error);
+    });
 
     // ✅ ORDERS LISTENER
     onValue(dbRefs.orders, (snapshot) => {
@@ -2940,6 +2888,7 @@ window.adminSaveProduct = async function(editId = null) {
 
     let imgUrl = '';
     
+    // Handle image upload
     if (fileInput.files.length > 0) {
         try {
             console.log('Starting Cloudinary upload with file:', fileInput.files[0]);
@@ -2981,11 +2930,6 @@ window.adminSaveProduct = async function(editId = null) {
             delete productUpdate.preorderStart;
         }
         await updateFirebase(`products/${editId}`, productUpdate);
-        
-        // ✅ NEW: Show success message and close modal
-        hideModal();
-        showModal('✅ Product Updated', 'Product has been updated successfully.', 
-            `<button onclick="hideModal()" class="px-4 py-2 bg-lime-600 text-white rounded">OK</button>`);
     } else {
         const newId = Date.now();
         const newProd = { 
@@ -3007,12 +2951,8 @@ window.adminSaveProduct = async function(editId = null) {
             newProd.preorderStart = Date.now();
         }
         await saveToFirebase(`products/${newId}`, newProd);
-        
-        // ✅ NEW: Show success message and close modal
-        hideModal();
-        showModal('✅ Product Added', 'New product has been added successfully.', 
-            `<button onclick="hideModal()" class="px-4 py-2 bg-lime-600 text-white rounded">OK</button>`);
     }
+    hideModal();
 };
 
 window.adminEditProduct = function(id) {
@@ -3079,40 +3019,22 @@ window.adminDeleteProduct = function(id) {
 };
 
 window.adminConfirmDelete = async function(id) {
-    try {
-        const prodToDelete = window.APP_STATE.products.find(p => p.id === id);
-        
-        // ✅ Save to deletion logs
-        const deleteLogs = await getFromFirebase('deleteLogs') || {};
-        const logId = 'DEL-' + uid();
-        
-        deleteLogs[logId] = {
-            id: logId,
-            itemType: 'product',
-            itemId: id,
-            deletedBy: window.APP_STATE.currentUser ? window.APP_STATE.currentUser.email : 'unknown',
-            date: new Date().toLocaleString(),
-            snapshot: prodToDelete || null
-        };
-        
-        await saveToFirebase('deleteLogs', deleteLogs);
-        
-        // ✅ Delete the product
-        await remove(ref(database, `products/${id}`));
-        
-        // ✅ Close modal and show success
-        hideModal();
-        showModal('✅ Product Deleted', 'Product has been deleted successfully.', 
-            `<button onclick="hideModal()" class="px-4 py-2 bg-lime-600 text-white rounded">OK</button>`);
-        
-        // ✅ REMOVED: Don't manually update APP_STATE or call renderMain() - let the listener handle it
-        
-    } catch (error) {
-        console.error('❌ Error deleting product:', error);
-        hideModal();
-        showModal('Error', 'Failed to delete product. Please try again.', 
-            `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
-    }
+    const prodToDelete = window.APP_STATE.products.find(p => p.id === id);
+    const deleteLogs = await getFromFirebase('deleteLogs') || {};
+    const logId = 'DEL-' + uid();
+    
+    deleteLogs[logId] = {
+        id: logId,
+        itemType: 'product',
+        itemId: id,
+        deletedBy: window.APP_STATE.currentUser ? window.APP_STATE.currentUser.email : 'unknown',
+        date: new Date().toLocaleString(),
+        snapshot: prodToDelete || null
+    };
+    
+    await saveToFirebase('deleteLogs', deleteLogs);
+    await remove(ref(database, `products/${id}`));
+    hideModal();
 };
 
 // Add this new function to verify database sync
@@ -4120,22 +4042,24 @@ window.updateAuthArea = function() {
     window.updateChatVisibility();
 };
 
+// Initialize user dropdown functionality
 function initUserDropdown() {
     const btn = document.getElementById('user-menu-btn');
     const menu = document.getElementById('user-menu');
+    const wrapper = document.querySelector('.user-menu-wrapper');
     
-    if (!btn || !menu) {
-        console.log('⚠️ Dropdown elements not found');
+    if (!btn || !menu || !wrapper) {
+        console.log('Dropdown elements not found');
         return;
     }
 
-    console.log('🔧 Initializing user dropdown...');
+    console.log('Initializing user dropdown...');
 
-    // Remove existing listeners by cloning
+    // Remove any existing listeners by cloning
     const newBtn = btn.cloneNode(true);
     btn.parentNode.replaceChild(newBtn, btn);
 
-    // Get/create overlay
+    // Create or get overlay
     let overlay = document.getElementById('user-menu-overlay');
     if (!overlay) {
         overlay = document.createElement('div');
@@ -4144,71 +4068,162 @@ function initUserDropdown() {
         document.body.appendChild(overlay);
     }
 
-    // Toggle on button click
+    // Toggle dropdown on button click
     newBtn.addEventListener('click', function(e) {
         e.preventDefault();
         e.stopPropagation();
-        
-        const isOpen = menu.classList.contains('show');
-        
-        if (isOpen) {
-            closeUserMenuInternal();
-        } else {
-            openUserMenuInternal();
-        }
+        console.log('User menu button clicked');
+        toggleUserMenu();
     });
 
     // Close on overlay click
     overlay.addEventListener('click', function(e) {
         e.preventDefault();
         e.stopPropagation();
-        closeUserMenuInternal();
+        closeUserMenu();
     });
 
-    // Close when clicking outside (for desktop)
+    // Close when clicking outside
     document.addEventListener('click', function(e) {
-        if (!newBtn.contains(e.target) && 
-            !menu.contains(e.target) && 
-            menu.classList.contains('show')) {
-            closeUserMenuInternal();
+        if (!wrapper.contains(e.target) && menu.classList.contains('show')) {
+            closeUserMenu();
         }
     });
 
-    // Prevent clicks inside menu from closing it
+    // Prevent closing when clicking inside menu
     menu.addEventListener('click', function(e) {
         e.stopPropagation();
     });
 
-    function openUserMenuInternal() {
-        menu.classList.add('show');
-        newBtn.classList.add('active');
-        if (window.innerWidth <= 768) {
-            overlay.classList.add('show');
-            document.body.style.overflow = 'hidden';
-        }
-    }
+    console.log('User dropdown initialized successfully');
+}
 
-    function closeUserMenuInternal() {
-        menu.classList.remove('show');
-        newBtn.classList.remove('active');
+// Toggle user menu
+function toggleUserMenu() {
+    const menu = document.getElementById('user-menu');
+    const overlay = document.getElementById('user-menu-overlay');
+    const icon = document.querySelector('.dropdown-icon');
+    
+    if (!menu) return;
+
+    const isOpen = menu.classList.contains('show');
+    
+    if (isOpen) {
+        closeUserMenu();
+    } else {
+        openUserMenu();
+    }
+}
+
+// Open user menu
+function openUserMenu() {
+    const menu = document.getElementById('user-menu');
+    const overlay = document.getElementById('user-menu-overlay');
+    const icon = document.querySelector('.dropdown-icon');
+    
+    if (!menu) return;
+    
+    console.log('Opening user menu');
+    menu.classList.add('show');
+    
+    if (icon) {
+        icon.style.transform = 'rotate(180deg)';
+    }
+    
+    // Show overlay on mobile
+    if (window.innerWidth <= 768 && overlay) {
+        overlay.classList.add('show');
+        document.body.style.overflow = 'hidden';
+    }
+}
+
+// Close user menu
+function closeUserMenu() {
+    const menu = document.getElementById('user-menu');
+    const overlay = document.getElementById('user-menu-overlay');
+    const icon = document.querySelector('.dropdown-icon');
+    
+    if (!menu) return;
+    
+    console.log('Closing user menu');
+    menu.classList.remove('show');
+    
+    if (icon) {
+        icon.style.transform = 'rotate(0deg)';
+    }
+    
+    if (overlay) {
         overlay.classList.remove('show');
         document.body.style.overflow = '';
     }
-
-    console.log('✅ User dropdown initialized');
 }
 
-// Update the global closeUserMenu function
-window.closeUserMenu = function() {
-    const menu = document.getElementById('user-menu');
-    const btn = document.getElementById('user-menu-btn');
-    const overlay = document.getElementById('user-menu-overlay');
+// Make closeUserMenu globally available
+window.closeUserMenu = closeUserMenu;
+
+// Setup user menu event listeners
+function setupUserMenuListeners() {
+    const userMenu = document.getElementById('user-menu');
+    const userMenuBtn = document.getElementById('user-menu-btn');
+    const userMenuContainer = document.querySelector('.user-menu-container');
     
-    if (menu) menu.classList.remove('show');
-    if (btn) btn.classList.remove('active');
-    if (overlay) overlay.classList.remove('show');
-    document.body.style.overflow = '';
-};
+    if (!userMenu || !userMenuBtn) return;
+
+    // Create overlay if it doesn't exist
+    let userMenuOverlay = document.getElementById('user-menu-overlay');
+    if (!userMenuOverlay) {
+        userMenuOverlay = document.createElement('div');
+        userMenuOverlay.id = 'user-menu-overlay';
+        userMenuOverlay.className = 'user-menu-overlay';
+        document.body.appendChild(userMenuOverlay);
+    }
+
+    // Toggle user menu on button click
+    userMenuBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        const isOpen = !userMenu.classList.contains('hidden');
+        
+        if (isOpen) {
+            hideUserMenu();
+        } else {
+            showUserMenu();
+        }
+    });
+
+    // Close when clicking overlay
+    userMenuOverlay.addEventListener('click', function() {
+        hideUserMenu();
+    });
+
+    // Close when clicking outside
+    document.addEventListener('click', function(e) {
+        if (!userMenuContainer.contains(e.target)) {
+            hideUserMenu();
+        }
+    });
+
+    // Prevent menu from closing when clicking inside it
+    userMenu.addEventListener('click', function(e) {
+        e.stopPropagation();
+    });
+}
+
+// Show user menu
+function showUserMenu() {
+    const userMenu = document.getElementById('user-menu');
+    const userMenuOverlay = document.getElementById('user-menu-overlay');
+    
+    if (userMenu) {
+        userMenu.classList.remove('hidden');
+        userMenu.classList.add('active');
+    }
+    
+    // Only show overlay on mobile
+    if (window.innerWidth <= 768 && userMenuOverlay) {
+        userMenuOverlay.classList.add('active');
+        document.body.classList.add('user-menu-open');
+    }
+}
 
 window.openAuth = function(mode = 'login') {
     if(mode === 'login') {
@@ -4242,18 +4257,14 @@ window.openAuth = function(mode = 'login') {
 window.exitAdmin = function() {
     window.APP_STATE.view = 'shop';
     closeUserMenu();
-    
-    // ✅ Use debounced render
-    debouncedRender();
+    renderMain();
 };
 
 window.goAdmin = function() {
     window.APP_STATE.view = 'admin';
     window.APP_STATE.adminView = 'dashboard';
     closeUserMenu();
-    
-    // ✅ Use debounced render
-    debouncedRender();
+    renderMain();
 };
 
 window.hideUserMenu = function() {
@@ -4278,11 +4289,9 @@ window.toggleCartDrawer = function(show) {
         return;
     }
     
-    // ✅ Prevent re-render, just toggle visibility
     if (typeof show === 'boolean') {
         if (show) {
             drawer.classList.remove('hidden');
-            renderCartDrawer(); // Only render cart content
             console.log('🛒 Cart drawer opened');
         } else {
             drawer.classList.add('hidden');
@@ -4290,13 +4299,13 @@ window.toggleCartDrawer = function(show) {
         }
     } else {
         drawer.classList.toggle('hidden');
-        if (!drawer.classList.contains('hidden')) {
-            renderCartDrawer(); // Only render cart content
-        }
         console.log('🔄 Cart drawer toggled');
     }
     
-    // ✅ DON'T call renderMain() here - it causes blinking
+    // Only render if opening
+    if (!drawer.classList.contains('hidden')) {
+        renderCartDrawer();
+    }
 };
 
 window.updateCartBadge = function() {
@@ -4422,26 +4431,6 @@ window.updatePreorderStatuses = function() {
 };
 
 window.renderMain = async function() {
-
-    const lastRenderState = window._lastRenderState || {};
-    const currentState = {
-        view: window.APP_STATE.view,
-        adminView: window.APP_STATE.adminView,
-        productsLength: window.APP_STATE.products.length,
-        ordersLength: window.APP_STATE.orders.length,
-        searchQuery: window.APP_STATE.searchQuery
-    };
-    
-    // Check if state actually changed
-    const stateChanged = JSON.stringify(lastRenderState) !== JSON.stringify(currentState);
-    
-    if (!stateChanged && window._lastRenderTime && (Date.now() - window._lastRenderTime) < 100) {
-        console.log('⏭️ Skipping redundant render');
-        return;
-    }
-    
-    window._lastRenderState = currentState;
-    window._lastRenderTime = Date.now();
     
     const main = document.getElementById('main-content');
 
@@ -4535,9 +4524,7 @@ setTimeout(() => {
 window.switchTo = function(v) {
     window.APP_STATE.view = v;
     closeMobileMenu();
-    
-    // ✅ Use debounced render
-    debouncedRender();
+    renderMain();
 };
 
 window.renderShop = function() {
@@ -4553,31 +4540,12 @@ window.renderShop = function() {
         const rem = isPre ? computeRemainingDays(p) : null;
         const preorderBadge = isPre ? `<div class="badge bg-yellow-100 text-yellow-700">🟡 Pre-Order • ${rem>0? rem + ' days left' : 'Ending'}</div>` : '';
         
-        // ✅ UPDATED: Better freshness indicator logic
-        const getFreshnessIndicator = (freshness) => {
-            if (!freshness) return 'fresh';
-            if (freshness >= 90) return 'farm-fresh';
-            if (freshness >= 70) return 'very-fresh';
-            if (freshness >= 50) return 'fresh';
-            if (freshness >= 30) return 'good';
-            return 'fair';
-        };
+        const freshnessBadge = p.freshness && p.freshnessIndicator ? 
+            `<div class="freshness-badge freshness-${p.freshnessIndicator}">${getFreshnessEmoji(p.freshnessIndicator)} ${p.freshness}% Fresh</div>` : '';
         
-        // ✅ Set freshness indicator if not already set
-        if (p.freshness && !p.freshnessIndicator) {
-            p.freshnessIndicator = getFreshnessIndicator(p.freshness);
-        }
-        
-        // ✅ UPDATED: Show freshness badge even if only freshness value exists
-        const freshnessBadge = p.freshness ? 
-            `<div class="freshness-badge freshness-${p.freshnessIndicator || getFreshnessIndicator(p.freshness)}">
-                ${getFreshnessEmoji(p.freshnessIndicator || getFreshnessIndicator(p.freshness))} ${p.freshness}% Fresh
-            </div>` : '';
-        
-        // ✅ UPDATED: Show freshness meter
         const freshnessMeter = p.freshness ? 
             `<div class="freshness-meter mt-2">
-                <div class="freshness-meter-fill level-${p.freshnessIndicator || getFreshnessIndicator(p.freshness)}" style="width: ${p.freshness}%"></div>
+                <div class="freshness-meter-fill level-${p.freshnessIndicator || 'fresh'}" style="width: ${p.freshness}%"></div>
             </div>` : '';
 
         const isAdminViewing = window.APP_STATE.currentUser && window.APP_STATE.currentUser.role === 'admin';
@@ -4593,14 +4561,14 @@ window.renderShop = function() {
                 <div class="h-40 w-full rounded-md overflow-hidden bg-gray-50 relative">
                   <img src="${p.imgUrl}" alt="${p.name}" class="w-full h-full object-cover">
                   <div class="absolute top-3 left-3 flex flex-col gap-1">${preorderBadge}${freshnessBadge}</div>
-                </div>
+                  </div>
                 <div class="mt-3 flex-1">
                   <div class="flex items-start justify-between gap-3">
                       <div>
                         <h3 class="font-semibold text-lg text-gray-800">${p.name}</h3>
                         <div class="text-sm text-gray-500">${p.origin} • <span class="font-medium">${p.farmer.name}</span></div>
                       </div>
-                      <div class="text-right">
+                       <div class="text-right">
                         <div class="text-lime-700 font-extrabold text-lg">${formatPeso(p.price)}</div>
                         <div class="text-xs text-gray-500 text-right">${p.unit}</div>
                       </div>
@@ -4645,34 +4613,16 @@ window.showProduct = function(id) {
     const rem = isPre ? computeRemainingDays(p) : null;
     const preorderBadge = isPre ? `<div class="badge bg-yellow-100 text-yellow-700 mb-2">🟡 Pre-Order • ${rem>0 ? rem + ' days left' : 'Ending'}</div>` : '';
     
-    // ✅ UPDATED: Better freshness indicator logic
-    const getFreshnessIndicator = (freshness) => {
-        if (!freshness) return 'fresh';
-        if (freshness >= 90) return 'farm-fresh';
-        if (freshness >= 70) return 'very-fresh';
-        if (freshness >= 50) return 'fresh';
-        if (freshness >= 30) return 'good';
-        return 'fair';
-    };
-    
-    // ✅ Set freshness indicator if not already set
-    if (p.freshness && !p.freshnessIndicator) {
-        p.freshnessIndicator = getFreshnessIndicator(p.freshness);
-    }
-    
-    // ✅ UPDATED: Freshness display with better fallback
-    const freshnessBadge = p.freshness ? 
-        `<div class="freshness-badge freshness-${p.freshnessIndicator || getFreshnessIndicator(p.freshness)} mb-2">
-            ${getFreshnessEmoji(p.freshnessIndicator || getFreshnessIndicator(p.freshness))} ${p.freshness}% Fresh
-        </div>` : '';
+    // Freshness display
+    const freshnessBadge = p.freshness && p.freshnessIndicator ? 
+        `<div class="freshness-badge freshness-${p.freshnessIndicator} mb-2">${getFreshnessEmoji(p.freshnessIndicator)} ${p.freshness}% Fresh</div>` : '';
     
     const freshnessMeter = p.freshness ? 
         `<div class="mb-3">
             <div class="text-sm text-gray-600 mb-1">Freshness Level</div>
             <div class="freshness-meter">
-                <div class="freshness-meter-fill level-${p.freshnessIndicator || getFreshnessIndicator(p.freshness)}" style="width: ${p.freshness}%"></div>
+                <div class="freshness-meter-fill level-${p.freshnessIndicator || 'fresh'}" style="width: ${p.freshness}%"></div>
             </div>
-            <div class="text-xs text-gray-500 mt-1">${p.freshness}% - ${(p.freshnessIndicator || getFreshnessIndicator(p.freshness)).replace('-', ' ').toUpperCase()}</div>
         </div>` : '';
     
     const isAdminViewing = window.APP_STATE.currentUser && window.APP_STATE.currentUser.role === 'admin';
@@ -5157,35 +5107,59 @@ const filteredPreorderOrders = preorderOrders;
 `;
 };
 
+// Initialize order search event listeners
 window.initializeOrderSearchListeners = function() {
     console.log('🔍 Initializing order search listeners...');
     
     // ===== REGULAR ORDERS SEARCH =====
     const orderSearchInput = document.getElementById('order-search-input');
+    const orderClearBtn = document.getElementById('clear-order-search-btn');
+    const orderClearButton = document.getElementById('clear-order-search-button');
     
     if (orderSearchInput) {
         console.log('✅ Found order search input');
         
-        // Remove existing listeners by cloning
+        // Remove existing listeners
         const newOrderInput = orderSearchInput.cloneNode(true);
         orderSearchInput.parentNode.replaceChild(newOrderInput, orderSearchInput);
         
-        // Set initial value to empty
+        // Set to empty initially
         newOrderInput.value = '';
         
-        // Debounced input handler
-        const debouncedOrderSearch = debounce(function(query) {
-            handleOrderSearch(query, 'regular');
-        }, 300);
-        
+        // Add input listener
         newOrderInput.addEventListener('input', function(e) {
-            debouncedOrderSearch(e.target.value);
+            const query = e.target.value;
+            orderSearchValue = query;
+            orderSearchCursor = e.target.selectionStart;
+            handleOrderSearch(query, 'regular');
         });
         
-        // Prevent form submission
+        // Prevent Enter key
         newOrderInput.addEventListener('keydown', function(e) {
             if (e.key === 'Enter') e.preventDefault();
         });
+        
+        // Clear button (X icon)
+        if (orderClearBtn) {
+            const newOrderClearBtn = orderClearBtn.cloneNode(true);
+            orderClearBtn.parentNode.replaceChild(newOrderClearBtn, orderClearBtn);
+            
+            newOrderClearBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                clearOrderSearch('regular');
+            });
+        }
+        
+        // Clear button (outside)
+        if (orderClearButton) {
+            const newOrderClearButton = orderClearButton.cloneNode(true);
+            orderClearButton.parentNode.replaceChild(newOrderClearButton, orderClearButton);
+            
+            newOrderClearButton.addEventListener('click', function(e) {
+                e.preventDefault();
+                clearOrderSearch('regular');
+            });
+        }
         
         // Initialize counts
         const regularOrders = window.APP_STATE.orders.filter(o => !o.type || o.type !== 'pre-order');
@@ -5194,37 +5168,59 @@ window.initializeOrderSearchListeners = function() {
     
     // ===== PRE-ORDER ORDERS SEARCH =====
     const preorderSearchInput = document.getElementById('preorder-search-input');
+    const preorderClearBtn = document.getElementById('clear-preorder-search-btn');
+    const preorderClearButton = document.getElementById('clear-preorder-search-button');
     
     if (preorderSearchInput) {
         console.log('✅ Found preorder search input');
         
-        // Remove existing listeners by cloning
+        // Remove existing listeners
         const newPreorderInput = preorderSearchInput.cloneNode(true);
         preorderSearchInput.parentNode.replaceChild(newPreorderInput, preorderSearchInput);
         
-        // Set initial value to empty
+        // Set to empty initially
         newPreorderInput.value = '';
         
-        // Debounced input handler
-        const debouncedPreorderSearch = debounce(function(query) {
-            handleOrderSearch(query, 'preorder');
-        }, 300);
-        
+        // Add input listener
         newPreorderInput.addEventListener('input', function(e) {
-            debouncedPreorderSearch(e.target.value);
+            const query = e.target.value;
+            preorderSearchValue = query;
+            preorderSearchCursor = e.target.selectionStart;
+            handleOrderSearch(query, 'preorder');
         });
         
-        // Prevent form submission
+        // Prevent Enter key
         newPreorderInput.addEventListener('keydown', function(e) {
             if (e.key === 'Enter') e.preventDefault();
         });
+        
+        // Clear button (X icon)
+        if (preorderClearBtn) {
+            const newPreorderClearBtn = preorderClearBtn.cloneNode(true);
+            preorderClearBtn.parentNode.replaceChild(newPreorderClearBtn, preorderClearBtn);
+            
+            newPreorderClearBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                clearOrderSearch('preorder');
+            });
+        }
+        
+        // Clear button (outside)
+        if (preorderClearButton) {
+            const newPreorderClearButton = preorderClearButton.cloneNode(true);
+            preorderClearButton.parentNode.replaceChild(newPreorderClearButton, preorderClearButton);
+            
+            newPreorderClearButton.addEventListener('click', function(e) {
+                e.preventDefault();
+                clearOrderSearch('preorder');
+            });
+        }
         
         // Initialize counts
         const preorderOrders = window.APP_STATE.orders.filter(o => o.type === 'pre-order');
         updateOrderSearchResultsCount(preorderOrders.length, preorderOrders.length, 'preorder');
     }
     
-    // Initialize Lucide icons
     setTimeout(() => icons(), 50);
 };
 
@@ -5494,40 +5490,28 @@ if (cartBtn) {
     cartBtn.addEventListener('click', () => toggleCartDrawer());
 }
 
-// Cart close button - improved handling
 const closeCart = document.getElementById('close-cart');
 if (closeCart) {
-    // Remove all existing event listeners by cloning
+    // Remove existing listeners
     const newCloseCart = closeCart.cloneNode(true);
     closeCart.parentNode.replaceChild(newCloseCart, closeCart);
     
-    // Single unified click handler
+    // Add fresh listener
     newCloseCart.addEventListener('click', function(e) {
         e.preventDefault();
         e.stopPropagation();
-        const drawer = document.getElementById('cart-drawer');
-        if (drawer) {
-            drawer.classList.add('hidden');
-            console.log('✅ Cart drawer closed');
-        }
+        console.log('❌ Close cart button clicked');
+        toggleCartDrawer(false);
     });
+    
+    // Also ensure onclick works
+    newCloseCart.onclick = function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        console.log('❌ Close cart (onclick) triggered');
+        toggleCartDrawer(false);
+    };
 }
-
-// Close cart when clicking outside
-document.addEventListener('click', function(e) {
-    const cartDrawer = document.getElementById('cart-drawer');
-    const cartBtn = document.getElementById('cart-btn');
-    
-    if (!cartDrawer || cartDrawer.classList.contains('hidden')) return;
-    
-    // Check if click is outside both cart drawer and cart button
-    if (!cartDrawer.contains(e.target) && 
-        !cartBtn.contains(e.target) && 
-        e.target.id !== 'cart-btn') {
-        cartDrawer.classList.add('hidden');
-        console.log('✅ Cart closed (clicked outside)');
-    }
-});
     
     const checkoutBtn = document.getElementById('checkout-btn');
 if (checkoutBtn) {
@@ -5629,22 +5613,6 @@ window.addEventListener('load', () => {
     icons();
 });
 
-// Initialize app
-window.addEventListener('load', () => {
-    // ✅ Remove preload class after everything loads
-    document.body.classList.add('preload');
-    
-    initializeFirebaseData();
-    setupEventListeners();
-    updateAuthArea();
-    icons();
-    
-    // ✅ Remove preload after a short delay
-    setTimeout(() => {
-        document.body.classList.remove('preload');
-    }, 100);
-});
-
 // Escape key handler
 window.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
@@ -5653,6 +5621,54 @@ window.addEventListener('keydown', (e) => {
         closeMobileMenu();
         closeUserMenu();
     }
+});
+
+// ✅ VERIFY ALL CRITICAL FUNCTIONS EXIST
+window.addEventListener('load', () => {
+    const criticalFunctions = [
+        'switchTo',
+        'checkout',
+        'toggleCartDrawer',
+        'toggleMobileMenu',
+        'openAuth',
+        'loginUser',
+        'signupUser',
+        'logoutUser',
+        'addToCart',
+        'preOrderItem',
+        'showUserProfile',
+        'adminAddProduct',
+        'adminEditProduct',
+        'adminDeleteProduct',
+        'adminViewOrder',
+        'adminEditOrder',
+        'adminDeleteOrder',
+        'verifyCustomerProfile',
+        'denyCustomerProfile',
+        'viewUserProfile',
+        'switchAdminView',
+        'toggleAdminChatDropdown'
+    ];
+    
+    const missing = criticalFunctions.filter(fn => typeof window[fn] !== 'function');
+    
+    if (missing.length > 0) {
+        console.error('❌ Missing functions:', missing);
+    } else {
+        console.log('✅ All critical functions loaded successfully');
+    }
+    
+    // Test button bindings
+    setTimeout(() => {
+        console.log('🔍 Testing button bindings...');
+        const testResults = window.testAllButtons();
+        
+        if (testResults.broken.length > 0 || testResults.missing.length > 0) {
+            console.warn('⚠️ Some buttons may not work correctly');
+        } else {
+            console.log('✅ All buttons properly configured');
+        }
+    }, 2000);
 });
 
 // ✅ Ensure Browse Products Button Works
