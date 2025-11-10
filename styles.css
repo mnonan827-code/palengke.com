@@ -3344,3 +3344,34 @@ button[onclick^="endChatConversation"]:active {
         justify-content: center;
     }
 }
+
+/* ==========================================
+   ⏳ Loading Spinner Animation
+   ========================================== */
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.animate-spin {
+    animation: spin 1s linear infinite;
+}
+
+/* Smooth fade for real-time updates */
+@keyframes fadeInUpdate {
+    from {
+        opacity: 0.5;
+        transform: scale(0.98);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+.admin-table tbody tr,
+.admin-card {
+    animation: fadeInUpdate 0.3s ease-out;
+}

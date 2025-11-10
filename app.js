@@ -1172,19 +1172,23 @@ function setupRealtimeListeners() {
             window.APP_STATE.products = Object.values(productsData);
             console.log('✅ Products updated:', window.APP_STATE.products.length);
             
-            // Re-render if on shop view
-            if (window.APP_STATE.view === 'shop') {
+            // ✅ NEW: Re-render for both shop AND admin views
+            if (window.APP_STATE.view === 'shop' || 
+                (window.APP_STATE.view === 'admin' && window.APP_STATE.adminView === 'dashboard')) {
                 renderMain();
             }
         } else {
             console.log('⚠️ No products in database');
             window.APP_STATE.products = [];
+            if (window.APP_STATE.view === 'shop' || window.APP_STATE.view === 'admin') {
+                renderMain();
+            }
         }
     }, (error) => {
         console.error('❌ Products listener error:', error);
     });
 
-    // ✅ ORDERS LISTENER
+    // ✅ ORDERS LISTENER - ENHANCED
     onValue(dbRefs.orders, (snapshot) => {
         console.log('📋 Orders listener triggered');
         if (snapshot.exists()) {
@@ -1192,16 +1196,36 @@ function setupRealtimeListeners() {
             window.APP_STATE.orders = Object.values(ordersData);
             console.log('✅ Orders updated:', window.APP_STATE.orders.length);
             
-            // Re-render if on orders view or admin
-            if (window.APP_STATE.view === 'orders' || window.APP_STATE.view === 'admin') {
+            // ✅ NEW: Re-render for orders view AND admin dashboard
+            if (window.APP_STATE.view === 'orders' || 
+                (window.APP_STATE.view === 'admin' && window.APP_STATE.adminView === 'dashboard')) {
                 renderMain();
             }
         } else {
             console.log('⚠️ No orders in database');
             window.APP_STATE.orders = [];
+            if (window.APP_STATE.view === 'orders' || window.APP_STATE.view === 'admin') {
+                renderMain();
+            }
         }
     }, (error) => {
         console.error('❌ Orders listener error:', error);
+    });
+
+    // ✅ USERS LISTENER - NEW FOR VERIFICATION PAGE
+    onValue(dbRefs.users, (snapshot) => {
+        console.log('👥 Users listener triggered');
+        if (snapshot.exists()) {
+            const usersData = snapshot.val();
+            console.log('✅ Users data updated');
+            
+            // ✅ Re-render if on verification page
+            if (window.APP_STATE.view === 'admin' && window.APP_STATE.adminView === 'verification') {
+                renderMain();
+            }
+        }
+    }, (error) => {
+        console.error('❌ Users listener error:', error);
     });
 
     // ✅ CHATS LISTENER
@@ -1249,6 +1273,18 @@ function setupRealtimeListeners() {
 
     console.log('✅ All listeners set up successfully');
 }
+
+// ✅ NEW: Debounced render to prevent too many re-renders
+let renderTimeout = null;
+window.debouncedRenderMain = function(delay = 300) {
+    if (renderTimeout) {
+        clearTimeout(renderTimeout);
+    }
+    renderTimeout = setTimeout(() => {
+        renderMain();
+        renderTimeout = null;
+    }, delay);
+};
 
 // ✅ NEW: Real-time update for customer chat messages
 // ✅ NEW: Real-time update for customer chat messages
@@ -2886,6 +2922,10 @@ window.adminSaveProduct = async function(editId = null) {
         return showModal('Missing fields', 'Please fill all product fields correctly.', `<button onclick="hideModal()" class="btn btn-secondary">OK</button>`);
     }
 
+    // ✅ NEW: Show loading indicator
+    const originalModalContent = document.getElementById('modal').innerHTML;
+    showModal('Saving...', '<div class="text-center py-8"><div class="inline-block animate-spin rounded-full h-12 w-12 border-4 border-lime-600 border-t-transparent"></div><p class="mt-4 text-gray-600">Saving product...</p></div>', '');
+
     let imgUrl = '';
     
     // Handle image upload
@@ -2897,6 +2937,7 @@ window.adminSaveProduct = async function(editId = null) {
             console.log('Cloudinary upload successful:', imgUrl);
         } catch (uploadError) {
             console.error('Cloudinary upload failed:', uploadError);
+            hideModal();
             return showModal('Upload Error', 'Failed to upload image: ' + uploadError.message, `<button onclick="hideModal()" class="btn btn-secondary">OK</button>`);
         }
     } else {
@@ -2907,52 +2948,65 @@ window.adminSaveProduct = async function(editId = null) {
     const isPre = document.getElementById('p-preorder')?.checked;
     const dur = parseInt(document.getElementById('p-preorder-duration')?.value) || null;
     
-    if(editId){
-        const productUpdate = { 
-            name, 
-            description,
-            price, 
-            quantity: qty, 
-            unit, 
-            orderLimit: orderLimit,
-            origin, 
-            farmer: { name: farmer, contact }, 
-            imgUrl: imgUrl,
-            freshness: freshness,
-        };
-        if(isPre){
-            productUpdate.preorder = true;
-            productUpdate.preorderDuration = Math.min(14, Math.max(7, (dur || 7)));
-            productUpdate.preorderStart = Date.now();
+    try {
+        if(editId){
+            const productUpdate = { 
+                name, 
+                description,
+                price, 
+                quantity: qty, 
+                unit, 
+                orderLimit: orderLimit,
+                origin, 
+                farmer: { name: farmer, contact }, 
+                imgUrl: imgUrl,
+                freshness: freshness,
+            };
+            if(isPre){
+                productUpdate.preorder = true;
+                productUpdate.preorderDuration = Math.min(14, Math.max(7, (dur || 7)));
+                productUpdate.preorderStart = Date.now();
+            } else {
+                productUpdate.preorder = false;
+                delete productUpdate.preorderDuration;
+                delete productUpdate.preorderStart;
+            }
+            await updateFirebase(`products/${editId}`, productUpdate);
         } else {
-            productUpdate.preorder = false;
-            delete productUpdate.preorderDuration;
-            delete productUpdate.preorderStart;
+            const newId = Date.now();
+            const newProd = { 
+                id: newId, 
+                name, 
+                description,
+                price, 
+                quantity: qty, 
+                unit,
+                orderLimit: orderLimit,
+                origin, 
+                farmer: { name: farmer, contact }, 
+                imgUrl: imgUrl,
+                freshness: freshness,
+            };
+            if(isPre){
+                newProd.preorder = true;
+                newProd.preorderDuration = Math.min(14, Math.max(7, (dur || 7)));
+                newProd.preorderStart = Date.now();
+            }
+            await saveToFirebase(`products/${newId}`, newProd);
         }
-        await updateFirebase(`products/${editId}`, productUpdate);
-    } else {
-        const newId = Date.now();
-        const newProd = { 
-            id: newId, 
-            name, 
-            description,
-            price, 
-            quantity: qty, 
-            unit,
-            orderLimit: orderLimit,
-            origin, 
-            farmer: { name: farmer, contact }, 
-            imgUrl: imgUrl,
-            freshness: freshness,
-        };
-        if(isPre){
-            newProd.preorder = true;
-            newProd.preorderDuration = Math.min(14, Math.max(7, (dur || 7)));
-            newProd.preorderStart = Date.now();
-        }
-        await saveToFirebase(`products/${newId}`, newProd);
+        
+        // ✅ NEW: Success feedback
+        hideModal();
+        showModal('✅ Success', `Product ${editId ? 'updated' : 'created'} successfully!`, 
+            `<button onclick="hideModal()" class="px-4 py-2 bg-lime-600 text-white rounded">OK</button>`);
+        
+        // ✅ Real-time listener will auto-update the UI
+    } catch (error) {
+        console.error('Error saving product:', error);
+        hideModal();
+        showModal('Error', 'Failed to save product: ' + error.message, 
+            `<button onclick="hideModal()" class="px-4 py-2 bg-red-600 text-white rounded">OK</button>`);
     }
-    hideModal();
 };
 
 window.adminEditProduct = function(id) {
@@ -3019,22 +3073,37 @@ window.adminDeleteProduct = function(id) {
 };
 
 window.adminConfirmDelete = async function(id) {
-    const prodToDelete = window.APP_STATE.products.find(p => p.id === id);
-    const deleteLogs = await getFromFirebase('deleteLogs') || {};
-    const logId = 'DEL-' + uid();
+    // Show loading
+    showModal('Deleting...', '<div class="text-center py-8"><div class="inline-block animate-spin rounded-full h-12 w-12 border-4 border-red-600 border-t-transparent"></div><p class="mt-4 text-gray-600">Deleting product...</p></div>', '');
     
-    deleteLogs[logId] = {
-        id: logId,
-        itemType: 'product',
-        itemId: id,
-        deletedBy: window.APP_STATE.currentUser ? window.APP_STATE.currentUser.email : 'unknown',
-        date: new Date().toLocaleString(),
-        snapshot: prodToDelete || null
-    };
-    
-    await saveToFirebase('deleteLogs', deleteLogs);
-    await remove(ref(database, `products/${id}`));
-    hideModal();
+    try {
+        const prodToDelete = window.APP_STATE.products.find(p => p.id === id);
+        const deleteLogs = await getFromFirebase('deleteLogs') || {};
+        const logId = 'DEL-' + uid();
+        
+        deleteLogs[logId] = {
+            id: logId,
+            itemType: 'product',
+            itemId: id,
+            deletedBy: window.APP_STATE.currentUser ? window.APP_STATE.currentUser.email : 'unknown',
+            date: new Date().toLocaleString(),
+            snapshot: prodToDelete || null
+        };
+        
+        await saveToFirebase('deleteLogs', deleteLogs);
+        await remove(ref(database, `products/${id}`));
+        
+        hideModal();
+        showModal('✅ Deleted', 'Product deleted successfully', 
+            `<button onclick="hideModal()" class="px-4 py-2 bg-lime-600 text-white rounded">OK</button>`);
+        
+        // ✅ Real-time listener will auto-update the UI
+    } catch (error) {
+        console.error('Error deleting product:', error);
+        hideModal();
+        showModal('Error', 'Failed to delete product', 
+            `<button onclick="hideModal()" class="px-4 py-2 bg-red-600 text-white rounded">OK</button>`);
+    }
 };
 
 // Add this new function to verify database sync
@@ -3455,10 +3524,30 @@ window.adminEditOrder = function(id) {
 };
 
 window.adminSaveOrderStatus = async function(id) {
-    if(!window.APP_STATE.currentUser || window.APP_STATE.currentUser.role !== 'admin') return showModal('Forbidden', 'Admin access required.', `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
+    if(!window.APP_STATE.currentUser || window.APP_STATE.currentUser.role !== 'admin') 
+        return showModal('Forbidden', 'Admin access required.', `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
+    
     const newS = document.getElementById('order-new-status')?.value;
-    await updateFirebase(`orders/${id}`, { status: newS });
-    hideModal();
+    
+    // ✅ NEW: Show loading
+    const originalModalContent = document.getElementById('modal').innerHTML;
+    showModal('Updating...', '<div class="text-center py-8"><div class="inline-block animate-spin rounded-full h-12 w-12 border-4 border-lime-600 border-t-transparent"></div><p class="mt-4 text-gray-600">Updating order status...</p></div>', '');
+    
+    try {
+        await updateFirebase(`orders/${id}`, { status: newS });
+        
+        // ✅ Success feedback
+        hideModal();
+        showModal('✅ Updated', `Order status changed to: ${newS}`, 
+            `<button onclick="hideModal()" class="px-4 py-2 bg-lime-600 text-white rounded">OK</button>`);
+        
+        // ✅ Real-time listener will auto-update the UI
+    } catch (error) {
+        console.error('Error updating order:', error);
+        hideModal();
+        showModal('Error', 'Failed to update order status', 
+            `<button onclick="hideModal()" class="px-4 py-2 bg-red-600 text-white rounded">OK</button>`);
+    }
 };
 
 window.adminUpdateDeliveryFee = function() {
@@ -3504,22 +3593,37 @@ window.adminDeleteOrder = function(id) {
 };
     
 window.adminConfirmDeleteOrder = async function(id) {
-    const orderToDelete = window.APP_STATE.orders.find(o => o.id === id);
-    const deleteLogs = await getFromFirebase('deleteLogs') || {};
-    const logId = 'DEL-' + uid();
+    // Show loading
+    showModal('Deleting...', '<div class="text-center py-8"><div class="inline-block animate-spin rounded-full h-12 w-12 border-4 border-red-600 border-t-transparent"></div><p class="mt-4 text-gray-600">Deleting order...</p></div>', '');
     
-    deleteLogs[logId] = {
-        id: logId,
-        itemType: 'order',
-        itemId: id,
-        deletedBy: window.APP_STATE.currentUser ? window.APP_STATE.currentUser.email : 'unknown',
-        date: new Date().toLocaleString(),
-        snapshot: orderToDelete || null
-    };
-    
-    await saveToFirebase('deleteLogs', deleteLogs);
-    await remove(ref(database, `orders/${id}`));
-    hideModal();
+    try {
+        const orderToDelete = window.APP_STATE.orders.find(o => o.id === id);
+        const deleteLogs = await getFromFirebase('deleteLogs') || {};
+        const logId = 'DEL-' + uid();
+        
+        deleteLogs[logId] = {
+            id: logId,
+            itemType: 'order',
+            itemId: id,
+            deletedBy: window.APP_STATE.currentUser ? window.APP_STATE.currentUser.email : 'unknown',
+            date: new Date().toLocaleString(),
+            snapshot: orderToDelete || null
+        };
+        
+        await saveToFirebase('deleteLogs', deleteLogs);
+        await remove(ref(database, `orders/${id}`));
+        
+        hideModal();
+        showModal('✅ Deleted', 'Order deleted successfully', 
+            `<button onclick="hideModal()" class="px-4 py-2 bg-lime-600 text-white rounded">OK</button>`);
+        
+        // ✅ Real-time listener will auto-update the UI
+    } catch (error) {
+        console.error('Error deleting order:', error);
+        hideModal();
+        showModal('Error', 'Failed to delete order', 
+            `<button onclick="hideModal()" class="px-4 py-2 bg-red-600 text-white rounded">OK</button>`);
+    }
 };
 
 window.viewDeleteLogs = async function() {
