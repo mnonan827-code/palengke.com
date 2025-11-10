@@ -51,11 +51,6 @@ window.APP_STATE = {
     chats: [], // 🟢 ADD THIS LINE
 };
 
-let orderSearchValue = '';
-let orderSearchCursor = 0;
-let preorderSearchValue = '';
-let preorderSearchCursor = 0;
-
 const CART_TIMEOUT = 30 * 60 * 1000; // 30 minutes in milliseconds
 let cartActivityTimer = null;
 
@@ -391,31 +386,17 @@ window.closeMobileMenu = function() {
     }
 };
 
-window.closeMobileMenu = function() {
-    const mobileMenu = document.getElementById("mobile-menu");
-    if (mobileMenu) {
-      mobileMenu.setAttribute("aria-hidden", "true");
-      mobileMenu.classList.remove("active");
-      document.body.classList.remove("mobile-menu-open");
-    }
-  };
-  
-
 async function initializeFirebaseData() {
-    console.log('🚀 Initializing Firebase data...');
     
     try {
         // ✅ STEP 1: Load Products
-        console.log('📦 Loading products...');
         const productsSnapshot = await get(dbRefs.products);
         if (productsSnapshot.exists()) {
     const productsData = productsSnapshot.val();
     window.APP_STATE.products = Object.values(productsData);
-    console.log('✅ Products loaded:', window.APP_STATE.products.length);
 } else {
     console.log('⚠️ No products found in database.');
-    window.APP_STATE.products = []; // leave empty
-    // ❌ Do NOT seed initial data automatically anymore
+    window.APP_STATE.products = [];
 }
 
 
@@ -489,22 +470,6 @@ async function initializeFirebaseData() {
             stack: error.stack
         });
     }
-}
-
-async function seedInitialData() {
-    const initialProducts = [
-        { id: 1, name: "Fresh Tilapia", origin: "San Juan Fish Farm", farmer: { name: "Mang Jose", contact: "0917-234-5678" }, price: 150.00, quantity: 50, unit: 'kg', freshness: 95, freshnessIndicator: 'farm-fresh', imgUrl: 'https://placehold.co/600x360/4ade80/000?text=Tilapia' },
-        { id: 2, name: "Native Chicken Eggs", origin: "Brgy. San Andres Poultry", farmer: { name: "Aling Nena", contact: "0998-765-4321" }, price: 8.00, quantity: 200, unit: 'pc', freshness: 92, freshnessIndicator: 'farm-fresh', imgUrl: 'https://placehold.co/600x360/84cc16/000?text=Eggs' },
-        { id: 3, name: "Organic Lettuce", origin: "Sta. Lucia Hydroponics", farmer: { name: "Mr. Dela Cruz", contact: "0920-111-2222" }, price: 65.00, quantity: 30, unit: 'head', freshness: 88, freshnessIndicator: 'very-fresh', imgUrl: 'https://placehold.co/600x360/4ade80/000?text=Lettuce' },
-        { id: 4, name: "Ripe Bananas (Lakatan)", origin: "Cainta Farm Cooperative", farmer: { name: "Ate Sol", contact: "0905-333-4444" }, price: 50.00, quantity: 80, unit: 'kg', freshness: 85, freshnessIndicator: 'very-fresh', imgUrl: 'https://placehold.co/600x360/84cc16/000?text=Bananas' },
-    ];
-
-    for (const product of initialProducts) {
-        await saveToFirebase(`products/${product.id}`, product);
-    }
-    window.APP_STATE.products = initialProducts;
-
-    await createDefaultAdmin();
 }
 
 async function createDefaultAdmin() {
@@ -4441,72 +4406,6 @@ window.updatePreorderStatuses = function() {
     }
 };
 
-// ✅ Migration function to fix existing products
-window.fixExistingProductsFreshness = async function() {
-    console.log('🔧 Fixing existing products freshness indicators...');
-    
-    const getFreshnessIndicator = (freshness) => {
-        if (!freshness) return 'fresh';
-        if (freshness >= 90) return 'farm-fresh';
-        if (freshness >= 70) return 'very-fresh';
-        if (freshness >= 50) return 'fresh';
-        if (freshness >= 30) return 'good';
-        return 'fair';
-    };
-    
-    try {
-        const productsSnapshot = await get(dbRefs.products);
-        if (!productsSnapshot.exists()) {
-            console.log('❌ No products to fix');
-            showModal('No Products', 'No products found in database.', 
-                `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
-            return;
-        }
-        
-        const products = productsSnapshot.val();
-        let fixedCount = 0;
-        let skippedCount = 0;
-        
-        for (const [id, product] of Object.entries(products)) {
-            if (product.freshness) {
-                // Always update/set the indicator based on freshness value
-                const indicator = getFreshnessIndicator(product.freshness);
-                await updateFirebase(`products/${id}`, {
-                    freshnessIndicator: indicator
-                });
-                fixedCount++;
-                console.log(`✅ Fixed product ${product.name}: ${product.freshness}% -> ${indicator}`);
-            } else {
-                // If no freshness value, set default to 100%
-                await updateFirebase(`products/${id}`, {
-                    freshness: 100,
-                    freshnessIndicator: 'farm-fresh'
-                });
-                fixedCount++;
-                console.log(`✅ Set default freshness for ${product.name}: 100% -> farm-fresh`);
-            }
-        }
-        
-        console.log(`✅ Migration complete: Fixed ${fixedCount} products, Skipped ${skippedCount} products`);
-        showModal('✅ Migration Complete', 
-            `<div class="space-y-2">
-                <p>Successfully updated freshness indicators for your products:</p>
-                <div class="bg-green-50 p-3 rounded border border-green-200">
-                    <div class="text-green-800 font-semibold">✅ ${fixedCount} products updated</div>
-                </div>
-                <p class="text-sm text-gray-600">All products now have proper freshness indicators.</p>
-            </div>`, 
-            `<button onclick="hideModal(); renderMain();" class="px-4 py-2 bg-lime-600 text-white rounded">OK</button>`
-        );
-        
-    } catch (error) {
-        console.error('❌ Migration error:', error);
-        showModal('Migration Error', 
-            `Failed to update products: ${error.message}`, 
-            `<button onclick="hideModal()" class="px-4 py-2 bg-red-600 text-white rounded">OK</button>`);
-    }
-};
-
 window.renderMain = async function() {
     
     const main = document.getElementById('main-content');
@@ -5701,54 +5600,6 @@ window.addEventListener('keydown', (e) => {
         closeMobileMenu();
         closeUserMenu();
     }
-});
-
-// ✅ VERIFY ALL CRITICAL FUNCTIONS EXIST
-window.addEventListener('load', () => {
-    const criticalFunctions = [
-        'switchTo',
-        'checkout',
-        'toggleCartDrawer',
-        'toggleMobileMenu',
-        'openAuth',
-        'loginUser',
-        'signupUser',
-        'logoutUser',
-        'addToCart',
-        'preOrderItem',
-        'showUserProfile',
-        'adminAddProduct',
-        'adminEditProduct',
-        'adminDeleteProduct',
-        'adminViewOrder',
-        'adminEditOrder',
-        'adminDeleteOrder',
-        'verifyCustomerProfile',
-        'denyCustomerProfile',
-        'viewUserProfile',
-        'switchAdminView',
-        'toggleAdminChatDropdown'
-    ];
-    
-    const missing = criticalFunctions.filter(fn => typeof window[fn] !== 'function');
-    
-    if (missing.length > 0) {
-        console.error('❌ Missing functions:', missing);
-    } else {
-        console.log('✅ All critical functions loaded successfully');
-    }
-    
-    // Test button bindings
-    setTimeout(() => {
-        console.log('🔍 Testing button bindings...');
-        const testResults = window.testAllButtons();
-        
-        if (testResults.broken.length > 0 || testResults.missing.length > 0) {
-            console.warn('⚠️ Some buttons may not work correctly');
-        } else {
-            console.log('✅ All buttons properly configured');
-        }
-    }, 2000);
 });
 
 // ✅ Ensure Browse Products Button Works
