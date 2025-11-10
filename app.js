@@ -115,26 +115,43 @@ window.debounce = function(func, wait) {
     };
 };
 
-// Search functionality
 window.handleSearch = debounce(function(query) {
     const trimmedQuery = query.toLowerCase().trim();
+    
+    // ✅ Don't re-render if query hasn't changed
+    if (window.APP_STATE.searchQuery === trimmedQuery) {
+        return;
+    }
+    
     window.APP_STATE.searchQuery = trimmedQuery;
     
-    // Update UI immediately without full re-render
+    // ✅ Update UI without full re-render
     const filteredProducts = filterProducts(window.APP_STATE.products);
     updateSearchResultsCount(filteredProducts.length, window.APP_STATE.products.length);
     
-    // Show/hide clear button
     const clearBtn = document.getElementById('clear-search-btn');
     if (clearBtn) {
         clearBtn.classList.toggle('hidden', !trimmedQuery);
     }
     
-    // Only re-render if on shop view
+    // ✅ Only re-render product grid if on shop view
     if (window.APP_STATE.view === 'shop') {
-        renderMain();
+        const mainContent = document.getElementById('main-content');
+        const currentHtml = mainContent.innerHTML;
+        const newHtml = renderShop();
+        
+        // Only update if content changed
+        if (currentHtml !== newHtml) {
+            mainContent.style.opacity = '0.9';
+            mainContent.innerHTML = newHtml;
+            
+            requestAnimationFrame(() => {
+                icons();
+                mainContent.style.opacity = '1';
+            });
+        }
     }
-}, 300); // 300ms debounce
+}, 300);
 
 window.clearSearch = function() {
     const searchInput = document.getElementById('search-input');
@@ -188,6 +205,22 @@ window.clearOrderSearch = function(type = 'regular') {
         window.APP_STATE.preorderSearchQuery = '';
     }
     renderMain();
+};
+
+// ✅ NEW: Prevent unnecessary re-renders for view switching
+window.switchToOptimized = function(view) {
+    if (window.APP_STATE.view === view) {
+        return; // Already on this view, don't re-render
+    }
+    
+    window.APP_STATE.view = view;
+    closeMobileMenu();
+    renderMain();
+};
+
+// Update existing switchTo to use optimized version
+window.switchTo = function(v) {
+    switchToOptimized(v);
 };
 
 // ✅ NEW: Update table rows without full page re-render
@@ -3974,13 +4007,20 @@ window.uploadImagePreview = function(fileInputId, previewImgId) {
 };
 
 window.icons = function() { 
-    try {
-        if (window.lucide && typeof lucide.createIcons === 'function') {
-            lucide.createIcons();
-        }
-    } catch (error) {
-        console.warn('Lucide icons failed to initialize:', error);
+    // ✅ Debounce icon initialization to prevent multiple calls
+    if (window.iconInitTimeout) {
+        clearTimeout(window.iconInitTimeout);
     }
+    
+    window.iconInitTimeout = setTimeout(() => {
+        try {
+            if (window.lucide && typeof lucide.createIcons === 'function') {
+                lucide.createIcons();
+            }
+        } catch (error) {
+            console.warn('Icon initialization failed:', error);
+        }
+    }, 50);
 };
 
 window.updateFreshnessDisplay = function(value) {
@@ -4029,10 +4069,53 @@ window.showModal = function(titleHtml, contentHtml, actionsHtml = '') {
 
 window.hideModal = function(){ 
     const modalOverlay = document.getElementById('modal-overlay');
-    modalOverlay.classList.add('hidden'); 
-    modalOverlay.style.display = 'none';
-    modalOverlay.removeAttribute('data-chat-id'); // 🔥 Clean up chat ID
-    document.body.classList.remove('modal-open');
+    
+    if (!modalOverlay) return;
+    
+    // ✅ Use transitions instead of immediate hide
+    modalOverlay.style.opacity = '0';
+    
+    setTimeout(() => {
+        modalOverlay.classList.add('hidden'); 
+        modalOverlay.style.display = 'none';
+        modalOverlay.removeAttribute('data-chat-id');
+        document.body.classList.remove('modal-open');
+    }, 200); // Match CSS transition duration
+};
+
+window.showModal = function(titleHtml, contentHtml, actionsHtml = '') {
+    const overlay = document.getElementById('modal-overlay');
+    const modal = document.getElementById('modal');
+    
+    modal.innerHTML = `
+        <div class="p-5">
+          <div class="flex items-start justify-between gap-4">
+            <div class="flex-1">
+              <h3 class="text-xl font-bold text-gray-800">${titleHtml}</h3>
+            </div>
+            <div><button onclick="hideModal()" class="text-gray-500 hover:text-gray-700"><i data-lucide="x" class="w-5 h-5"></i></button></div>
+          </div>
+        </div>
+        <div class="text-gray-700">${contentHtml}</div>
+        <div class="bg-gray-50 p-4 flex justify-end gap-3">
+          ${actionsHtml}
+        </div>
+    `;
+    
+    overlay.classList.remove('hidden');
+    overlay.style.display = 'flex';
+    overlay.style.opacity = '0';
+    
+    // ✅ Smooth fade-in
+    requestAnimationFrame(() => {
+        overlay.style.opacity = '1';
+        document.body.classList.add('modal-open');
+    });
+    
+    // ✅ Initialize icons only once
+    requestAnimationFrame(() => {
+        icons();
+    });
 };
 
 window.updateAuthArea = function() {
@@ -4211,9 +4294,17 @@ window.closeUserMenu = function() {
     const menu = document.getElementById('user-menu');
     const overlay = document.getElementById('user-menu-overlay');
     
-    if (menu) menu.classList.remove('show');
-    if (overlay) overlay.classList.remove('show');
-    document.body.style.overflow = '';
+    if (!menu) return;
+    
+    // ✅ Use CSS transitions instead of re-rendering
+    menu.classList.remove('show');
+    
+    if (overlay) {
+        overlay.classList.remove('show');
+        document.body.style.overflow = '';
+    }
+    
+    // ✅ No need to call renderMain() here
 };
 
 function closeUserMenu() {
@@ -4300,22 +4391,28 @@ window.toggleCartDrawer = function(show) {
         return;
     }
     
+    const isHidden = drawer.classList.contains('hidden');
+    
     if (typeof show === 'boolean') {
-        if (show) {
+        if (show && isHidden) {
             drawer.classList.remove('hidden');
-            console.log('🛒 Cart drawer opened');
-        } else {
+            // ✅ Only render when opening
+            requestAnimationFrame(() => {
+                renderCartDrawer();
+            });
+        } else if (!show && !isHidden) {
             drawer.classList.add('hidden');
-            console.log('❌ Cart drawer closed');
         }
     } else {
-        drawer.classList.toggle('hidden');
-        console.log('🔄 Cart drawer toggled');
-    }
-    
-    // Only render if opening
-    if (!drawer.classList.contains('hidden')) {
-        renderCartDrawer();
+        // Toggle
+        if (isHidden) {
+            drawer.classList.remove('hidden');
+            requestAnimationFrame(() => {
+                renderCartDrawer();
+            });
+        } else {
+            drawer.classList.add('hidden');
+        }
     }
 };
 
@@ -4508,93 +4605,66 @@ window.fixExistingProductsFreshness = async function() {
 };
 
 window.renderMain = async function() {
-    
     const main = document.getElementById('main-content');
-
     const searchSection = document.getElementById('search-section');
     
+    // Only hide/show search section, don't re-render it
     if (searchSection) {
-        if (window.APP_STATE.view === 'shop') {
-            searchSection.style.display = 'block';
-        } else {
-            searchSection.style.display = 'none';
-        }
+        searchSection.style.display = window.APP_STATE.view === 'shop' ? 'block' : 'none';
     }
 
     const viewOrdersBtn = document.getElementById('view-orders');
     if(window.APP_STATE.currentUser && window.APP_STATE.currentUser.role === 'admin') {
-        viewOrdersBtn.classList.remove('hidden');
-        viewOrdersBtn.textContent = 'Orders (All)';
+        viewOrdersBtn?.classList.remove('hidden');
+        if(viewOrdersBtn) viewOrdersBtn.textContent = 'Orders (All)';
     } else if(window.APP_STATE.currentUser) {
-        viewOrdersBtn.classList.remove('hidden');
-        viewOrdersBtn.textContent = 'My Orders';
+        viewOrdersBtn?.classList.remove('hidden');
+        if(viewOrdersBtn) viewOrdersBtn.textContent = 'My Orders';
     } else {
-        viewOrdersBtn.classList.add('hidden');
+        viewOrdersBtn?.classList.add('hidden');
     }
 
     updatePreorderStatuses();
 
+    // ✅ FIXED: Only update content that changed
+    let newContent = '';
+    
     if(window.APP_STATE.currentUser && window.APP_STATE.currentUser.role === 'admin' && window.APP_STATE.view === 'admin') {
-    if(window.APP_STATE.adminView === 'verification') {
-        main.innerHTML = await renderUserVerificationPage();
+        if(window.APP_STATE.adminView === 'verification') {
+            newContent = await renderUserVerificationPage();
+        } else {
+            newContent = await renderAdminDashboard();
+        }
     } else {
-        // ✅ Clear search state when entering admin dashboard
-        window.APP_STATE.orderSearchQuery = '';
-        window.APP_STATE.preorderSearchQuery = '';
-        
-        main.innerHTML = await renderAdminDashboard();
-            
-            // Re-initialize search listeners after DOM update
-            main.innerHTML = await renderAdminDashboard();
-
-// Re-initialize search listeners after DOM update
-setTimeout(() => {
-    initializeOrderSearchListeners();
-    
-    // ✅ IMPORTANT: Clear the saved search values too
-    orderSearchValue = '';
-    orderSearchCursor = 0;
-    preorderSearchValue = '';
-    preorderSearchCursor = 0;
-    
-    // Make sure inputs are empty
-    const newOrderInput = document.getElementById('order-search-input');
-    const newPreorderInput = document.getElementById('preorder-search-input');
-    
-    if (newOrderInput) {
-        newOrderInput.value = '';
-    }
-    if (newPreorderInput) {
-        newPreorderInput.value = '';
-    }
-}, 50);
+        if(window.APP_STATE.view === 'shop') {
+            newContent = renderShop();
+        } else {
+            newContent = renderOrdersPublic();
         }
     }
     
-    else {
-        if(window.APP_STATE.view === 'shop') main.innerHTML = renderShop();
-        else main.innerHTML = renderOrdersPublic();
+    // ✅ Only update if content actually changed
+    if (main.innerHTML !== newContent) {
+        main.innerHTML = newContent;
+        
+        // ✅ Initialize icons only once after content change
+        requestAnimationFrame(() => {
+            icons();
+            
+            // Re-attach event listeners only for new content
+            if (window.APP_STATE.view === 'admin' && window.APP_STATE.adminView === 'dashboard') {
+                initializeOrderSearchListeners();
+            }
+        });
     }
     
-    icons();
+    // ✅ Update cart without re-rendering
     updateCartBadge();
-    renderCartDrawer();
-
-    setTimeout(() => {
-    const checkoutBtn = document.getElementById('checkout-btn');
-    if (checkoutBtn) {
-        checkoutBtn.onclick = function(e) {
-            e.preventDefault();
-            console.log('🛒 Checkout clicked');
-            checkout();
-        };
-    }
-}, 100);
     
-    // Restore search input value if exists
-    const searchInput = document.getElementById('search-input');
-    if (searchInput && window.APP_STATE.searchQuery) {
-        searchInput.value = window.APP_STATE.searchQuery;
+    // ✅ Only render cart drawer if it's open
+    const cartDrawer = document.getElementById('cart-drawer');
+    if (cartDrawer && !cartDrawer.classList.contains('hidden')) {
+        renderCartDrawer();
     }
 };
 
@@ -5493,8 +5563,22 @@ window.switchAdminView = function(viewName) {
         return showModal('Forbidden', 'Admin access required.', `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
     }
     
+    // ✅ Prevent unnecessary re-render if already on this view
+    if (window.APP_STATE.adminView === viewName) {
+        return;
+    }
+    
     window.APP_STATE.adminView = viewName;
-    renderMain();
+    
+    // ✅ Use smooth transition
+    const mainContent = document.getElementById('main-content');
+    mainContent.style.opacity = '0.7';
+    
+    requestAnimationFrame(() => {
+        renderMain().then(() => {
+            mainContent.style.opacity = '1';
+        });
+    });
 };
 
 window.toggleHowItWorks = function() {
