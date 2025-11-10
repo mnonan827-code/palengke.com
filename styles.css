@@ -1837,6 +1837,27 @@ body.modal-open header {
   background: #fecaca;
   color: #991b1b;
 }
+
+
+.level-farm-fresh {
+    background: #22c55e;
+}
+
+.level-very-fresh {
+    background: #84cc16;
+}
+
+.level-fresh {
+    background: #eab308;
+}
+
+.level-good {
+    background: #f97316;
+}
+
+.level-fair {
+    background: #ef4444;
+}
   }
 
   /* ==========================================
@@ -3343,33 +3364,4 @@ button[onclick^="endChatConversation"]:active {
         width: 100%;
         justify-content: center;
     }
-}
-
-/* Real-time update animations */
-@keyframes pulseGreen {
-  0%, 100% {
-    box-shadow: 0 0 0 0 rgba(132, 204, 22, 0.7);
-  }
-  50% {
-    box-shadow: 0 0 0 10px rgba(132, 204, 22, 0);
-  }
-}
-
-.realtime-update {
-  animation: pulseGreen 1s ease-out;
-}
-
-@keyframes slideInFromTop {
-  from {
-    opacity: 0;
-    transform: translateY(-20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.data-updated {
-  animation: slideInFromTop 0.3s ease-out;
 }

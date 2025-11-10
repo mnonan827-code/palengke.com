@@ -88,7 +88,7 @@ const dbRefs = {
     carts: ref(database, 'carts'),
     notifications: ref(database, 'notifications'),
     deleteLogs: ref(database, 'deleteLogs'),
-    chats: ref(database, 'chats') // 🟢 ADD THIS LINE
+    chats: ref(database, 'chats')
 };
 
 // Helper to safely initialize Lucide icons
@@ -1164,43 +1164,36 @@ window.toggleAdminChatDropdown = function() {
 function setupRealtimeListeners() {
     console.log('🎧 Setting up real-time listeners...');
 
-    // ✅ PRODUCTS LISTENER - Enhanced
-    onValue(dbRefs.products, (snapshot) => {
-        console.log('📦 Products listener triggered');
-        if (snapshot.exists()) {
-            const productsData = snapshot.val();
-            window.APP_STATE.products = Object.values(productsData);
-            console.log('✅ Products updated:', window.APP_STATE.products.length);
-            
-            // Re-render ALL views that depend on products
-            if (window.APP_STATE.view === 'shop') {
-                const mainContent = document.getElementById('main-content');
-                if (mainContent) {
-                    mainContent.innerHTML = renderShop();
-                    icons();
-                }
-            }
-            
-            // Update admin dashboard if in admin view
-            if (window.APP_STATE.view === 'admin') {
-                renderMain();
-            }
-            
-            // Update cart drawer (product info might have changed)
-            renderCartDrawer();
-            
-        } else {
-            console.log('⚠️ No products in database');
-            window.APP_STATE.products = [];
-            if (window.APP_STATE.view === 'shop') {
-                renderMain();
-            }
+    // ✅ PRODUCTS LISTENER
+    // ✅ PRODUCTS LISTENER
+onValue(dbRefs.products, (snapshot) => {
+    console.log('📦 Products listener triggered');
+    if (snapshot.exists()) {
+        const productsData = snapshot.val();
+        window.APP_STATE.products = Object.values(productsData);
+        console.log('✅ Products updated:', window.APP_STATE.products.length);
+        
+        // ✅ NEW: Re-render if on shop view OR admin dashboard
+        if (window.APP_STATE.view === 'shop') {
+            renderMain();
+        } else if (window.APP_STATE.view === 'admin' && window.APP_STATE.currentUser?.role === 'admin') {
+            renderMain();
         }
-    }, (error) => {
-        console.error('❌ Products listener error:', error);
-    });
+    } else {
+        console.log('⚠️ No products in database');
+        window.APP_STATE.products = [];
+        
+        // ✅ NEW: Re-render even when products are empty
+        if (window.APP_STATE.view === 'shop' || 
+            (window.APP_STATE.view === 'admin' && window.APP_STATE.currentUser?.role === 'admin')) {
+            renderMain();
+        }
+    }
+}, (error) => {
+    console.error('❌ Products listener error:', error);
+});
 
-    // ✅ ORDERS LISTENER - Enhanced
+    // ✅ ORDERS LISTENER
     onValue(dbRefs.orders, (snapshot) => {
         console.log('📋 Orders listener triggered');
         if (snapshot.exists()) {
@@ -1208,52 +1201,19 @@ function setupRealtimeListeners() {
             window.APP_STATE.orders = Object.values(ordersData);
             console.log('✅ Orders updated:', window.APP_STATE.orders.length);
             
-            // Re-render if on orders view OR admin view
-            if (window.APP_STATE.view === 'orders') {
-                const mainContent = document.getElementById('main-content');
-                if (mainContent) {
-                    mainContent.innerHTML = renderOrdersPublic();
-                    icons();
-                }
-            }
-            
-            if (window.APP_STATE.view === 'admin') {
+            // Re-render if on orders view or admin
+            if (window.APP_STATE.view === 'orders' || window.APP_STATE.view === 'admin') {
                 renderMain();
             }
         } else {
             console.log('⚠️ No orders in database');
             window.APP_STATE.orders = [];
-            if (window.APP_STATE.view === 'orders' || window.APP_STATE.view === 'admin') {
-                renderMain();
-            }
         }
     }, (error) => {
         console.error('❌ Orders listener error:', error);
     });
 
-    // ✅ CARTS LISTENER - New real-time cart sync
-    if (window.APP_STATE.currentUser) {
-        const userCartRef = ref(database, `carts/${window.APP_STATE.currentUser.uid}`);
-        onValue(userCartRef, (snapshot) => {
-            console.log('🛒 Cart listener triggered');
-            if (snapshot.exists()) {
-                const cartData = snapshot.val();
-                const cartItems = Object.values(cartData).filter(item => 
-                    item && typeof item === 'object' && item.productId
-                );
-                window.APP_STATE.cart = cartItems;
-                console.log('✅ Cart updated:', window.APP_STATE.cart.length);
-                
-                // Update cart UI
-                renderCartDrawer();
-                updateCartBadge();
-            }
-        }, (error) => {
-            console.error('❌ Cart listener error:', error);
-        });
-    }
-
-    // ✅ CHATS LISTENER - Already good, but ensure it updates UI
+    // ✅ CHATS LISTENER
     onValue(dbRefs.chats, (snapshot) => {
         console.log('💬 Chats listener triggered');
         if (snapshot.exists()) {
@@ -1297,21 +1257,6 @@ function setupRealtimeListeners() {
     });
 
     console.log('✅ All listeners set up successfully');
-
-    // ✅ DELIVERY FEE LISTENER - New
-    const deliveryFeeRef = ref(database, 'settings/deliveryFee');
-    onValue(deliveryFeeRef, (snapshot) => {
-        console.log('💰 Delivery fee listener triggered');
-        if (snapshot.exists()) {
-            window.APP_STATE.deliveryFee = snapshot.val();
-            console.log('✅ Delivery fee updated:', window.APP_STATE.deliveryFee);
-            
-            // Update cart drawer to reflect new delivery fee
-            renderCartDrawer();
-        }
-    }, (error) => {
-        console.error('❌ Delivery fee listener error:', error);
-    });
 }
 
 // ✅ NEW: Real-time update for customer chat messages
@@ -2952,7 +2897,6 @@ window.adminSaveProduct = async function(editId = null) {
 
     let imgUrl = '';
     
-    // Handle image upload
     if (fileInput.files.length > 0) {
         try {
             console.log('Starting Cloudinary upload with file:', fileInput.files[0]);
@@ -2994,6 +2938,11 @@ window.adminSaveProduct = async function(editId = null) {
             delete productUpdate.preorderStart;
         }
         await updateFirebase(`products/${editId}`, productUpdate);
+        
+        // ✅ NEW: Show success message and close modal
+        hideModal();
+        showModal('✅ Product Updated', 'Product has been updated successfully.', 
+            `<button onclick="hideModal()" class="px-4 py-2 bg-lime-600 text-white rounded">OK</button>`);
     } else {
         const newId = Date.now();
         const newProd = { 
@@ -3015,8 +2964,12 @@ window.adminSaveProduct = async function(editId = null) {
             newProd.preorderStart = Date.now();
         }
         await saveToFirebase(`products/${newId}`, newProd);
+        
+        // ✅ NEW: Show success message and close modal
+        hideModal();
+        showModal('✅ Product Added', 'New product has been added successfully.', 
+            `<button onclick="hideModal()" class="px-4 py-2 bg-lime-600 text-white rounded">OK</button>`);
     }
-    hideModal();
 };
 
 window.adminEditProduct = function(id) {
@@ -3083,22 +3036,40 @@ window.adminDeleteProduct = function(id) {
 };
 
 window.adminConfirmDelete = async function(id) {
-    const prodToDelete = window.APP_STATE.products.find(p => p.id === id);
-    const deleteLogs = await getFromFirebase('deleteLogs') || {};
-    const logId = 'DEL-' + uid();
-    
-    deleteLogs[logId] = {
-        id: logId,
-        itemType: 'product',
-        itemId: id,
-        deletedBy: window.APP_STATE.currentUser ? window.APP_STATE.currentUser.email : 'unknown',
-        date: new Date().toLocaleString(),
-        snapshot: prodToDelete || null
-    };
-    
-    await saveToFirebase('deleteLogs', deleteLogs);
-    await remove(ref(database, `products/${id}`));
-    hideModal();
+    try {
+        const prodToDelete = window.APP_STATE.products.find(p => p.id === id);
+        
+        // ✅ Save to deletion logs
+        const deleteLogs = await getFromFirebase('deleteLogs') || {};
+        const logId = 'DEL-' + uid();
+        
+        deleteLogs[logId] = {
+            id: logId,
+            itemType: 'product',
+            itemId: id,
+            deletedBy: window.APP_STATE.currentUser ? window.APP_STATE.currentUser.email : 'unknown',
+            date: new Date().toLocaleString(),
+            snapshot: prodToDelete || null
+        };
+        
+        await saveToFirebase('deleteLogs', deleteLogs);
+        
+        // ✅ Delete the product
+        await remove(ref(database, `products/${id}`));
+        
+        // ✅ Close modal and show success
+        hideModal();
+        showModal('✅ Product Deleted', 'Product has been deleted successfully.', 
+            `<button onclick="hideModal()" class="px-4 py-2 bg-lime-600 text-white rounded">OK</button>`);
+        
+        // ✅ REMOVED: Don't manually update APP_STATE or call renderMain() - let the listener handle it
+        
+    } catch (error) {
+        console.error('❌ Error deleting product:', error);
+        hideModal();
+        showModal('Error', 'Failed to delete product. Please try again.', 
+            `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
+    }
 };
 
 // Add this new function to verify database sync
@@ -4494,8 +4465,76 @@ window.updatePreorderStatuses = function() {
     }
 };
 
+// ✅ Migration function to fix existing products
+window.fixExistingProductsFreshness = async function() {
+    console.log('🔧 Fixing existing products freshness indicators...');
+    
+    const getFreshnessIndicator = (freshness) => {
+        if (!freshness) return 'fresh';
+        if (freshness >= 90) return 'farm-fresh';
+        if (freshness >= 70) return 'very-fresh';
+        if (freshness >= 50) return 'fresh';
+        if (freshness >= 30) return 'good';
+        return 'fair';
+    };
+    
+    try {
+        const productsSnapshot = await get(dbRefs.products);
+        if (!productsSnapshot.exists()) {
+            console.log('❌ No products to fix');
+            showModal('No Products', 'No products found in database.', 
+                `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
+            return;
+        }
+        
+        const products = productsSnapshot.val();
+        let fixedCount = 0;
+        let skippedCount = 0;
+        
+        for (const [id, product] of Object.entries(products)) {
+            if (product.freshness) {
+                // Always update/set the indicator based on freshness value
+                const indicator = getFreshnessIndicator(product.freshness);
+                await updateFirebase(`products/${id}`, {
+                    freshnessIndicator: indicator
+                });
+                fixedCount++;
+                console.log(`✅ Fixed product ${product.name}: ${product.freshness}% -> ${indicator}`);
+            } else {
+                // If no freshness value, set default to 100%
+                await updateFirebase(`products/${id}`, {
+                    freshness: 100,
+                    freshnessIndicator: 'farm-fresh'
+                });
+                fixedCount++;
+                console.log(`✅ Set default freshness for ${product.name}: 100% -> farm-fresh`);
+            }
+        }
+        
+        console.log(`✅ Migration complete: Fixed ${fixedCount} products, Skipped ${skippedCount} products`);
+        showModal('✅ Migration Complete', 
+            `<div class="space-y-2">
+                <p>Successfully updated freshness indicators for your products:</p>
+                <div class="bg-green-50 p-3 rounded border border-green-200">
+                    <div class="text-green-800 font-semibold">✅ ${fixedCount} products updated</div>
+                </div>
+                <p class="text-sm text-gray-600">All products now have proper freshness indicators.</p>
+            </div>`, 
+            `<button onclick="hideModal(); renderMain();" class="px-4 py-2 bg-lime-600 text-white rounded">OK</button>`
+        );
+        
+    } catch (error) {
+        console.error('❌ Migration error:', error);
+        showModal('Migration Error', 
+            `Failed to update products: ${error.message}`, 
+            `<button onclick="hideModal()" class="px-4 py-2 bg-red-600 text-white rounded">OK</button>`);
+    }
+};
+
 window.renderMain = async function() {
+    
     const main = document.getElementById('main-content');
+
     const searchSection = document.getElementById('search-section');
     
     if (searchSection) {
@@ -4519,43 +4558,46 @@ window.renderMain = async function() {
 
     updatePreorderStatuses();
 
-    // ✅ Only render if content needs to change
-    const currentView = main.getAttribute('data-current-view');
-    const newView = window.APP_STATE.view;
-    
-    if (currentView !== newView || !main.innerHTML) {
-        if(window.APP_STATE.currentUser && window.APP_STATE.currentUser.role === 'admin' && window.APP_STATE.view === 'admin') {
-            if(window.APP_STATE.adminView === 'verification') {
-                main.innerHTML = await renderUserVerificationPage();
-            } else {
-                window.APP_STATE.orderSearchQuery = '';
-                window.APP_STATE.preorderSearchQuery = '';
-                
-                main.innerHTML = await renderAdminDashboard();
-                
-                setTimeout(() => {
-                    initializeOrderSearchListeners();
-                    orderSearchValue = '';
-                    orderSearchCursor = 0;
-                    preorderSearchValue = '';
-                    preorderSearchCursor = 0;
-                    
-                    const newOrderInput = document.getElementById('order-search-input');
-                    const newPreorderInput = document.getElementById('preorder-search-input');
-                    
-                    if (newOrderInput) newOrderInput.value = '';
-                    if (newPreorderInput) newPreorderInput.value = '';
-                }, 50);
-            }
-        } else {
-            if(window.APP_STATE.view === 'shop') {
-                main.innerHTML = renderShop();
-            } else {
-                main.innerHTML = renderOrdersPublic();
-            }
-        }
+    if(window.APP_STATE.currentUser && window.APP_STATE.currentUser.role === 'admin' && window.APP_STATE.view === 'admin') {
+    if(window.APP_STATE.adminView === 'verification') {
+        main.innerHTML = await renderUserVerificationPage();
+    } else {
+        // ✅ Clear search state when entering admin dashboard
+        window.APP_STATE.orderSearchQuery = '';
+        window.APP_STATE.preorderSearchQuery = '';
         
-        main.setAttribute('data-current-view', newView);
+        main.innerHTML = await renderAdminDashboard();
+            
+            // Re-initialize search listeners after DOM update
+            main.innerHTML = await renderAdminDashboard();
+
+// Re-initialize search listeners after DOM update
+setTimeout(() => {
+    initializeOrderSearchListeners();
+    
+    // ✅ IMPORTANT: Clear the saved search values too
+    orderSearchValue = '';
+    orderSearchCursor = 0;
+    preorderSearchValue = '';
+    preorderSearchCursor = 0;
+    
+    // Make sure inputs are empty
+    const newOrderInput = document.getElementById('order-search-input');
+    const newPreorderInput = document.getElementById('preorder-search-input');
+    
+    if (newOrderInput) {
+        newOrderInput.value = '';
+    }
+    if (newPreorderInput) {
+        newPreorderInput.value = '';
+    }
+}, 50);
+        }
+    }
+    
+    else {
+        if(window.APP_STATE.view === 'shop') main.innerHTML = renderShop();
+        else main.innerHTML = renderOrdersPublic();
     }
     
     icons();
@@ -4563,15 +4605,15 @@ window.renderMain = async function() {
     renderCartDrawer();
 
     setTimeout(() => {
-        const checkoutBtn = document.getElementById('checkout-btn');
-        if (checkoutBtn) {
-            checkoutBtn.onclick = function(e) {
-                e.preventDefault();
-                console.log('🛒 Checkout clicked');
-                checkout();
-            };
-        }
-    }, 100);
+    const checkoutBtn = document.getElementById('checkout-btn');
+    if (checkoutBtn) {
+        checkoutBtn.onclick = function(e) {
+            e.preventDefault();
+            console.log('🛒 Checkout clicked');
+            checkout();
+        };
+    }
+}, 100);
     
     // Restore search input value if exists
     const searchInput = document.getElementById('search-input');
@@ -4599,12 +4641,31 @@ window.renderShop = function() {
         const rem = isPre ? computeRemainingDays(p) : null;
         const preorderBadge = isPre ? `<div class="badge bg-yellow-100 text-yellow-700">🟡 Pre-Order • ${rem>0? rem + ' days left' : 'Ending'}</div>` : '';
         
-        const freshnessBadge = p.freshness && p.freshnessIndicator ? 
-            `<div class="freshness-badge freshness-${p.freshnessIndicator}">${getFreshnessEmoji(p.freshnessIndicator)} ${p.freshness}% Fresh</div>` : '';
+        // ✅ UPDATED: Better freshness indicator logic
+        const getFreshnessIndicator = (freshness) => {
+            if (!freshness) return 'fresh';
+            if (freshness >= 90) return 'farm-fresh';
+            if (freshness >= 70) return 'very-fresh';
+            if (freshness >= 50) return 'fresh';
+            if (freshness >= 30) return 'good';
+            return 'fair';
+        };
         
+        // ✅ Set freshness indicator if not already set
+        if (p.freshness && !p.freshnessIndicator) {
+            p.freshnessIndicator = getFreshnessIndicator(p.freshness);
+        }
+        
+        // ✅ UPDATED: Show freshness badge even if only freshness value exists
+        const freshnessBadge = p.freshness ? 
+            `<div class="freshness-badge freshness-${p.freshnessIndicator || getFreshnessIndicator(p.freshness)}">
+                ${getFreshnessEmoji(p.freshnessIndicator || getFreshnessIndicator(p.freshness))} ${p.freshness}% Fresh
+            </div>` : '';
+        
+        // ✅ UPDATED: Show freshness meter
         const freshnessMeter = p.freshness ? 
             `<div class="freshness-meter mt-2">
-                <div class="freshness-meter-fill level-${p.freshnessIndicator || 'fresh'}" style="width: ${p.freshness}%"></div>
+                <div class="freshness-meter-fill level-${p.freshnessIndicator || getFreshnessIndicator(p.freshness)}" style="width: ${p.freshness}%"></div>
             </div>` : '';
 
         const isAdminViewing = window.APP_STATE.currentUser && window.APP_STATE.currentUser.role === 'admin';
@@ -4620,14 +4681,14 @@ window.renderShop = function() {
                 <div class="h-40 w-full rounded-md overflow-hidden bg-gray-50 relative">
                   <img src="${p.imgUrl}" alt="${p.name}" class="w-full h-full object-cover">
                   <div class="absolute top-3 left-3 flex flex-col gap-1">${preorderBadge}${freshnessBadge}</div>
-                  </div>
+                </div>
                 <div class="mt-3 flex-1">
                   <div class="flex items-start justify-between gap-3">
                       <div>
                         <h3 class="font-semibold text-lg text-gray-800">${p.name}</h3>
                         <div class="text-sm text-gray-500">${p.origin} • <span class="font-medium">${p.farmer.name}</span></div>
                       </div>
-                       <div class="text-right">
+                      <div class="text-right">
                         <div class="text-lime-700 font-extrabold text-lg">${formatPeso(p.price)}</div>
                         <div class="text-xs text-gray-500 text-right">${p.unit}</div>
                       </div>
@@ -4672,16 +4733,34 @@ window.showProduct = function(id) {
     const rem = isPre ? computeRemainingDays(p) : null;
     const preorderBadge = isPre ? `<div class="badge bg-yellow-100 text-yellow-700 mb-2">🟡 Pre-Order • ${rem>0 ? rem + ' days left' : 'Ending'}</div>` : '';
     
-    // Freshness display
-    const freshnessBadge = p.freshness && p.freshnessIndicator ? 
-        `<div class="freshness-badge freshness-${p.freshnessIndicator} mb-2">${getFreshnessEmoji(p.freshnessIndicator)} ${p.freshness}% Fresh</div>` : '';
+    // ✅ UPDATED: Better freshness indicator logic
+    const getFreshnessIndicator = (freshness) => {
+        if (!freshness) return 'fresh';
+        if (freshness >= 90) return 'farm-fresh';
+        if (freshness >= 70) return 'very-fresh';
+        if (freshness >= 50) return 'fresh';
+        if (freshness >= 30) return 'good';
+        return 'fair';
+    };
+    
+    // ✅ Set freshness indicator if not already set
+    if (p.freshness && !p.freshnessIndicator) {
+        p.freshnessIndicator = getFreshnessIndicator(p.freshness);
+    }
+    
+    // ✅ UPDATED: Freshness display with better fallback
+    const freshnessBadge = p.freshness ? 
+        `<div class="freshness-badge freshness-${p.freshnessIndicator || getFreshnessIndicator(p.freshness)} mb-2">
+            ${getFreshnessEmoji(p.freshnessIndicator || getFreshnessIndicator(p.freshness))} ${p.freshness}% Fresh
+        </div>` : '';
     
     const freshnessMeter = p.freshness ? 
         `<div class="mb-3">
             <div class="text-sm text-gray-600 mb-1">Freshness Level</div>
             <div class="freshness-meter">
-                <div class="freshness-meter-fill level-${p.freshnessIndicator || 'fresh'}" style="width: ${p.freshness}%"></div>
+                <div class="freshness-meter-fill level-${p.freshnessIndicator || getFreshnessIndicator(p.freshness)}" style="width: ${p.freshness}%"></div>
             </div>
+            <div class="text-xs text-gray-500 mt-1">${p.freshness}% - ${(p.freshnessIndicator || getFreshnessIndicator(p.freshness)).replace('-', ' ').toUpperCase()}</div>
         </div>` : '';
     
     const isAdminViewing = window.APP_STATE.currentUser && window.APP_STATE.currentUser.role === 'admin';
@@ -5627,6 +5706,7 @@ document.addEventListener('click', function(e) {
 });
 
 // Auth state listener
+// Auth state listener
 onAuthStateChanged(auth, async (user) => {
     if (user) {
         const userData = await getFromFirebase(`users/${user.uid}`);
@@ -5638,7 +5718,6 @@ onAuthStateChanged(auth, async (user) => {
                 role: userData.role
             };
 
-            // Load user cart
             const userCart = await getFromFirebase(`carts/${user.uid}`);
             if (userCart) {
                 const cartItems = Object.values(userCart).filter(item => 
@@ -5647,25 +5726,11 @@ onAuthStateChanged(auth, async (user) => {
                 window.APP_STATE.cart = cartItems;
             }
             
-            // ✅ NEW: Setup real-time cart listener for logged-in user
-            const userCartRef = ref(database, `carts/${user.uid}`);
-            onValue(userCartRef, (snapshot) => {
-                if (snapshot.exists()) {
-                    const cartData = snapshot.val();
-                    const cartItems = Object.values(cartData).filter(item => 
-                        item && typeof item === 'object' && item.productId
-                    );
-                    window.APP_STATE.cart = cartItems;
-                    renderCartDrawer();
-                    updateCartBadge();
-                }
-            });
-            
-            // Check for abandoned cart on login
+            // ✅ Check for abandoned cart on login
             await checkAbandonedCartOnStartup();
         }
     } else {
-        // Clear timer on logout
+        // ✅ Clear timer on logout
         if (cartActivityTimer) {
             clearTimeout(cartActivityTimer);
             cartActivityTimer = null;
@@ -5760,28 +5825,6 @@ window.formatOrderId = function(orderId) {
         return 'O-' + orderId;
     }
     return orderId;
-};
-
-// Add to app.js (at the end, before closing)
-window.testRealtimeUpdates = async function() {
-    console.log('🧪 Testing real-time updates...');
-    
-    // Test 1: Update a product
-    if (window.APP_STATE.products.length > 0) {
-        const testProduct = window.APP_STATE.products[0];
-        console.log('📦 Updating product:', testProduct.id);
-        await updateFirebase(`products/${testProduct.id}`, {
-            quantity: testProduct.quantity + 1
-        });
-        console.log('✅ Product update sent, check if UI updates automatically');
-    }
-    
-    // Test 2: Check listeners are active
-    console.log('🎧 Active listeners:', {
-        products: !!dbRefs.products,
-        orders: !!dbRefs.orders,
-        chats: !!dbRefs.chats
-    });
 };
 
 console.log('validateAndPlaceOrder exists:', typeof window.validateAndPlaceOrder);
