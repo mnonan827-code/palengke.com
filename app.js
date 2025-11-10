@@ -148,7 +148,7 @@ window.handleOrderSearch = function(query, type = 'regular') {
         window.APP_STATE.preorderSearchQuery = query.toLowerCase().trim();
     }
     
-    // Update UI elements immediately (without re-rendering table)
+    // Get orders
     const orders = type === 'regular' 
         ? window.APP_STATE.orders.filter(o => !o.type || o.type !== 'pre-order')
         : window.APP_STATE.orders.filter(o => o.type === 'pre-order');
@@ -159,7 +159,7 @@ window.handleOrderSearch = function(query, type = 'regular') {
     // Update counts immediately
     updateOrderSearchResultsCount(filteredOrders.length, orders.length, type);
     
-    // Update clear button visibility immediately
+    // Update clear button visibility
     const clearBtn = document.getElementById(type === 'regular' ? 'clear-order-search-btn' : 'clear-preorder-search-btn');
     if (clearBtn) {
         if (searchQuery) {
@@ -169,20 +169,83 @@ window.handleOrderSearch = function(query, type = 'regular') {
         }
     }
     
-    // ✅ NEW: Directly update table rows without full re-render
-    updateOrderTableRows(filteredOrders, type);
+    // ✅ Update table display without full re-render
+    updateOrderTableDisplay(filteredOrders, type);
+};
+
+// ✅ NEW: Update order table rows without full page re-render
+window.updateOrderTableDisplay = function(filteredOrders, type = 'regular') {
+    const tableId = type === 'regular' ? 'regular-orders-tbody' : 'preorder-orders-tbody';
+    const tbody = document.getElementById(tableId);
+    
+    if (!tbody) {
+        console.log('⚠️ Table body not found:', tableId);
+        return;
+    }
+    
+    // Generate new rows HTML
+    const rowsHtml = filteredOrders.length > 0 ? filteredOrders.map(o => `
+        <tr class="hover:bg-gray-50 border-b">
+            <td class="px-3 py-2 text-sm font-mono">${o.id}</td>
+            <td class="px-3 py-2 text-sm">${o.customer}</td>
+            <td class="px-3 py-2 text-sm font-semibold">${formatPeso(o.total)}</td>
+            <td class="px-3 py-2 text-sm">
+                <span class="inline-flex items-center px-2 py-1 rounded-full text-xs ${
+                    o.status === 'Delivered' ? 'bg-green-100 text-green-800' :
+                    o.status === 'Out for Delivery' ? 'bg-blue-100 text-blue-800' :
+                    o.status === 'Ready to Deliver' ? 'bg-yellow-100 text-yellow-800' :
+                    type === 'regular' ? 'bg-gray-100 text-gray-800' : 'bg-orange-100 text-orange-800'
+                }">${o.status}</span>
+            </td>
+            <td class="px-3 py-2 text-sm hidden lg:table-cell">${o.date}</td>
+            <td class="px-3 py-2 text-sm text-right">
+                <div class="flex flex-col sm:flex-row gap-1 justify-end">
+                    <button onclick="adminViewOrder('${o.id}')" class="px-2 py-1 text-xs bg-white border rounded hover:bg-gray-50">View</button>
+                    <button onclick="adminEditOrder('${o.id}')" class="px-2 py-1 text-xs bg-lime-600 text-white rounded hover:bg-lime-700">Update</button>
+                    <button onclick="adminDeleteOrder('${o.id}')" class="px-2 py-1 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100">Delete</button>
+                </div>
+            </td>
+        </tr>
+    `).join('') : `<tr><td class="px-3 py-8 text-center text-gray-500 text-sm" colspan="6">No ${type} orders found</td></tr>`;
+    
+    // Update table content
+    tbody.innerHTML = rowsHtml;
+    
+    // Reinitialize icons
+    if (window.lucide) {
+        lucide.createIcons();
+    }
 };
 
 window.clearOrderSearch = function(type = 'regular') {
-    const searchInput = document.getElementById(type === 'regular' ? 'order-search-input' : 'preorder-search-input');
-    if (searchInput) searchInput.value = '';
+    console.log(`🧹 Clearing ${type} order search`);
     
+    // Clear the input
+    const searchInput = document.getElementById(type === 'regular' ? 'order-search-input' : 'preorder-search-input');
+    if (searchInput) {
+        searchInput.value = '';
+    }
+    
+    // Clear the state
     if (type === 'regular') {
         window.APP_STATE.orderSearchQuery = '';
     } else {
         window.APP_STATE.preorderSearchQuery = '';
     }
-    renderMain();
+    
+    // Hide clear button
+    const clearBtn = document.getElementById(type === 'regular' ? 'clear-order-search-btn' : 'clear-preorder-search-btn');
+    if (clearBtn) {
+        clearBtn.classList.add('hidden');
+    }
+    
+    // Update table to show all orders
+    const orders = type === 'regular' 
+        ? window.APP_STATE.orders.filter(o => !o.type || o.type !== 'pre-order')
+        : window.APP_STATE.orders.filter(o => o.type === 'pre-order');
+    
+    updateOrderTableDisplay(orders, type);
+    updateOrderSearchResultsCount(orders.length, orders.length, type);
 };
 
 // ✅ NEW: Update table rows without full page re-render
@@ -1224,25 +1287,33 @@ onValue(dbRefs.products, (snapshot) => {
     console.error('❌ Products listener error:', error);
 });
 
-    // ✅ ORDERS LISTENER
     onValue(dbRefs.orders, (snapshot) => {
-        console.log('📋 Orders listener triggered');
-        if (snapshot.exists()) {
-            const ordersData = snapshot.val();
-            window.APP_STATE.orders = Object.values(ordersData);
-            console.log('✅ Orders updated:', window.APP_STATE.orders.length);
-            
-            // Re-render if on orders view or admin
-            if (window.APP_STATE.view === 'orders' || window.APP_STATE.view === 'admin') {
+    console.log('📋 Orders listener triggered');
+    
+    const oldOrders = JSON.stringify(window.APP_STATE.orders);
+    
+    if (snapshot.exists()) {
+        const ordersData = snapshot.val();
+        window.APP_STATE.orders = Object.values(ordersData);
+        console.log('✅ Orders updated:', window.APP_STATE.orders.length);
+        
+        // Only re-render if orders actually changed
+        const hasChanged = oldOrders !== JSON.stringify(window.APP_STATE.orders);
+        
+        if (hasChanged) {
+            if (window.APP_STATE.view === 'orders') {
                 renderMain();
+            } else if (window.APP_STATE.view === 'admin' && window.APP_STATE.currentUser?.role === 'admin') {
+                // Update only order tables, not entire page
+                updateAdminOrderTablesOnly();
             }
-        } else {
-            console.log('⚠️ No orders in database');
-            window.APP_STATE.orders = [];
         }
-    }, (error) => {
-        console.error('❌ Orders listener error:', error);
-    });
+    } else {
+        window.APP_STATE.orders = [];
+    }
+}, (error) => {
+    console.error('❌ Orders listener error:', error);
+});
 
     // ✅ CHATS LISTENER
     onValue(dbRefs.chats, (snapshot) => {
@@ -1290,6 +1361,23 @@ onValue(dbRefs.products, (snapshot) => {
     console.log('✅ All listeners set up successfully');
 }
 
+// ✅ NEW: Update admin order tables without full page re-render
+window.updateAdminOrderTablesOnly = function() {
+    // Only proceed if we're on admin view
+    if (window.APP_STATE.view !== 'admin') return;
+    
+    // Update regular orders
+    const regularOrders = window.APP_STATE.orders.filter(o => !o.type || o.type !== 'pre-order');
+    const filteredRegular = filterOrders(regularOrders, window.APP_STATE.orderSearchQuery || '');
+    updateOrderTableDisplay(filteredRegular, 'regular');
+    
+    // Update pre-orders
+    const preOrders = window.APP_STATE.orders.filter(o => o.type === 'pre-order');
+    const filteredPreorder = filterOrders(preOrders, window.APP_STATE.preorderSearchQuery || '');
+    updateOrderTableDisplay(filteredPreorder, 'preorder');
+    
+    console.log('✅ Admin order tables updated without full re-render');
+};
 // ✅ NEW: Real-time update for customer chat messages
 // ✅ NEW: Real-time update for customer chat messages
 window.updateCustomerChatMessages = function() {
@@ -4499,6 +4587,19 @@ setTimeout(() => {
 
 window.switchTo = function(v) {
     window.APP_STATE.view = v;
+    
+    // Clear search queries when switching views
+    if (v !== 'shop') {
+        window.APP_STATE.searchQuery = '';
+        const searchInput = document.getElementById('search-input');
+        if (searchInput) searchInput.value = '';
+    }
+    
+    if (v !== 'admin') {
+        window.APP_STATE.orderSearchQuery = '';
+        window.APP_STATE.preorderSearchQuery = '';
+    }
+    
     closeMobileMenu();
     renderMain();
 };
@@ -5464,14 +5565,13 @@ if (closeCart) {
     const newCloseCart = closeCart.cloneNode(true);
     closeCart.parentNode.replaceChild(newCloseCart, closeCart);
     
-    // Single unified click handler
+    // Add single click handler
     newCloseCart.addEventListener('click', function(e) {
         e.preventDefault();
         e.stopPropagation();
         const drawer = document.getElementById('cart-drawer');
         if (drawer) {
             drawer.classList.add('hidden');
-            console.log('✅ Cart drawer closed');
         }
     });
 }
