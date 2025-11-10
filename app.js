@@ -1164,7 +1164,7 @@ window.toggleAdminChatDropdown = function() {
 function setupRealtimeListeners() {
     console.log('🎧 Setting up real-time listeners...');
 
-    // ✅ PRODUCTS LISTENER
+    // ✅ PRODUCTS LISTENER - Enhanced
     onValue(dbRefs.products, (snapshot) => {
         console.log('📦 Products listener triggered');
         if (snapshot.exists()) {
@@ -1172,19 +1172,35 @@ function setupRealtimeListeners() {
             window.APP_STATE.products = Object.values(productsData);
             console.log('✅ Products updated:', window.APP_STATE.products.length);
             
-            // Re-render if on shop view
+            // Re-render ALL views that depend on products
             if (window.APP_STATE.view === 'shop') {
+                const mainContent = document.getElementById('main-content');
+                if (mainContent) {
+                    mainContent.innerHTML = renderShop();
+                    icons();
+                }
+            }
+            
+            // Update admin dashboard if in admin view
+            if (window.APP_STATE.view === 'admin') {
                 renderMain();
             }
+            
+            // Update cart drawer (product info might have changed)
+            renderCartDrawer();
+            
         } else {
             console.log('⚠️ No products in database');
             window.APP_STATE.products = [];
+            if (window.APP_STATE.view === 'shop') {
+                renderMain();
+            }
         }
     }, (error) => {
         console.error('❌ Products listener error:', error);
     });
 
-    // ✅ ORDERS LISTENER
+    // ✅ ORDERS LISTENER - Enhanced
     onValue(dbRefs.orders, (snapshot) => {
         console.log('📋 Orders listener triggered');
         if (snapshot.exists()) {
@@ -1192,19 +1208,52 @@ function setupRealtimeListeners() {
             window.APP_STATE.orders = Object.values(ordersData);
             console.log('✅ Orders updated:', window.APP_STATE.orders.length);
             
-            // Re-render if on orders view or admin
-            if (window.APP_STATE.view === 'orders' || window.APP_STATE.view === 'admin') {
+            // Re-render if on orders view OR admin view
+            if (window.APP_STATE.view === 'orders') {
+                const mainContent = document.getElementById('main-content');
+                if (mainContent) {
+                    mainContent.innerHTML = renderOrdersPublic();
+                    icons();
+                }
+            }
+            
+            if (window.APP_STATE.view === 'admin') {
                 renderMain();
             }
         } else {
             console.log('⚠️ No orders in database');
             window.APP_STATE.orders = [];
+            if (window.APP_STATE.view === 'orders' || window.APP_STATE.view === 'admin') {
+                renderMain();
+            }
         }
     }, (error) => {
         console.error('❌ Orders listener error:', error);
     });
 
-    // ✅ CHATS LISTENER
+    // ✅ CARTS LISTENER - New real-time cart sync
+    if (window.APP_STATE.currentUser) {
+        const userCartRef = ref(database, `carts/${window.APP_STATE.currentUser.uid}`);
+        onValue(userCartRef, (snapshot) => {
+            console.log('🛒 Cart listener triggered');
+            if (snapshot.exists()) {
+                const cartData = snapshot.val();
+                const cartItems = Object.values(cartData).filter(item => 
+                    item && typeof item === 'object' && item.productId
+                );
+                window.APP_STATE.cart = cartItems;
+                console.log('✅ Cart updated:', window.APP_STATE.cart.length);
+                
+                // Update cart UI
+                renderCartDrawer();
+                updateCartBadge();
+            }
+        }, (error) => {
+            console.error('❌ Cart listener error:', error);
+        });
+    }
+
+    // ✅ CHATS LISTENER - Already good, but ensure it updates UI
     onValue(dbRefs.chats, (snapshot) => {
         console.log('💬 Chats listener triggered');
         if (snapshot.exists()) {
@@ -1248,6 +1297,21 @@ function setupRealtimeListeners() {
     });
 
     console.log('✅ All listeners set up successfully');
+
+    // ✅ DELIVERY FEE LISTENER - New
+    const deliveryFeeRef = ref(database, 'settings/deliveryFee');
+    onValue(deliveryFeeRef, (snapshot) => {
+        console.log('💰 Delivery fee listener triggered');
+        if (snapshot.exists()) {
+            window.APP_STATE.deliveryFee = snapshot.val();
+            console.log('✅ Delivery fee updated:', window.APP_STATE.deliveryFee);
+            
+            // Update cart drawer to reflect new delivery fee
+            renderCartDrawer();
+        }
+    }, (error) => {
+        console.error('❌ Delivery fee listener error:', error);
+    });
 }
 
 // ✅ NEW: Real-time update for customer chat messages
@@ -4431,9 +4495,7 @@ window.updatePreorderStatuses = function() {
 };
 
 window.renderMain = async function() {
-    
     const main = document.getElementById('main-content');
-
     const searchSection = document.getElementById('search-section');
     
     if (searchSection) {
@@ -4457,46 +4519,43 @@ window.renderMain = async function() {
 
     updatePreorderStatuses();
 
-    if(window.APP_STATE.currentUser && window.APP_STATE.currentUser.role === 'admin' && window.APP_STATE.view === 'admin') {
-    if(window.APP_STATE.adminView === 'verification') {
-        main.innerHTML = await renderUserVerificationPage();
-    } else {
-        // ✅ Clear search state when entering admin dashboard
-        window.APP_STATE.orderSearchQuery = '';
-        window.APP_STATE.preorderSearchQuery = '';
-        
-        main.innerHTML = await renderAdminDashboard();
-            
-            // Re-initialize search listeners after DOM update
-            main.innerHTML = await renderAdminDashboard();
-
-// Re-initialize search listeners after DOM update
-setTimeout(() => {
-    initializeOrderSearchListeners();
+    // ✅ Only render if content needs to change
+    const currentView = main.getAttribute('data-current-view');
+    const newView = window.APP_STATE.view;
     
-    // ✅ IMPORTANT: Clear the saved search values too
-    orderSearchValue = '';
-    orderSearchCursor = 0;
-    preorderSearchValue = '';
-    preorderSearchCursor = 0;
-    
-    // Make sure inputs are empty
-    const newOrderInput = document.getElementById('order-search-input');
-    const newPreorderInput = document.getElementById('preorder-search-input');
-    
-    if (newOrderInput) {
-        newOrderInput.value = '';
-    }
-    if (newPreorderInput) {
-        newPreorderInput.value = '';
-    }
-}, 50);
+    if (currentView !== newView || !main.innerHTML) {
+        if(window.APP_STATE.currentUser && window.APP_STATE.currentUser.role === 'admin' && window.APP_STATE.view === 'admin') {
+            if(window.APP_STATE.adminView === 'verification') {
+                main.innerHTML = await renderUserVerificationPage();
+            } else {
+                window.APP_STATE.orderSearchQuery = '';
+                window.APP_STATE.preorderSearchQuery = '';
+                
+                main.innerHTML = await renderAdminDashboard();
+                
+                setTimeout(() => {
+                    initializeOrderSearchListeners();
+                    orderSearchValue = '';
+                    orderSearchCursor = 0;
+                    preorderSearchValue = '';
+                    preorderSearchCursor = 0;
+                    
+                    const newOrderInput = document.getElementById('order-search-input');
+                    const newPreorderInput = document.getElementById('preorder-search-input');
+                    
+                    if (newOrderInput) newOrderInput.value = '';
+                    if (newPreorderInput) newPreorderInput.value = '';
+                }, 50);
+            }
+        } else {
+            if(window.APP_STATE.view === 'shop') {
+                main.innerHTML = renderShop();
+            } else {
+                main.innerHTML = renderOrdersPublic();
+            }
         }
-    }
-    
-    else {
-        if(window.APP_STATE.view === 'shop') main.innerHTML = renderShop();
-        else main.innerHTML = renderOrdersPublic();
+        
+        main.setAttribute('data-current-view', newView);
     }
     
     icons();
@@ -4504,15 +4563,15 @@ setTimeout(() => {
     renderCartDrawer();
 
     setTimeout(() => {
-    const checkoutBtn = document.getElementById('checkout-btn');
-    if (checkoutBtn) {
-        checkoutBtn.onclick = function(e) {
-            e.preventDefault();
-            console.log('🛒 Checkout clicked');
-            checkout();
-        };
-    }
-}, 100);
+        const checkoutBtn = document.getElementById('checkout-btn');
+        if (checkoutBtn) {
+            checkoutBtn.onclick = function(e) {
+                e.preventDefault();
+                console.log('🛒 Checkout clicked');
+                checkout();
+            };
+        }
+    }, 100);
     
     // Restore search input value if exists
     const searchInput = document.getElementById('search-input');
@@ -5568,7 +5627,6 @@ document.addEventListener('click', function(e) {
 });
 
 // Auth state listener
-// Auth state listener
 onAuthStateChanged(auth, async (user) => {
     if (user) {
         const userData = await getFromFirebase(`users/${user.uid}`);
@@ -5580,6 +5638,7 @@ onAuthStateChanged(auth, async (user) => {
                 role: userData.role
             };
 
+            // Load user cart
             const userCart = await getFromFirebase(`carts/${user.uid}`);
             if (userCart) {
                 const cartItems = Object.values(userCart).filter(item => 
@@ -5588,11 +5647,25 @@ onAuthStateChanged(auth, async (user) => {
                 window.APP_STATE.cart = cartItems;
             }
             
-            // ✅ Check for abandoned cart on login
+            // ✅ NEW: Setup real-time cart listener for logged-in user
+            const userCartRef = ref(database, `carts/${user.uid}`);
+            onValue(userCartRef, (snapshot) => {
+                if (snapshot.exists()) {
+                    const cartData = snapshot.val();
+                    const cartItems = Object.values(cartData).filter(item => 
+                        item && typeof item === 'object' && item.productId
+                    );
+                    window.APP_STATE.cart = cartItems;
+                    renderCartDrawer();
+                    updateCartBadge();
+                }
+            });
+            
+            // Check for abandoned cart on login
             await checkAbandonedCartOnStartup();
         }
     } else {
-        // ✅ Clear timer on logout
+        // Clear timer on logout
         if (cartActivityTimer) {
             clearTimeout(cartActivityTimer);
             cartActivityTimer = null;
@@ -5687,6 +5760,28 @@ window.formatOrderId = function(orderId) {
         return 'O-' + orderId;
     }
     return orderId;
+};
+
+// Add to app.js (at the end, before closing)
+window.testRealtimeUpdates = async function() {
+    console.log('🧪 Testing real-time updates...');
+    
+    // Test 1: Update a product
+    if (window.APP_STATE.products.length > 0) {
+        const testProduct = window.APP_STATE.products[0];
+        console.log('📦 Updating product:', testProduct.id);
+        await updateFirebase(`products/${testProduct.id}`, {
+            quantity: testProduct.quantity + 1
+        });
+        console.log('✅ Product update sent, check if UI updates automatically');
+    }
+    
+    // Test 2: Check listeners are active
+    console.log('🎧 Active listeners:', {
+        products: !!dbRefs.products,
+        orders: !!dbRefs.orders,
+        chats: !!dbRefs.chats
+    });
 };
 
 console.log('validateAndPlaceOrder exists:', typeof window.validateAndPlaceOrder);
