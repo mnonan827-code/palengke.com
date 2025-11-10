@@ -116,10 +116,25 @@ window.debounce = function(func, wait) {
 };
 
 // Search functionality
-window.handleSearch = function(query) {
-    window.APP_STATE.searchQuery = query.toLowerCase().trim();
-    renderMain();
-};
+window.handleSearch = debounce(function(query) {
+    const trimmedQuery = query.toLowerCase().trim();
+    window.APP_STATE.searchQuery = trimmedQuery;
+    
+    // Update UI immediately without full re-render
+    const filteredProducts = filterProducts(window.APP_STATE.products);
+    updateSearchResultsCount(filteredProducts.length, window.APP_STATE.products.length);
+    
+    // Show/hide clear button
+    const clearBtn = document.getElementById('clear-search-btn');
+    if (clearBtn) {
+        clearBtn.classList.toggle('hidden', !trimmedQuery);
+    }
+    
+    // Only re-render if on shop view
+    if (window.APP_STATE.view === 'shop') {
+        renderMain();
+    }
+}, 300); // 300ms debounce
 
 window.clearSearch = function() {
     const searchInput = document.getElementById('search-input');
@@ -325,17 +340,55 @@ window.toggleMobileMenu = function() {
     const mobileMenu = document.getElementById('mobile-menu');
     const mobileMenuBtn = document.getElementById('mobile-menu-btn');
     
-    mobileMenu.classList.toggle('hidden');
-    mobileMenu.classList.toggle('active');
+    if (!mobileMenu || !mobileMenuBtn) return;
     
-    // Update icon
-    const icon = mobileMenuBtn.querySelector('i');
-    if (mobileMenu.classList.contains('hidden')) {
-        icon.setAttribute('data-lucide', 'menu');
+    const isOpen = mobileMenu.classList.contains('active');
+    
+    if (isOpen) {
+        // Close menu
+        mobileMenu.classList.remove('active');
+        mobileMenu.classList.add('hidden');
+        document.body.classList.remove('mobile-menu-open');
+        
+        // Update icon
+        const icon = mobileMenuBtn.querySelector('i');
+        if (icon) {
+            icon.setAttribute('data-lucide', 'menu');
+        }
     } else {
-        icon.setAttribute('data-lucide', 'x');
+        // Open menu
+        mobileMenu.classList.remove('hidden');
+        mobileMenu.classList.add('active');
+        document.body.classList.add('mobile-menu-open');
+        
+        // Update icon
+        const icon = mobileMenuBtn.querySelector('i');
+        if (icon) {
+            icon.setAttribute('data-lucide', 'x');
+        }
     }
+    
     lucide.createIcons();
+};
+
+window.closeMobileMenu = function() {
+    const mobileMenu = document.getElementById("mobile-menu");
+    const mobileMenuBtn = document.getElementById('mobile-menu-btn');
+    
+    if (mobileMenu) {
+        mobileMenu.classList.remove("active");
+        mobileMenu.classList.add("hidden");
+        document.body.classList.remove("mobile-menu-open");
+        
+        // Update icon
+        if (mobileMenuBtn) {
+            const icon = mobileMenuBtn.querySelector('i');
+            if (icon) {
+                icon.setAttribute('data-lucide', 'menu');
+                lucide.createIcons();
+            }
+        }
+    }
 };
 
 window.closeMobileMenu = function() {
@@ -784,7 +837,7 @@ window.renderCustomerChatWindow = function() {
     }
 
 const messagesHtml = messages.map(msg => {
-    // ✅ NEW: Handle system messages
+    // System messages
     if (msg.isSystemMessage) {
         return `
             <div class="text-center my-3">
@@ -806,17 +859,22 @@ const messagesHtml = messages.map(msg => {
     
     const nameText = isCustomer ? senderName : (isAutoResponse ? 'Admin (Auto) 🤖' : 'Admin');
     
-    // ✅ FIXED: Proper line break handling for all messages
-    const formattedText = isAutoResponse 
-        ? `<pre class="chat-message-text">${escapeHtml(msg.text)}</pre>`
-        : `<div class="chat-message-text">${escapeHtml(msg.text).replace(/\n/g, '<br>')}</div>`;
+    // Process message text - preserve line breaks properly
+    let formattedText;
+    if (isAutoResponse) {
+        formattedText = `<pre class="chat-message-text" style="font-family: inherit; white-space: pre-wrap; margin: 0; padding: 0;">${escapeHtml(msg.text)}</pre>`;
+    } else {
+        // Replace newlines with <br> tags
+        const textWithBreaks = escapeHtml(msg.text).replace(/\n/g, '<br>');
+        formattedText = `<div class="chat-message-text">${textWithBreaks}</div>`;
+    }
     
     return `
-        <div class="chat-message-item ${isCustomer ? 'items-end' : 'items-start'} mb-3">
+        <div class="chat-message-item flex flex-col ${isCustomer ? 'items-end' : 'items-start'} mb-3">
             <div class="text-xs ${isAutoResponse ? 'text-blue-600 font-semibold' : 'text-gray-500'} mb-1">
                 ${nameText} - ${new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </div>
-            <div class="${msgClass} chat-message-bubble">
+            <div class="${msgClass} max-w-xs p-3 rounded-xl shadow-sm">
                 ${formattedText}
             </div>
         </div>
@@ -1166,24 +1224,32 @@ function setupRealtimeListeners() {
 
     // ✅ PRODUCTS LISTENER
     // ✅ PRODUCTS LISTENER
+// ✅ PRODUCTS LISTENER - IMPROVED
 onValue(dbRefs.products, (snapshot) => {
     console.log('📦 Products listener triggered');
+    
+    const oldProducts = window.APP_STATE.products;
+    
     if (snapshot.exists()) {
         const productsData = snapshot.val();
         window.APP_STATE.products = Object.values(productsData);
         console.log('✅ Products updated:', window.APP_STATE.products.length);
         
-        // ✅ NEW: Re-render if on shop view OR admin dashboard
-        if (window.APP_STATE.view === 'shop') {
-            renderMain();
-        } else if (window.APP_STATE.view === 'admin' && window.APP_STATE.currentUser?.role === 'admin') {
-            renderMain();
+        // Check if products actually changed
+        const hasChanged = JSON.stringify(oldProducts) !== JSON.stringify(window.APP_STATE.products);
+        
+        if (hasChanged) {
+            // Re-render if on shop view OR admin dashboard
+            if (window.APP_STATE.view === 'shop') {
+                renderMain();
+            } else if (window.APP_STATE.view === 'admin' && window.APP_STATE.currentUser?.role === 'admin') {
+                renderMain();
+            }
         }
     } else {
         console.log('⚠️ No products in database');
         window.APP_STATE.products = [];
         
-        // ✅ NEW: Re-render even when products are empty
         if (window.APP_STATE.view === 'shop' || 
             (window.APP_STATE.view === 'admin' && window.APP_STATE.currentUser?.role === 'admin')) {
             renderMain();
@@ -4077,24 +4143,22 @@ window.updateAuthArea = function() {
     window.updateChatVisibility();
 };
 
-// Initialize user dropdown functionality
 function initUserDropdown() {
     const btn = document.getElementById('user-menu-btn');
     const menu = document.getElementById('user-menu');
-    const wrapper = document.querySelector('.user-menu-wrapper');
     
-    if (!btn || !menu || !wrapper) {
-        console.log('Dropdown elements not found');
+    if (!btn || !menu) {
+        console.log('⚠️ Dropdown elements not found');
         return;
     }
 
-    console.log('Initializing user dropdown...');
+    console.log('🔧 Initializing user dropdown...');
 
-    // Remove any existing listeners by cloning
+    // Remove existing listeners by cloning
     const newBtn = btn.cloneNode(true);
     btn.parentNode.replaceChild(newBtn, btn);
 
-    // Create or get overlay
+    // Get/create overlay
     let overlay = document.getElementById('user-menu-overlay');
     if (!overlay) {
         overlay = document.createElement('div');
@@ -4103,76 +4167,55 @@ function initUserDropdown() {
         document.body.appendChild(overlay);
     }
 
-    // Toggle dropdown on button click
+    // Toggle on button click
     newBtn.addEventListener('click', function(e) {
         e.preventDefault();
         e.stopPropagation();
-        console.log('User menu button clicked');
-        toggleUserMenu();
+        
+        const isOpen = menu.classList.contains('show');
+        
+        if (isOpen) {
+            menu.classList.remove('show');
+            overlay.classList.remove('show');
+            document.body.style.overflow = '';
+        } else {
+            menu.classList.add('show');
+            if (window.innerWidth <= 768) {
+                overlay.classList.add('show');
+                document.body.style.overflow = 'hidden';
+            }
+        }
     });
 
     // Close on overlay click
-    overlay.addEventListener('click', function(e) {
-        e.preventDefault();
-        e.stopPropagation();
-        closeUserMenu();
+    overlay.addEventListener('click', function() {
+        menu.classList.remove('show');
+        overlay.classList.remove('show');
+        document.body.style.overflow = '';
     });
 
     // Close when clicking outside
     document.addEventListener('click', function(e) {
-        if (!wrapper.contains(e.target) && menu.classList.contains('show')) {
-            closeUserMenu();
+        if (!newBtn.contains(e.target) && !menu.contains(e.target) && menu.classList.contains('show')) {
+            menu.classList.remove('show');
+            overlay.classList.remove('show');
+            document.body.style.overflow = '';
         }
     });
 
-    // Prevent closing when clicking inside menu
-    menu.addEventListener('click', function(e) {
-        e.stopPropagation();
-    });
-
-    console.log('User dropdown initialized successfully');
+    console.log('✅ User dropdown initialized');
 }
 
-// Toggle user menu
-function toggleUserMenu() {
+// Make closeUserMenu globally available
+window.closeUserMenu = function() {
     const menu = document.getElementById('user-menu');
     const overlay = document.getElementById('user-menu-overlay');
-    const icon = document.querySelector('.dropdown-icon');
     
-    if (!menu) return;
+    if (menu) menu.classList.remove('show');
+    if (overlay) overlay.classList.remove('show');
+    document.body.style.overflow = '';
+};
 
-    const isOpen = menu.classList.contains('show');
-    
-    if (isOpen) {
-        closeUserMenu();
-    } else {
-        openUserMenu();
-    }
-}
-
-// Open user menu
-function openUserMenu() {
-    const menu = document.getElementById('user-menu');
-    const overlay = document.getElementById('user-menu-overlay');
-    const icon = document.querySelector('.dropdown-icon');
-    
-    if (!menu) return;
-    
-    console.log('Opening user menu');
-    menu.classList.add('show');
-    
-    if (icon) {
-        icon.style.transform = 'rotate(180deg)';
-    }
-    
-    // Show overlay on mobile
-    if (window.innerWidth <= 768 && overlay) {
-        overlay.classList.add('show');
-        document.body.style.overflow = 'hidden';
-    }
-}
-
-// Close user menu
 function closeUserMenu() {
     const menu = document.getElementById('user-menu');
     const overlay = document.getElementById('user-menu-overlay');
@@ -4190,73 +4233,6 @@ function closeUserMenu() {
     if (overlay) {
         overlay.classList.remove('show');
         document.body.style.overflow = '';
-    }
-}
-
-// Make closeUserMenu globally available
-window.closeUserMenu = closeUserMenu;
-
-// Setup user menu event listeners
-function setupUserMenuListeners() {
-    const userMenu = document.getElementById('user-menu');
-    const userMenuBtn = document.getElementById('user-menu-btn');
-    const userMenuContainer = document.querySelector('.user-menu-container');
-    
-    if (!userMenu || !userMenuBtn) return;
-
-    // Create overlay if it doesn't exist
-    let userMenuOverlay = document.getElementById('user-menu-overlay');
-    if (!userMenuOverlay) {
-        userMenuOverlay = document.createElement('div');
-        userMenuOverlay.id = 'user-menu-overlay';
-        userMenuOverlay.className = 'user-menu-overlay';
-        document.body.appendChild(userMenuOverlay);
-    }
-
-    // Toggle user menu on button click
-    userMenuBtn.addEventListener('click', function(e) {
-        e.stopPropagation();
-        const isOpen = !userMenu.classList.contains('hidden');
-        
-        if (isOpen) {
-            hideUserMenu();
-        } else {
-            showUserMenu();
-        }
-    });
-
-    // Close when clicking overlay
-    userMenuOverlay.addEventListener('click', function() {
-        hideUserMenu();
-    });
-
-    // Close when clicking outside
-    document.addEventListener('click', function(e) {
-        if (!userMenuContainer.contains(e.target)) {
-            hideUserMenu();
-        }
-    });
-
-    // Prevent menu from closing when clicking inside it
-    userMenu.addEventListener('click', function(e) {
-        e.stopPropagation();
-    });
-}
-
-// Show user menu
-function showUserMenu() {
-    const userMenu = document.getElementById('user-menu');
-    const userMenuOverlay = document.getElementById('user-menu-overlay');
-    
-    if (userMenu) {
-        userMenu.classList.remove('hidden');
-        userMenu.classList.add('active');
-    }
-    
-    // Only show overlay on mobile
-    if (window.innerWidth <= 768 && userMenuOverlay) {
-        userMenuOverlay.classList.add('active');
-        document.body.classList.add('user-menu-open');
     }
 }
 
@@ -5245,59 +5221,35 @@ const filteredPreorderOrders = preorderOrders;
 `;
 };
 
-// Initialize order search event listeners
 window.initializeOrderSearchListeners = function() {
     console.log('🔍 Initializing order search listeners...');
     
     // ===== REGULAR ORDERS SEARCH =====
     const orderSearchInput = document.getElementById('order-search-input');
-    const orderClearBtn = document.getElementById('clear-order-search-btn');
-    const orderClearButton = document.getElementById('clear-order-search-button');
     
     if (orderSearchInput) {
         console.log('✅ Found order search input');
         
-        // Remove existing listeners
+        // Remove existing listeners by cloning
         const newOrderInput = orderSearchInput.cloneNode(true);
         orderSearchInput.parentNode.replaceChild(newOrderInput, orderSearchInput);
         
-        // Set to empty initially
+        // Set initial value to empty
         newOrderInput.value = '';
         
-        // Add input listener
-        newOrderInput.addEventListener('input', function(e) {
-            const query = e.target.value;
-            orderSearchValue = query;
-            orderSearchCursor = e.target.selectionStart;
+        // Debounced input handler
+        const debouncedOrderSearch = debounce(function(query) {
             handleOrderSearch(query, 'regular');
+        }, 300);
+        
+        newOrderInput.addEventListener('input', function(e) {
+            debouncedOrderSearch(e.target.value);
         });
         
-        // Prevent Enter key
+        // Prevent form submission
         newOrderInput.addEventListener('keydown', function(e) {
             if (e.key === 'Enter') e.preventDefault();
         });
-        
-        // Clear button (X icon)
-        if (orderClearBtn) {
-            const newOrderClearBtn = orderClearBtn.cloneNode(true);
-            orderClearBtn.parentNode.replaceChild(newOrderClearBtn, orderClearBtn);
-            
-            newOrderClearBtn.addEventListener('click', function(e) {
-                e.preventDefault();
-                clearOrderSearch('regular');
-            });
-        }
-        
-        // Clear button (outside)
-        if (orderClearButton) {
-            const newOrderClearButton = orderClearButton.cloneNode(true);
-            orderClearButton.parentNode.replaceChild(newOrderClearButton, orderClearButton);
-            
-            newOrderClearButton.addEventListener('click', function(e) {
-                e.preventDefault();
-                clearOrderSearch('regular');
-            });
-        }
         
         // Initialize counts
         const regularOrders = window.APP_STATE.orders.filter(o => !o.type || o.type !== 'pre-order');
@@ -5306,59 +5258,37 @@ window.initializeOrderSearchListeners = function() {
     
     // ===== PRE-ORDER ORDERS SEARCH =====
     const preorderSearchInput = document.getElementById('preorder-search-input');
-    const preorderClearBtn = document.getElementById('clear-preorder-search-btn');
-    const preorderClearButton = document.getElementById('clear-preorder-search-button');
     
     if (preorderSearchInput) {
         console.log('✅ Found preorder search input');
         
-        // Remove existing listeners
+        // Remove existing listeners by cloning
         const newPreorderInput = preorderSearchInput.cloneNode(true);
         preorderSearchInput.parentNode.replaceChild(newPreorderInput, preorderSearchInput);
         
-        // Set to empty initially
+        // Set initial value to empty
         newPreorderInput.value = '';
         
-        // Add input listener
-        newPreorderInput.addEventListener('input', function(e) {
-            const query = e.target.value;
-            preorderSearchValue = query;
-            preorderSearchCursor = e.target.selectionStart;
+        // Debounced input handler
+        const debouncedPreorderSearch = debounce(function(query) {
             handleOrderSearch(query, 'preorder');
+        }, 300);
+        
+        newPreorderInput.addEventListener('input', function(e) {
+            debouncedPreorderSearch(e.target.value);
         });
         
-        // Prevent Enter key
+        // Prevent form submission
         newPreorderInput.addEventListener('keydown', function(e) {
             if (e.key === 'Enter') e.preventDefault();
         });
-        
-        // Clear button (X icon)
-        if (preorderClearBtn) {
-            const newPreorderClearBtn = preorderClearBtn.cloneNode(true);
-            preorderClearBtn.parentNode.replaceChild(newPreorderClearBtn, preorderClearBtn);
-            
-            newPreorderClearBtn.addEventListener('click', function(e) {
-                e.preventDefault();
-                clearOrderSearch('preorder');
-            });
-        }
-        
-        // Clear button (outside)
-        if (preorderClearButton) {
-            const newPreorderClearButton = preorderClearButton.cloneNode(true);
-            preorderClearButton.parentNode.replaceChild(newPreorderClearButton, preorderClearButton);
-            
-            newPreorderClearButton.addEventListener('click', function(e) {
-                e.preventDefault();
-                clearOrderSearch('preorder');
-            });
-        }
         
         // Initialize counts
         const preorderOrders = window.APP_STATE.orders.filter(o => o.type === 'pre-order');
         updateOrderSearchResultsCount(preorderOrders.length, preorderOrders.length, 'preorder');
     }
     
+    // Initialize Lucide icons
     setTimeout(() => icons(), 50);
 };
 
@@ -5628,28 +5558,40 @@ if (cartBtn) {
     cartBtn.addEventListener('click', () => toggleCartDrawer());
 }
 
+// Cart close button - improved handling
 const closeCart = document.getElementById('close-cart');
 if (closeCart) {
-    // Remove existing listeners
+    // Remove all existing event listeners by cloning
     const newCloseCart = closeCart.cloneNode(true);
     closeCart.parentNode.replaceChild(newCloseCart, closeCart);
     
-    // Add fresh listener
+    // Single unified click handler
     newCloseCart.addEventListener('click', function(e) {
         e.preventDefault();
         e.stopPropagation();
-        console.log('❌ Close cart button clicked');
-        toggleCartDrawer(false);
+        const drawer = document.getElementById('cart-drawer');
+        if (drawer) {
+            drawer.classList.add('hidden');
+            console.log('✅ Cart drawer closed');
+        }
     });
-    
-    // Also ensure onclick works
-    newCloseCart.onclick = function(e) {
-        e.preventDefault();
-        e.stopPropagation();
-        console.log('❌ Close cart (onclick) triggered');
-        toggleCartDrawer(false);
-    };
 }
+
+// Close cart when clicking outside
+document.addEventListener('click', function(e) {
+    const cartDrawer = document.getElementById('cart-drawer');
+    const cartBtn = document.getElementById('cart-btn');
+    
+    if (!cartDrawer || cartDrawer.classList.contains('hidden')) return;
+    
+    // Check if click is outside both cart drawer and cart button
+    if (!cartDrawer.contains(e.target) && 
+        !cartBtn.contains(e.target) && 
+        e.target.id !== 'cart-btn') {
+        cartDrawer.classList.add('hidden');
+        console.log('✅ Cart closed (clicked outside)');
+    }
+});
     
     const checkoutBtn = document.getElementById('checkout-btn');
 if (checkoutBtn) {
