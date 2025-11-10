@@ -427,6 +427,39 @@ async function initializeFirebaseData() {
         setTimeout(() => {
             window.verifyDatabaseSync();
         }, 2000);
+
+        // ✅ ADD THIS: Real-time cart sync for logged-in users
+if (window.APP_STATE.currentUser) {
+    const userCartRef = ref(database, `carts/${window.APP_STATE.currentUser.uid}`);
+    
+    onValue(userCartRef, (snapshot) => {
+        if (snapshot.exists()) {
+            const cartData = snapshot.val();
+            const cartItems = Object.values(cartData).filter(item => 
+                item && typeof item === 'object' && item.productId
+            );
+            
+            // Only update if cart actually changed
+            const cartChanged = JSON.stringify(window.APP_STATE.cart) !== JSON.stringify(cartItems);
+            
+            if (cartChanged) {
+                window.APP_STATE.cart = cartItems;
+                console.log('🛒 Cart synced from database:', cartItems.length, 'items');
+                
+                // Update cart drawer if open
+                const cartDrawer = document.getElementById('cart-drawer');
+                if (cartDrawer && !cartDrawer.classList.contains('hidden')) {
+                    renderCartDrawer();
+                }
+                
+                // Update cart badge
+                updateCartBadge();
+            }
+        }
+    }, (error) => {
+        console.error('❌ Cart listener error:', error);
+    });
+}
         
     } catch (error) {
         console.error('❌ Error initializing Firebase data:', error);
@@ -1164,74 +1197,114 @@ window.toggleAdminChatDropdown = function() {
 function setupRealtimeListeners() {
     console.log('🎧 Setting up real-time listeners...');
 
-    // ✅ PRODUCTS LISTENER
+    // ✅ PRODUCTS LISTENER - Real-time updates
     onValue(dbRefs.products, (snapshot) => {
         console.log('📦 Products listener triggered');
         if (snapshot.exists()) {
             const productsData = snapshot.val();
-            window.APP_STATE.products = Object.values(productsData);
-            console.log('✅ Products updated:', window.APP_STATE.products.length);
+            const newProducts = Object.values(productsData);
             
-            // Re-render if on shop view
-            if (window.APP_STATE.view === 'shop') {
-                renderMain();
+            // Check if products actually changed
+            const productsChanged = JSON.stringify(window.APP_STATE.products) !== JSON.stringify(newProducts);
+            
+            if (productsChanged) {
+                window.APP_STATE.products = newProducts;
+                console.log('✅ Products updated:', window.APP_STATE.products.length);
+                
+                // Re-render only if on shop view
+                if (window.APP_STATE.view === 'shop') {
+                    renderMain();
+                }
+                
+                // Update cart drawer if open
+                const cartDrawer = document.getElementById('cart-drawer');
+                if (cartDrawer && !cartDrawer.classList.contains('hidden')) {
+                    renderCartDrawer();
+                }
             }
         } else {
             console.log('⚠️ No products in database');
             window.APP_STATE.products = [];
+            if (window.APP_STATE.view === 'shop') {
+                renderMain();
+            }
         }
     }, (error) => {
         console.error('❌ Products listener error:', error);
     });
 
-    // ✅ ORDERS LISTENER
+    // ✅ ORDERS LISTENER - Real-time updates
     onValue(dbRefs.orders, (snapshot) => {
         console.log('📋 Orders listener triggered');
         if (snapshot.exists()) {
             const ordersData = snapshot.val();
-            window.APP_STATE.orders = Object.values(ordersData);
-            console.log('✅ Orders updated:', window.APP_STATE.orders.length);
+            const newOrders = Object.values(ordersData);
             
-            // Re-render if on orders view or admin
-            if (window.APP_STATE.view === 'orders' || window.APP_STATE.view === 'admin') {
-                renderMain();
+            // Check if orders actually changed
+            const ordersChanged = JSON.stringify(window.APP_STATE.orders) !== JSON.stringify(newOrders);
+            
+            if (ordersChanged) {
+                window.APP_STATE.orders = newOrders;
+                console.log('✅ Orders updated:', window.APP_STATE.orders.length);
+                
+                // Re-render if on orders view or admin
+                if (window.APP_STATE.view === 'orders' || window.APP_STATE.view === 'admin') {
+                    renderMain();
+                }
             }
         } else {
             console.log('⚠️ No orders in database');
             window.APP_STATE.orders = [];
+            if (window.APP_STATE.view === 'orders' || window.APP_STATE.view === 'admin') {
+                renderMain();
+            }
         }
     }, (error) => {
         console.error('❌ Orders listener error:', error);
     });
 
-    // ✅ CHATS LISTENER
+    // ✅ USERS LISTENER - Real-time updates for profile verification
+    onValue(dbRefs.users, (snapshot) => {
+        console.log('👥 Users listener triggered');
+        
+        // Re-render if on admin verification view
+        if (window.APP_STATE.view === 'admin' && window.APP_STATE.adminView === 'verification') {
+            renderMain();
+        }
+    }, (error) => {
+        console.error('❌ Users listener error:', error);
+    });
+
+    // ✅ CHATS LISTENER - Real-time chat updates
     onValue(dbRefs.chats, (snapshot) => {
         console.log('💬 Chats listener triggered');
         if (snapshot.exists()) {
             const chatsData = snapshot.val();
-            window.APP_STATE.chats = Object.keys(chatsData).map(chatId => ({
+            const newChats = Object.keys(chatsData).map(chatId => ({
                 id: chatId,
                 ...chatsData[chatId]
             })).sort((a, b) => new Date(b.lastMessageAt) - new Date(a.lastMessageAt));
             
+            window.APP_STATE.chats = newChats;
             console.log('✅ Chats updated:', window.APP_STATE.chats.length);
             
-            // Update UI elements
+            // Update admin chat dropdown
             if (typeof window.renderAdminChatDropdown === 'function') {
                 window.renderAdminChatDropdown();
             }
+            
+            // Update customer chat bubble indicator
             if (typeof window.renderChatBubbleIndicator === 'function') {
                 window.renderChatBubbleIndicator();
             }
             
-            // Update chat windows if open
+            // Update open chat windows
             const chatWindow = document.getElementById('customer-chat-window');
             if (chatWindow && !chatWindow.classList.contains('hidden')) {
-                if (typeof window.updateCustomerChatMessages === 'function') {
-                    window.updateCustomerChatMessages();
-                }
+                window.updateCustomerChatMessages();
             }
             
+            // Update open admin chat modal
             const modalOverlay = document.getElementById('modal-overlay');
             if (modalOverlay && !modalOverlay.classList.contains('hidden')) {
                 const openChatId = modalOverlay.getAttribute('data-chat-id');
@@ -1245,6 +1318,23 @@ function setupRealtimeListeners() {
         }
     }, (error) => {
         console.error('❌ Chats listener error:', error);
+    });
+
+    // ✅ DELIVERY FEE LISTENER - Real-time updates
+    onValue(ref(database, 'settings/deliveryFee'), (snapshot) => {
+        if (snapshot.exists()) {
+            const newFee = snapshot.val();
+            if (window.APP_STATE.deliveryFee !== newFee) {
+                window.APP_STATE.deliveryFee = newFee;
+                console.log('✅ Delivery fee updated:', newFee);
+                
+                // Update cart drawer if open
+                const cartDrawer = document.getElementById('cart-drawer');
+                if (cartDrawer && !cartDrawer.classList.contains('hidden')) {
+                    renderCartDrawer();
+                }
+            }
+        }
     });
 
     console.log('✅ All listeners set up successfully');
@@ -1678,40 +1768,39 @@ window.addToCart = async function(productId, qty = 1) {
     const newStock = availableStock - qty;
     
     try {
-        // Update stock in Firebase
-        await updateFirebase(`products/${productId}`, { quantity: newStock });
-        
-        // Update local state
-        p.quantity = newStock;
-        
-        console.log(`✅ Stock reserved: ${p.name} (${qty} ${p.unit}) - Remaining: ${newStock}`);
-        
-        // ✅ Add to cart
-        if (idx >= 0) {
-            window.APP_STATE.cart[idx].quantity += qty;
-        } else {
-            window.APP_STATE.cart.push({ 
-                productId: p.id, 
-                name: p.name, 
-                price: p.price, 
-                quantity: qty, 
-                unit: p.unit, 
-                preordered: false 
-            });
-        }
-
-        // ✅ Save cart to Firebase
-        await saveToFirebase(`carts/${window.APP_STATE.currentUser.uid}`, window.APP_STATE.cart);
-
-        renderCartDrawer();
-        toggleCartDrawer(true);
-
-        await updateCartActivity();
-        
-    } catch (error) {
-        console.error('❌ Error reserving stock:', error);
-        showModal('Error', 'Failed to add item to cart. Please try again.', `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
+    // Update stock in Firebase - this will trigger real-time listeners
+    await updateFirebase(`products/${productId}`, { quantity: newStock });
+    
+    // Local state will be updated by the real-time listener
+    console.log(`✅ Stock reserved: ${p.name} (${qty} ${p.unit}) - Remaining: ${newStock}`);
+    
+    // Add to cart
+    if (idx >= 0) {
+        window.APP_STATE.cart[idx].quantity += qty;
+    } else {
+        window.APP_STATE.cart.push({ 
+            productId: p.id, 
+            name: p.name, 
+            price: p.price, 
+            quantity: qty, 
+            unit: p.unit, 
+            preordered: false 
+        });
     }
+
+    // Save cart to Firebase - this will trigger real-time sync
+    await saveToFirebase(`carts/${window.APP_STATE.currentUser.uid}`, window.APP_STATE.cart);
+
+    // Update UI immediately
+    renderCartDrawer();
+    toggleCartDrawer(true);
+
+    await updateCartActivity();
+    
+} catch (error) {
+    console.error('❌ Error reserving stock:', error);
+    showModal('Error', 'Failed to add item to cart. Please try again.', `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
+}
 };
 
 window.preOrderItem = async function(productId, qty = 1) {
@@ -2929,7 +3018,15 @@ window.adminSaveProduct = async function(editId = null) {
             delete productUpdate.preorderDuration;
             delete productUpdate.preorderStart;
         }
+        
         await updateFirebase(`products/${editId}`, productUpdate);
+        
+        // 🆕 ADDED: Real-time update notification for editing
+        console.log('✅ Product updated in Firebase');
+        if (typeof window.showRealtimeUpdateNotification === 'function') {
+            window.showRealtimeUpdateNotification(`Product "${name}" updated successfully`, 'success');
+        }
+        
     } else {
         const newId = Date.now();
         const newProd = { 
@@ -2950,8 +3047,16 @@ window.adminSaveProduct = async function(editId = null) {
             newProd.preorderDuration = Math.min(14, Math.max(7, (dur || 7)));
             newProd.preorderStart = Date.now();
         }
+        
         await saveToFirebase(`products/${newId}`, newProd);
+        
+        // 🆕 ADDED: Real-time update notification for creating
+        console.log('✅ New product created in Firebase');
+        if (typeof window.showRealtimeUpdateNotification === 'function') {
+            window.showRealtimeUpdateNotification(`Product "${name}" created successfully`, 'success');
+        }
     }
+    
     hideModal();
 };
 
@@ -3034,6 +3139,10 @@ window.adminConfirmDelete = async function(id) {
     
     await saveToFirebase('deleteLogs', deleteLogs);
     await remove(ref(database, `products/${id}`));
+
+    if (typeof window.showRealtimeUpdateNotification === 'function') {
+    window.showRealtimeUpdateNotification('Product deleted successfully', 'warning');
+}
     hideModal();
 };
 
@@ -3455,10 +3564,32 @@ window.adminEditOrder = function(id) {
 };
 
 window.adminSaveOrderStatus = async function(id) {
-    if(!window.APP_STATE.currentUser || window.APP_STATE.currentUser.role !== 'admin') return showModal('Forbidden', 'Admin access required.', `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
-    const newS = document.getElementById('order-new-status')?.value;
-    await updateFirebase(`orders/${id}`, { status: newS });
-    hideModal();
+    if(!window.APP_STATE.currentUser || window.APP_STATE.currentUser.role !== 'admin') {
+        return showModal('Forbidden', 'Admin access required.', `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
+    }
+    
+    const newStatus = document.getElementById('order-new-status')?.value;
+    
+    try {
+        // Update in Firebase - real-time listeners will update all connected clients
+        await updateFirebase(`orders/${id}`, { 
+            status: newStatus,
+            updatedAt: new Date().toISOString()
+        });
+        
+        hideModal();
+        
+        // Show success notification
+        showModal(
+            '✅ Status Updated',
+            `Order ${id} status changed to: <strong>${newStatus}</strong>`,
+            `<button onclick="hideModal()" class="px-4 py-2 bg-lime-600 text-white rounded">OK</button>`
+        );
+        
+    } catch (error) {
+        console.error('❌ Error updating order status:', error);
+        showModal('Error', 'Failed to update order status.', `<button onclick="hideModal()" class="px-4 py-2 bg-gray-100 rounded">OK</button>`);
+    }
 };
 
 window.adminUpdateDeliveryFee = function() {
@@ -4519,6 +4650,40 @@ setTimeout(() => {
     if (searchInput && window.APP_STATE.searchQuery) {
         searchInput.value = window.APP_STATE.searchQuery;
     }
+};
+
+// ✅ NEW: Show real-time update notification
+window.showRealtimeUpdateNotification = function(message, type = 'info') {
+    const notification = document.createElement('div');
+    notification.className = `fixed top-20 right-4 z-50 px-4 py-3 rounded-lg shadow-lg transform translate-x-full transition-transform duration-300 ${
+        type === 'success' ? 'bg-green-50 border-l-4 border-green-500 text-green-800' :
+        type === 'warning' ? 'bg-yellow-50 border-l-4 border-yellow-500 text-yellow-800' :
+        type === 'error' ? 'bg-red-50 border-l-4 border-red-500 text-red-800' :
+        'bg-blue-50 border-l-4 border-blue-500 text-blue-800'
+    }`;
+    
+    notification.innerHTML = `
+        <div class="flex items-center gap-2">
+            <i data-lucide="${type === 'success' ? 'check-circle' : type === 'warning' ? 'alert-circle' : type === 'error' ? 'x-circle' : 'info'}" class="w-5 h-5"></i>
+            <span class="text-sm font-medium">${message}</span>
+        </div>
+    `;
+    
+    document.body.appendChild(notification);
+    
+    // Initialize icons
+    if (window.lucide) lucide.createIcons();
+    
+    // Slide in
+    setTimeout(() => {
+        notification.style.transform = 'translateX(0)';
+    }, 100);
+    
+    // Auto remove after 3 seconds
+    setTimeout(() => {
+        notification.style.transform = 'translateX(100%)';
+        setTimeout(() => notification.remove(), 300);
+    }, 3000);
 };
 
 window.switchTo = function(v) {
