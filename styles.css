@@ -2401,7 +2401,7 @@ body.user-menu-open {
 }
 
 /* ==========================================
-   👤 USER DROPDOWN MENU - FIXED VERSION
+   💤 USER DROPDOWN MENU - FIXED VERSION
    ========================================== */
 
 .user-menu-wrapper {
@@ -2419,6 +2419,10 @@ body.user-menu-open {
   transition: transform 0.3s ease;
 }
 
+#user-menu-btn.active .dropdown-icon {
+  transform: rotate(180deg);
+}
+
 .user-dropdown-menu {
   position: absolute;
   top: calc(100% + 0.5rem);
@@ -2431,17 +2435,20 @@ body.user-menu-open {
   z-index: 1000;
   opacity: 0;
   visibility: hidden;
-  transform: translateY(-10px) scale(0.95);
+  transform: translateY(-10px);
   transform-origin: top right;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: opacity 0.2s ease, visibility 0.2s ease, transform 0.2s ease;
   pointer-events: none;
+  max-height: 0;
+  overflow: hidden;
 }
 
 .user-dropdown-menu.show {
   opacity: 1;
   visibility: visible;
-  transform: translateY(0) scale(1);
+  transform: translateY(0);
   pointer-events: all;
+  max-height: 500px;
 }
 
 .user-dropdown-item {
@@ -2457,7 +2464,7 @@ body.user-menu-open {
   font-family: inherit;
   font-size: 0.9375rem;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background-color 0.15s ease, color 0.15s ease;
   border-bottom: 1px solid #f3f4f6;
 }
 
@@ -2504,14 +2511,12 @@ body.user-menu-open {
   z-index: 999;
   opacity: 0;
   visibility: hidden;
-  transition: all 0.3s ease;
-  display: none;
+  transition: opacity 0.3s ease, visibility 0.3s ease;
 }
 
 .user-menu-overlay.show {
   opacity: 1;
   visibility: visible;
-  display: block;
 }
 
 /* Mobile Styles */
@@ -2528,10 +2533,13 @@ body.user-menu-open {
     transform: translateY(100%);
     transform-origin: bottom center;
     min-width: 100%;
+    max-height: none;
   }
   
   .user-dropdown-menu.show {
     transform: translateY(0);
+    max-height: 80vh;
+    overflow-y: auto;
   }
   
   .user-dropdown-item {
@@ -3384,4 +3392,50 @@ button:not(:disabled):active {
     to {
         opacity: 1;
     }
+}
+
+/* ==========================================
+   🎯 Anti-Blink Optimizations
+   ========================================== */
+
+/* Prevent flash of content */
+#main-content {
+    min-height: 400px;
+    transition: opacity 0.15s ease;
+}
+
+/* Smooth state changes */
+.user-dropdown-menu,
+#cart-drawer,
+#mobile-menu {
+    will-change: transform, opacity;
+}
+
+/* Disable transitions during page load */
+.preload * {
+    transition: none !important;
+}
+
+/* GPU acceleration for smooth animations */
+#user-menu,
+#cart-drawer,
+.user-dropdown-menu {
+    transform: translateZ(0);
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+}
+
+/* Prevent layout shift */
+button:not(:disabled) {
+    transition: transform 0.1s ease, background-color 0.15s ease;
+}
+
+button:not(:disabled):active {
+    transform: scale(0.98);
+}
+
+/* Optimize rendering */
+.card,
+.admin-table-container {
+    content-visibility: auto;
 }

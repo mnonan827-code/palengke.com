@@ -86,6 +86,18 @@ const dbRefs = {
     chats: ref(database, 'chats')
 };
 
+// ✅ NEW: Debounced render to prevent blinking
+window.debouncedRender = (function() {
+    let timeout;
+    return function(callback) {
+        clearTimeout(timeout);
+        timeout = setTimeout(() => {
+            if (callback) callback();
+            renderMain();
+        }, 50);
+    };
+})();
+
 // Helper to safely initialize Lucide icons
 window.safeIconInit = function() {
     try {
@@ -4140,66 +4152,63 @@ function initUserDropdown() {
         const isOpen = menu.classList.contains('show');
         
         if (isOpen) {
-            menu.classList.remove('show');
-            overlay.classList.remove('show');
-            document.body.style.overflow = '';
+            closeUserMenuInternal();
         } else {
-            menu.classList.add('show');
-            if (window.innerWidth <= 768) {
-                overlay.classList.add('show');
-                document.body.style.overflow = 'hidden';
-            }
+            openUserMenuInternal();
         }
     });
 
     // Close on overlay click
-    overlay.addEventListener('click', function() {
-        menu.classList.remove('show');
-        overlay.classList.remove('show');
-        document.body.style.overflow = '';
+    overlay.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        closeUserMenuInternal();
     });
 
-    // Close when clicking outside
+    // Close when clicking outside (for desktop)
     document.addEventListener('click', function(e) {
-        if (!newBtn.contains(e.target) && !menu.contains(e.target) && menu.classList.contains('show')) {
-            menu.classList.remove('show');
-            overlay.classList.remove('show');
-            document.body.style.overflow = '';
+        if (!newBtn.contains(e.target) && 
+            !menu.contains(e.target) && 
+            menu.classList.contains('show')) {
+            closeUserMenuInternal();
         }
     });
+
+    // Prevent clicks inside menu from closing it
+    menu.addEventListener('click', function(e) {
+        e.stopPropagation();
+    });
+
+    function openUserMenuInternal() {
+        menu.classList.add('show');
+        newBtn.classList.add('active');
+        if (window.innerWidth <= 768) {
+            overlay.classList.add('show');
+            document.body.style.overflow = 'hidden';
+        }
+    }
+
+    function closeUserMenuInternal() {
+        menu.classList.remove('show');
+        newBtn.classList.remove('active');
+        overlay.classList.remove('show');
+        document.body.style.overflow = '';
+    }
 
     console.log('✅ User dropdown initialized');
 }
 
-// Make closeUserMenu globally available
+// Update the global closeUserMenu function
 window.closeUserMenu = function() {
     const menu = document.getElementById('user-menu');
+    const btn = document.getElementById('user-menu-btn');
     const overlay = document.getElementById('user-menu-overlay');
     
     if (menu) menu.classList.remove('show');
+    if (btn) btn.classList.remove('active');
     if (overlay) overlay.classList.remove('show');
     document.body.style.overflow = '';
 };
-
-function closeUserMenu() {
-    const menu = document.getElementById('user-menu');
-    const overlay = document.getElementById('user-menu-overlay');
-    const icon = document.querySelector('.dropdown-icon');
-    
-    if (!menu) return;
-    
-    console.log('Closing user menu');
-    menu.classList.remove('show');
-    
-    if (icon) {
-        icon.style.transform = 'rotate(0deg)';
-    }
-    
-    if (overlay) {
-        overlay.classList.remove('show');
-        document.body.style.overflow = '';
-    }
-}
 
 window.openAuth = function(mode = 'login') {
     if(mode === 'login') {
@@ -4233,14 +4242,18 @@ window.openAuth = function(mode = 'login') {
 window.exitAdmin = function() {
     window.APP_STATE.view = 'shop';
     closeUserMenu();
-    renderMain();
+    
+    // ✅ Use debounced render
+    debouncedRender();
 };
 
 window.goAdmin = function() {
     window.APP_STATE.view = 'admin';
     window.APP_STATE.adminView = 'dashboard';
     closeUserMenu();
-    renderMain();
+    
+    // ✅ Use debounced render
+    debouncedRender();
 };
 
 window.hideUserMenu = function() {
@@ -4265,9 +4278,11 @@ window.toggleCartDrawer = function(show) {
         return;
     }
     
+    // ✅ Prevent re-render, just toggle visibility
     if (typeof show === 'boolean') {
         if (show) {
             drawer.classList.remove('hidden');
+            renderCartDrawer(); // Only render cart content
             console.log('🛒 Cart drawer opened');
         } else {
             drawer.classList.add('hidden');
@@ -4275,13 +4290,13 @@ window.toggleCartDrawer = function(show) {
         }
     } else {
         drawer.classList.toggle('hidden');
+        if (!drawer.classList.contains('hidden')) {
+            renderCartDrawer(); // Only render cart content
+        }
         console.log('🔄 Cart drawer toggled');
     }
     
-    // Only render if opening
-    if (!drawer.classList.contains('hidden')) {
-        renderCartDrawer();
-    }
+    // ✅ DON'T call renderMain() here - it causes blinking
 };
 
 window.updateCartBadge = function() {
@@ -4407,6 +4422,26 @@ window.updatePreorderStatuses = function() {
 };
 
 window.renderMain = async function() {
+
+    const lastRenderState = window._lastRenderState || {};
+    const currentState = {
+        view: window.APP_STATE.view,
+        adminView: window.APP_STATE.adminView,
+        productsLength: window.APP_STATE.products.length,
+        ordersLength: window.APP_STATE.orders.length,
+        searchQuery: window.APP_STATE.searchQuery
+    };
+    
+    // Check if state actually changed
+    const stateChanged = JSON.stringify(lastRenderState) !== JSON.stringify(currentState);
+    
+    if (!stateChanged && window._lastRenderTime && (Date.now() - window._lastRenderTime) < 100) {
+        console.log('⏭️ Skipping redundant render');
+        return;
+    }
+    
+    window._lastRenderState = currentState;
+    window._lastRenderTime = Date.now();
     
     const main = document.getElementById('main-content');
 
@@ -4500,7 +4535,9 @@ setTimeout(() => {
 window.switchTo = function(v) {
     window.APP_STATE.view = v;
     closeMobileMenu();
-    renderMain();
+    
+    // ✅ Use debounced render
+    debouncedRender();
 };
 
 window.renderShop = function() {
@@ -5590,6 +5627,22 @@ window.addEventListener('load', () => {
     setupEventListeners();
     updateAuthArea();
     icons();
+});
+
+// Initialize app
+window.addEventListener('load', () => {
+    // ✅ Remove preload class after everything loads
+    document.body.classList.add('preload');
+    
+    initializeFirebaseData();
+    setupEventListeners();
+    updateAuthArea();
+    icons();
+    
+    // ✅ Remove preload after a short delay
+    setTimeout(() => {
+        document.body.classList.remove('preload');
+    }, 100);
 });
 
 // Escape key handler
