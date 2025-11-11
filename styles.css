@@ -3375,3 +3375,47 @@ button[onclick^="endChatConversation"]:active {
 .admin-card {
     animation: fadeInUpdate 0.3s ease-out;
 }
+
+/* ==========================================
+   🛒 Cart Drawer Close Animation Fix
+   ========================================== */
+
+#cart-drawer {
+    transition: opacity 0.25s ease, 
+                transform 0.25s ease, 
+                visibility 0.25s;
+    pointer-events: auto;
+}
+
+#cart-drawer.hidden {
+    opacity: 0;
+    transform: translateX(20px);
+    visibility: hidden;
+    pointer-events: none;
+}
+
+#cart-drawer:not(.hidden) {
+    opacity: 1;
+    transform: translateX(0);
+    visibility: visible;
+    pointer-events: auto;
+}
+
+/* Close button improvements */
+#close-cart {
+    cursor: pointer;
+    user-select: none;
+    min-height: 44px;
+    min-width: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#close-cart:hover {
+    background: rgba(239, 68, 68, 0.1);
+}
+
+#close-cart:active {
+    transform: scale(0.95);
+}
