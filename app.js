@@ -46,9 +46,9 @@ window.APP_STATE = {
     deliveryFee: 25.00,
     adminView: 'dashboard',
     searchQuery: '',
-    orderSearchQuery: '',       
-    preorderSearchQuery: '',     
-    chats: [], 
+    orderSearchQuery: '',        // ✅ Add this
+    preorderSearchQuery: '',      // ✅ Add this
+    chats: [], // 🟢 ADD THIS LINE
 };
 
 let orderSearchValue = '';
@@ -56,8 +56,7 @@ let orderSearchCursor = 0;
 let preorderSearchValue = '';
 let preorderSearchCursor = 0;
 
-const CART_TIMEOUT = 30 * 60 * 1000; 
-
+const CART_TIMEOUT = 30 * 60 * 1000; // 30 minutes in milliseconds
 let cartActivityTimer = null;
 
 const APP_KEY = 'palengke_cainta_v4';
@@ -89,7 +88,7 @@ const dbRefs = {
     carts: ref(database, 'carts'),
     notifications: ref(database, 'notifications'),
     deleteLogs: ref(database, 'deleteLogs'),
-    chats: ref(database, 'chats') 
+    chats: ref(database, 'chats') // 🟢 ADD THIS LINE
 };
 
 // Helper to safely initialize Lucide icons
@@ -362,8 +361,8 @@ async function initializeFirebaseData() {
     console.log('✅ Products loaded:', window.APP_STATE.products.length);
 } else {
     console.log('⚠️ No products found in database.');
-    window.APP_STATE.products = []; 
-    
+    window.APP_STATE.products = []; // leave empty
+    // ❌ Do NOT seed initial data automatically anymore
 }
 
 
@@ -439,6 +438,22 @@ async function initializeFirebaseData() {
     }
 }
 
+async function seedInitialData() {
+    const initialProducts = [
+        { id: 1, name: "Fresh Tilapia", origin: "San Juan Fish Farm", farmer: { name: "Mang Jose", contact: "0917-234-5678" }, price: 150.00, quantity: 50, unit: 'kg', freshness: 95, freshnessIndicator: 'farm-fresh', imgUrl: 'https://placehold.co/600x360/4ade80/000?text=Tilapia' },
+        { id: 2, name: "Native Chicken Eggs", origin: "Brgy. San Andres Poultry", farmer: { name: "Aling Nena", contact: "0998-765-4321" }, price: 8.00, quantity: 200, unit: 'pc', freshness: 92, freshnessIndicator: 'farm-fresh', imgUrl: 'https://placehold.co/600x360/84cc16/000?text=Eggs' },
+        { id: 3, name: "Organic Lettuce", origin: "Sta. Lucia Hydroponics", farmer: { name: "Mr. Dela Cruz", contact: "0920-111-2222" }, price: 65.00, quantity: 30, unit: 'head', freshness: 88, freshnessIndicator: 'very-fresh', imgUrl: 'https://placehold.co/600x360/4ade80/000?text=Lettuce' },
+        { id: 4, name: "Ripe Bananas (Lakatan)", origin: "Cainta Farm Cooperative", farmer: { name: "Ate Sol", contact: "0905-333-4444" }, price: 50.00, quantity: 80, unit: 'kg', freshness: 85, freshnessIndicator: 'very-fresh', imgUrl: 'https://placehold.co/600x360/84cc16/000?text=Bananas' },
+    ];
+
+    for (const product of initialProducts) {
+        await saveToFirebase(`products/${product.id}`, product);
+    }
+    window.APP_STATE.products = initialProducts;
+
+    await createDefaultAdmin();
+}
+
 async function createDefaultAdmin() {
     const adminEmail = "lgucainta@gmail.com";
     const adminPassword = "LGUCAINTA2025";
@@ -469,10 +484,12 @@ async function createDefaultAdmin() {
     }
 }
 
+// In app.js (Add these functions)
 
 // Utility function to generate a simple unique ID for new chat threads
 const uid = () => 'C' + Date.now().toString(36) + Math.random().toString(36).substring(2);
 
+// Find or create a chat thread ID for the current user (UID for logged in, Session ID for guest)
 // Find or create a chat thread ID for the current user (UID for logged in, Session ID for guest)
 window.getChatThreadId = function() {
     if (!window.APP_STATE.currentUser) {
@@ -486,6 +503,9 @@ window.getChatThreadId = function() {
     return window.APP_STATE.currentUser.uid;
 };
 
+// Send a chat message (customer or admin)
+// Send a chat message (customer or admin)
+// Send a chat message (customer or admin)
 // Send a chat message (customer or admin)
 window.sendChatMessage = async function(threadId, sender, messageText, role) {
     if (!messageText.trim()) return;
@@ -509,6 +529,7 @@ window.sendChatMessage = async function(threadId, sender, messageText, role) {
         timestamp: timestamp
     };
     
+    // ... rest of the function stays the same
     
     try {
         const chatRef = ref(database, `chats/${threadId}`);
@@ -586,6 +607,8 @@ if (role === 'customer' && (!chatData.autoResponseSent || chatData.conversationE
     }
 };
 
+// ✅ NEW: Send automatic admin welcome message
+// ✅ NEW: Send automatic admin welcome message
 // ✅ NEW: Send automatic admin welcome message
 window.sendAutoAdminResponse = async function(threadId) {
     console.log('🤖 Starting auto-response for thread:', threadId);
@@ -1034,6 +1057,9 @@ window.setupAdminChatListener = function(threadId) {
     });
 };;
 
+// In app.js (Add this function)
+
+// Function to control which chat interface is visible based on user role
 // Function to control which chat interface is visible based on user role
 window.updateChatVisibility = function() {
     // Check if the current user is logged in AND has the 'admin' role
@@ -1261,7 +1287,7 @@ window.debouncedRenderMain = function(delay = 300) {
 };
 
 // ✅ NEW: Real-time update for customer chat messages
-
+// ✅ NEW: Real-time update for customer chat messages
 window.updateCustomerChatMessages = function() {
     console.log('🔄 Updating customer chat messages...');
     const chatWindow = document.getElementById('customer-chat-window');
@@ -2292,6 +2318,7 @@ window.handleChatInputKeydown = function(event, threadId, senderName, role) {
         const sendBtn = document.getElementById(`chat-send-btn-${threadId}`);
         if (sendBtn) sendBtn.click();
     }
+    // Shift+Enter = New line (default behavior, no need to handle)
 };
 
 // Show user profile modal
@@ -2566,10 +2593,10 @@ window.saveUserProfile = async function() {
             idType,
             idUrl,
             verified: false,
-            denied: false,  
-            denialReason: null,
-            deniedAt: null, 
-            deniedBy: null, 
+            denied: false,  // ✅ Clear denial status
+            denialReason: null,  // ✅ Clear denial reason
+            deniedAt: null,  // ✅ Clear denial timestamp
+            deniedBy: null,  // ✅ Clear who denied it
             submittedAt: new Date().toISOString()
         };
 
@@ -2637,6 +2664,7 @@ window.updateAddressPreview = function() {
     }
 };
 
+// Address validation function for Cainta, Rizal only
 
 // Validate address before placing order
 
@@ -2693,7 +2721,7 @@ window.validateAndPlaceOrder = async function() {
     const userData = await getFromFirebase(`users/${window.APP_STATE.currentUser.uid}`);
     const profile = userData.profile || {};
     
-
+    // Proceed with placing order
     // ✅ FIXED: Generate proper random order ID
 const newId = 'O-' + generateOrderId(); // Now generates O-XXXXXXXX with random alphanumeric
     const itemsCopy = window.APP_STATE.cart.map(i=> ({ ...i }));
@@ -4361,37 +4389,26 @@ window.toggleCartDrawer = function(show) {
     const drawer = document.getElementById('cart-drawer');
     
     if (!drawer) {
-        console.error('❌ Cart drawer not found');
+        console.error('Cart drawer not found');
         return;
     }
     
     if (typeof show === 'boolean') {
         if (show) {
             drawer.classList.remove('hidden');
-            renderCartDrawer();
-            // Setup interaction handlers after a brief delay
-            setTimeout(() => {
-                setupCartInteractionHandlers();
-            }, 150);
             console.log('🛒 Cart drawer opened');
         } else {
             drawer.classList.add('hidden');
-            console.log('✅ Cart drawer closed');
+            console.log('❌ Cart drawer closed');
         }
     } else {
-        // Toggle behavior
-        const isHidden = drawer.classList.contains('hidden');
-        if (isHidden) {
-            drawer.classList.remove('hidden');
-            renderCartDrawer();
-            setTimeout(() => {
-                setupCartInteractionHandlers();
-            }, 150);
-            console.log('🛒 Cart drawer opened (toggled)');
-        } else {
-            drawer.classList.add('hidden');
-            console.log('✅ Cart drawer closed (toggled)');
-        }
+        drawer.classList.toggle('hidden');
+        console.log('🔄 Cart drawer toggled');
+    }
+    
+    // Only render if opening
+    if (!drawer.classList.contains('hidden')) {
+        renderCartDrawer();
     }
 };
 
@@ -4471,42 +4488,9 @@ window.renderCartDrawer = function() {
             checkoutBtn.style.display = 'block';
         }
     }
-   // 🆕 ADD THIS AT THE END
-    setTimeout(() => {
-        setupCartInteractionHandlers();
-    }, 100);
-};
-
-// Prevent cart interactions from closing the drawer
-window.setupCartInteractionHandlers = function() {
-    const cartDrawer = document.getElementById('cart-drawer');
-    if (!cartDrawer) return;
     
-    // Stop propagation on all interactive elements inside cart
-    const interactiveElements = cartDrawer.querySelectorAll('button, input, select, textarea, a');
-    
-    interactiveElements.forEach(element => {
-        // Don't add if it's the close button (it needs to close)
-        if (element.id === 'close-cart') return;
-        
-        element.addEventListener('click', function(e) {
-            e.stopPropagation();
-        });
-        
-        element.addEventListener('mousedown', function(e) {
-            e.stopPropagation();
-        });
-    });
-    
-    // Stop propagation on the cart body itself
-    const cartBody = document.getElementById('cart-drawer-body');
-    if (cartBody) {
-        cartBody.addEventListener('click', function(e) {
-            e.stopPropagation();
-        });
-    }
-    
-    console.log('✅ Cart interaction handlers set up');
+    updateCartBadge();
+    icons();
 };
 
 window.computeRemainingDays = function(p) {
@@ -4952,7 +4936,7 @@ const preorderRows = filteredPreorder.length > 0 ? filteredPreorder.map(p => {
     `;
 }).join('') : '<tr><td class="px-3 py-8 text-center text-gray-500 text-sm" colspan="8">No pre-order products</td></tr>';
 
-   
+    // ✅ FILTER ORDERS
     // ✅ FILTER ORDERS - Reset search state when rendering dashboard
 const regularOrders = window.APP_STATE.orders.filter(o => !o.type || o.type !== 'pre-order');
 const preorderOrders = window.APP_STATE.orders.filter(o => o.type === 'pre-order');
@@ -5365,7 +5349,7 @@ const pendingUsers = usersData ? Object.values(usersData).filter(u =>
         u.profile && u.profile.verified
     ) : [];
 
-  
+    // Add after getting verifiedUsers (around line 1670):
 
 // Get denied users
 const deniedUsers = usersData ? Object.values(usersData).filter(u => 
@@ -5604,60 +5588,74 @@ function setupEventListeners() {
         mobileViewOrders.addEventListener('click', () => switchTo('orders'));
     }
     
-// Cart button - open cart
-const cartBtn = document.getElementById('cart-btn');
+    // Cart
+    const cartBtn = document.getElementById('cart-btn');
 if (cartBtn) {
-    // Remove existing listeners by cloning
-    const newCartBtn = cartBtn.cloneNode(true);
-    cartBtn.parentNode.replaceChild(newCartBtn, cartBtn);
-    
-    newCartBtn.addEventListener('click', function(e) {
-        e.preventDefault();
-        e.stopPropagation();
-        console.log('🛒 Cart button clicked');
-        const cartDrawer = document.getElementById('cart-drawer');
-        if (cartDrawer && !cartDrawer.classList.contains('hidden')) {
-            // Cart is open, close it
-            toggleCartDrawer(false);
-        } else {
-            // Cart is closed, open it
-            toggleCartDrawer(true);
-        }
-    });
+    cartBtn.addEventListener('click', () => toggleCartDrawer());
 }
 
-// Cart close button - close cart
 const closeCart = document.getElementById('close-cart');
 if (closeCart) {
-    // Remove existing listeners by cloning
+    // Remove existing listeners
     const newCloseCart = closeCart.cloneNode(true);
     closeCart.parentNode.replaceChild(newCloseCart, closeCart);
     
-    // Single click handler
+    // Add fresh listener
     newCloseCart.addEventListener('click', function(e) {
         e.preventDefault();
         e.stopPropagation();
-        console.log('✅ Close cart button clicked');
+        console.log('❌ Close cart button clicked');
         toggleCartDrawer(false);
     });
+    
+    // Also ensure onclick works
+    newCloseCart.onclick = function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        console.log('❌ Close cart (onclick) triggered');
+        toggleCartDrawer(false);
+    };
 }
-
-// Checkout button
-const checkoutBtn = document.getElementById('checkout-btn');
+    
+    const checkoutBtn = document.getElementById('checkout-btn');
 if (checkoutBtn) {
-    // Remove existing listeners by cloning
+    // Remove any existing listeners by cloning
     const newCheckoutBtn = checkoutBtn.cloneNode(true);
     checkoutBtn.parentNode.replaceChild(newCheckoutBtn, checkoutBtn);
     
+    // Add fresh listener
     newCheckoutBtn.addEventListener('click', function(e) {
         e.preventDefault();
         e.stopPropagation();
-        console.log('💳 Checkout button clicked');
+        console.log('Checkout button clicked');
         checkout();
     });
 }
+    
+    // Modal
+    const modalOverlay = document.getElementById('modal-overlay');
+    if (modalOverlay) {
+        modalOverlay.addEventListener('click', (e) => {
+            if (e.target === e.currentTarget) hideModal();
+        });
+    }
 
-// Close cart when clicking outside - IMPROVED VERSION
+    // Close mobile menu when clicking outside
+    document.addEventListener('click', (e) => {
+        const mobileMenu = document.getElementById('mobile-menu');
+        const mobileMenuBtn = document.getElementById('mobile-menu-btn');
+        
+        if (mobileMenu && !mobileMenu.contains(e.target) && !mobileMenuBtn.contains(e.target)) {
+            closeMobileMenu();
+        }
+    });
+    
+    console.log('✅ Event listeners setup complete');
+}
+
+// Add BEFORE the closing brace of setupEventListeners()
+
+// Close cart when clicking outside
 document.addEventListener('click', function(e) {
     const cartDrawer = document.getElementById('cart-drawer');
     const cartBtn = document.getElementById('cart-btn');
@@ -5666,27 +5664,14 @@ document.addEventListener('click', function(e) {
         return;
     }
     
-    // Check if click is inside cart drawer
-    if (cartDrawer.contains(e.target)) {
-        // Click is inside cart, do nothing
-        return;
+    // Check if click is outside cart drawer and cart button
+    if (!cartDrawer.contains(e.target) && !cartBtn.contains(e.target)) {
+        console.log('👆 Clicked outside cart, closing...');
+        toggleCartDrawer(false);
     }
-    
-    // Check if click is on cart button
-    if (cartBtn && cartBtn.contains(e.target)) {
-        // Click is on cart button, let that handler deal with it
-        return;
-    }
-    
-    // Click is outside both cart and cart button, close cart
-    console.log('👆 Clicked outside cart, closing...');
-    toggleCartDrawer(false);
 });
-    
-    console.log('✅ Event listeners setup complete');
-}
 
-
+// Auth state listener
 // Auth state listener
 onAuthStateChanged(auth, async (user) => {
     if (user) {

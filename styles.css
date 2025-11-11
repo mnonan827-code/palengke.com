@@ -3377,97 +3377,42 @@ button[onclick^="endChatConversation"]:active {
 }
 
 /* ==========================================
-   🛒 Cart Drawer Close Animation Fix
+   💬 Admin Chat Dropdown - Enhanced Styling
    ========================================== */
 
-#cart-drawer {
-    transition: opacity 0.25s ease, 
-                transform 0.25s ease, 
-                visibility 0.25s;
-    pointer-events: auto;
+#admin-chat-dropdown-content button {
+    opacity: 1 !important; /* Force full opacity */
+    transition: all 0.2s ease;
 }
 
-#cart-drawer.hidden {
-    opacity: 0;
-    transform: translateX(20px);
-    visibility: hidden;
-    pointer-events: none;
+#admin-chat-dropdown-content button:hover {
+    background-color: #f9fafb !important;
 }
 
-#cart-drawer:not(.hidden) {
-    opacity: 1;
-    transform: translateX(0);
-    visibility: visible;
-    pointer-events: auto;
+/* Unread chat styling */
+#admin-chat-dropdown-content button.bg-lime-50 {
+    background-color: #f0fdf4 !important;
+    border-left: 3px solid #84cc16;
 }
 
-/* Close button improvements */
-#close-cart {
-    cursor: pointer;
-    user-select: none;
-    min-height: 44px;
-    min-width: 44px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+/* Resolved chat visual indicator (without opacity) */
+#admin-chat-dropdown-content .text-green-600 {
+    font-weight: 600;
 }
 
-#close-cart:hover {
-    background: rgba(239, 68, 68, 0.1);
+/* Active chat indicator */
+#admin-chat-dropdown-content button:active {
+    background-color: #e5e7eb !important;
 }
 
-#close-cart:active {
-    transform: scale(0.95);
-}
-
-/* ==========================================
-   🛒 Cart Drawer Interaction Improvements
-   ========================================== */
-
-#cart-drawer {
-    pointer-events: auto;
-}
-
-#cart-drawer.hidden {
-    pointer-events: none;
-}
-
-/* Ensure cart content is clickable */
-#cart-drawer-body {
-    pointer-events: auto;
-}
-
-#cart-drawer-body * {
-    pointer-events: auto;
-}
-
-/* Cart buttons should not trigger close */
-#cart-drawer button {
-    cursor: pointer;
-    user-select: none;
-}
-
-#cart-drawer input,
-#cart-drawer select {
-    cursor: text;
-}
-
-/* Close button should be prominent */
-#close-cart {
-    position: relative;
-    z-index: 10;
-    cursor: pointer;
-}
-
-/* Checkout button should be distinct */
-#checkout-btn {
-    position: relative;
-    z-index: 5;
-}
-
-/* Prevent accidental closes on mobile */
-@media (max-width: 768px) {
-    #cart-drawer {
-        touch-action: pan-y;
+/* Mobile responsiveness */
+@media (max-width: 640px) {
+    #admin-chat-dropdown {
+        width: 90vw;
+        max-width: 320px;
+    }
+    
+    #admin-chat-dropdown-content {
+        max-height: 70vh;
     }
 }
