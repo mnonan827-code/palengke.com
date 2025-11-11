@@ -1099,7 +1099,6 @@ window.updateChatVisibility = function() {
     }
 };
 
-// Render Admin Chat Dropdown Content
 window.renderAdminChatDropdown = function() {
     const chatDropdownContent = document.getElementById('admin-chat-dropdown-content');
     const chatBadge = document.getElementById('admin-chat-badge');
@@ -1123,26 +1122,27 @@ window.renderAdminChatDropdown = function() {
     }
 
     const chatItems = window.APP_STATE.chats.map(chat => {
-    const isUnread = chat.unreadAdmin;
-    const isResolved = chat.status === 'resolved';
-    const lastMsgTime = new Date(chat.lastMessageAt).toLocaleString('en-US', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short' });
-    
-    return `
-        <button onclick="window.openAdminChatModal('${chat.id}'); window.toggleAdminChatDropdown();" class="flex items-center gap-3 p-3 w-full text-left border-b hover:bg-gray-50 transition ${isUnread ? 'bg-lime-50' : ''} ${isResolved ? 'opacity-60' : ''}">
-            <div class="flex-grow min-w-0">
-                <div class="font-semibold text-gray-800 truncate ${isUnread ? 'font-extrabold text-lime-700' : ''}">
-                    ${chat.customerName || chat.id}
-                    ${isUnread ? '<span class="text-xs text-red-500 ml-2">NEW</span>' : ''}
-                    ${isResolved ? '<span class="text-xs text-gray-500 ml-2">✓ RESOLVED</span>' : ''}
+        const isUnread = chat.unreadAdmin;
+        const isResolved = chat.status === 'resolved';
+        const lastMsgTime = new Date(chat.lastMessageAt).toLocaleString('en-US', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short' });
+        
+        // ✅ FIXED: Remove opacity class, add visual indicator instead
+        return `
+            <button onclick="window.openAdminChatModal('${chat.id}'); window.toggleAdminChatDropdown();" class="flex items-center gap-3 p-3 w-full text-left border-b hover:bg-gray-50 transition ${isUnread ? 'bg-lime-50' : ''}">
+                <div class="flex-grow min-w-0">
+                    <div class="font-semibold text-gray-800 truncate ${isUnread ? 'font-extrabold text-lime-700' : ''}">
+                        ${chat.customerName || chat.id}
+                        ${isUnread ? '<span class="text-xs text-red-500 ml-2">NEW</span>' : ''}
+                        ${isResolved ? '<span class="text-xs text-green-600 ml-2">✓ RESOLVED</span>' : ''}
+                    </div>
+                    <p class="text-sm text-gray-500 truncate">${chat.lastMessageText || 'No messages yet.'}</p>
                 </div>
-                <p class="text-sm text-gray-500 truncate">${chat.lastMessageText || 'No messages yet.'}</p>
-            </div>
-            <div class="flex-shrink-0 text-xs text-gray-400">
-                ${lastMsgTime}
-            </div>
-        </button>
-    `;
-}).join('');
+                <div class="flex-shrink-0 text-xs text-gray-400">
+                    ${lastMsgTime}
+                </div>
+            </button>
+        `;
+    }).join('');
 
     chatDropdownContent.innerHTML = chatItems;
     lucide.createIcons();

@@ -3375,3 +3375,44 @@ button[onclick^="endChatConversation"]:active {
 .admin-card {
     animation: fadeInUpdate 0.3s ease-out;
 }
+
+/* ==========================================
+   💬 Admin Chat Dropdown - Enhanced Styling
+   ========================================== */
+
+#admin-chat-dropdown-content button {
+    opacity: 1 !important; /* Force full opacity */
+    transition: all 0.2s ease;
+}
+
+#admin-chat-dropdown-content button:hover {
+    background-color: #f9fafb !important;
+}
+
+/* Unread chat styling */
+#admin-chat-dropdown-content button.bg-lime-50 {
+    background-color: #f0fdf4 !important;
+    border-left: 3px solid #84cc16;
+}
+
+/* Resolved chat visual indicator (without opacity) */
+#admin-chat-dropdown-content .text-green-600 {
+    font-weight: 600;
+}
+
+/* Active chat indicator */
+#admin-chat-dropdown-content button:active {
+    background-color: #e5e7eb !important;
+}
+
+/* Mobile responsiveness */
+@media (max-width: 640px) {
+    #admin-chat-dropdown {
+        width: 90vw;
+        max-width: 320px;
+    }
+    
+    #admin-chat-dropdown-content {
+        max-height: 70vh;
+    }
+}
