@@ -4369,6 +4369,10 @@ window.toggleCartDrawer = function(show) {
         if (show) {
             drawer.classList.remove('hidden');
             renderCartDrawer();
+            // Setup interaction handlers after a brief delay
+            setTimeout(() => {
+                setupCartInteractionHandlers();
+            }, 150);
             console.log('🛒 Cart drawer opened');
         } else {
             drawer.classList.add('hidden');
@@ -4380,6 +4384,9 @@ window.toggleCartDrawer = function(show) {
         if (isHidden) {
             drawer.classList.remove('hidden');
             renderCartDrawer();
+            setTimeout(() => {
+                setupCartInteractionHandlers();
+            }, 150);
             console.log('🛒 Cart drawer opened (toggled)');
         } else {
             drawer.classList.add('hidden');
@@ -4464,9 +4471,42 @@ window.renderCartDrawer = function() {
             checkoutBtn.style.display = 'block';
         }
     }
+   // 🆕 ADD THIS AT THE END
+    setTimeout(() => {
+        setupCartInteractionHandlers();
+    }, 100);
+};
+
+// Prevent cart interactions from closing the drawer
+window.setupCartInteractionHandlers = function() {
+    const cartDrawer = document.getElementById('cart-drawer');
+    if (!cartDrawer) return;
     
-    updateCartBadge();
-    icons();
+    // Stop propagation on all interactive elements inside cart
+    const interactiveElements = cartDrawer.querySelectorAll('button, input, select, textarea, a');
+    
+    interactiveElements.forEach(element => {
+        // Don't add if it's the close button (it needs to close)
+        if (element.id === 'close-cart') return;
+        
+        element.addEventListener('click', function(e) {
+            e.stopPropagation();
+        });
+        
+        element.addEventListener('mousedown', function(e) {
+            e.stopPropagation();
+        });
+    });
+    
+    // Stop propagation on the cart body itself
+    const cartBody = document.getElementById('cart-drawer-body');
+    if (cartBody) {
+        cartBody.addEventListener('click', function(e) {
+            e.stopPropagation();
+        });
+    }
+    
+    console.log('✅ Cart interaction handlers set up');
 };
 
 window.computeRemainingDays = function(p) {
@@ -5564,7 +5604,7 @@ function setupEventListeners() {
         mobileViewOrders.addEventListener('click', () => switchTo('orders'));
     }
     
-    // Cart button - open cart
+// Cart button - open cart
 const cartBtn = document.getElementById('cart-btn');
 if (cartBtn) {
     // Remove existing listeners by cloning
@@ -5575,7 +5615,14 @@ if (cartBtn) {
         e.preventDefault();
         e.stopPropagation();
         console.log('🛒 Cart button clicked');
-        toggleCartDrawer(true);
+        const cartDrawer = document.getElementById('cart-drawer');
+        if (cartDrawer && !cartDrawer.classList.contains('hidden')) {
+            // Cart is open, close it
+            toggleCartDrawer(false);
+        } else {
+            // Cart is closed, open it
+            toggleCartDrawer(true);
+        }
     });
 }
 
@@ -5610,23 +5657,30 @@ if (checkoutBtn) {
     });
 }
 
-// Close cart when clicking outside
+// Close cart when clicking outside - IMPROVED VERSION
 document.addEventListener('click', function(e) {
     const cartDrawer = document.getElementById('cart-drawer');
     const cartBtn = document.getElementById('cart-btn');
-    const closeBtn = document.getElementById('close-cart');
     
     if (!cartDrawer || cartDrawer.classList.contains('hidden')) {
         return;
     }
     
-    // Check if click is outside cart drawer, cart button, and close button
-    if (!cartDrawer.contains(e.target) && 
-        !cartBtn.contains(e.target) && 
-        !closeBtn.contains(e.target)) {
-        console.log('👆 Clicked outside cart, closing...');
-        toggleCartDrawer(false);
+    // Check if click is inside cart drawer
+    if (cartDrawer.contains(e.target)) {
+        // Click is inside cart, do nothing
+        return;
     }
+    
+    // Check if click is on cart button
+    if (cartBtn && cartBtn.contains(e.target)) {
+        // Click is on cart button, let that handler deal with it
+        return;
+    }
+    
+    // Click is outside both cart and cart button, close cart
+    console.log('👆 Clicked outside cart, closing...');
+    toggleCartDrawer(false);
 });
     
     console.log('✅ Event listeners setup complete');

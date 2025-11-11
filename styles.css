@@ -3419,3 +3419,55 @@ button[onclick^="endChatConversation"]:active {
 #close-cart:active {
     transform: scale(0.95);
 }
+
+/* ==========================================
+   🛒 Cart Drawer Interaction Improvements
+   ========================================== */
+
+#cart-drawer {
+    pointer-events: auto;
+}
+
+#cart-drawer.hidden {
+    pointer-events: none;
+}
+
+/* Ensure cart content is clickable */
+#cart-drawer-body {
+    pointer-events: auto;
+}
+
+#cart-drawer-body * {
+    pointer-events: auto;
+}
+
+/* Cart buttons should not trigger close */
+#cart-drawer button {
+    cursor: pointer;
+    user-select: none;
+}
+
+#cart-drawer input,
+#cart-drawer select {
+    cursor: text;
+}
+
+/* Close button should be prominent */
+#close-cart {
+    position: relative;
+    z-index: 10;
+    cursor: pointer;
+}
+
+/* Checkout button should be distinct */
+#checkout-btn {
+    position: relative;
+    z-index: 5;
+}
+
+/* Prevent accidental closes on mobile */
+@media (max-width: 768px) {
+    #cart-drawer {
+        touch-action: pan-y;
+    }
+}
