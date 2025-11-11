@@ -46,9 +46,9 @@ window.APP_STATE = {
     deliveryFee: 25.00,
     adminView: 'dashboard',
     searchQuery: '',
-    orderSearchQuery: '',        // ✅ Add this
-    preorderSearchQuery: '',      // ✅ Add this
-    chats: [], // 🟢 ADD THIS LINE
+    orderSearchQuery: '',        
+    preorderSearchQuery: '',      
+    chats: [], 
 };
 
 let orderSearchValue = '';
@@ -88,7 +88,7 @@ const dbRefs = {
     carts: ref(database, 'carts'),
     notifications: ref(database, 'notifications'),
     deleteLogs: ref(database, 'deleteLogs'),
-    chats: ref(database, 'chats') // 🟢 ADD THIS LINE
+    chats: ref(database, 'chats') 
 };
 
 // Helper to safely initialize Lucide icons
@@ -361,8 +361,8 @@ async function initializeFirebaseData() {
     console.log('✅ Products loaded:', window.APP_STATE.products.length);
 } else {
     console.log('⚠️ No products found in database.');
-    window.APP_STATE.products = []; // leave empty
-    // ❌ Do NOT seed initial data automatically anymore
+    window.APP_STATE.products = []; 
+
 }
 
 
@@ -490,7 +490,6 @@ async function createDefaultAdmin() {
 const uid = () => 'C' + Date.now().toString(36) + Math.random().toString(36).substring(2);
 
 // Find or create a chat thread ID for the current user (UID for logged in, Session ID for guest)
-// Find or create a chat thread ID for the current user (UID for logged in, Session ID for guest)
 window.getChatThreadId = function() {
     if (!window.APP_STATE.currentUser) {
         let guestId = sessionStorage.getItem('guestChatId');
@@ -503,9 +502,7 @@ window.getChatThreadId = function() {
     return window.APP_STATE.currentUser.uid;
 };
 
-// Send a chat message (customer or admin)
-// Send a chat message (customer or admin)
-// Send a chat message (customer or admin)
+
 // Send a chat message (customer or admin)
 window.sendChatMessage = async function(threadId, sender, messageText, role) {
     if (!messageText.trim()) return;
@@ -529,7 +526,6 @@ window.sendChatMessage = async function(threadId, sender, messageText, role) {
         timestamp: timestamp
     };
     
-    // ... rest of the function stays the same
     
     try {
         const chatRef = ref(database, `chats/${threadId}`);
@@ -607,8 +603,6 @@ if (role === 'customer' && (!chatData.autoResponseSent || chatData.conversationE
     }
 };
 
-// ✅ NEW: Send automatic admin welcome message
-// ✅ NEW: Send automatic admin welcome message
 // ✅ NEW: Send automatic admin welcome message
 window.sendAutoAdminResponse = async function(threadId) {
     console.log('🤖 Starting auto-response for thread:', threadId);
@@ -1057,9 +1051,6 @@ window.setupAdminChatListener = function(threadId) {
     });
 };;
 
-// In app.js (Add this function)
-
-// Function to control which chat interface is visible based on user role
 // Function to control which chat interface is visible based on user role
 window.updateChatVisibility = function() {
     // Check if the current user is logged in AND has the 'admin' role
@@ -1286,7 +1277,6 @@ window.debouncedRenderMain = function(delay = 300) {
     }, delay);
 };
 
-// ✅ NEW: Real-time update for customer chat messages
 // ✅ NEW: Real-time update for customer chat messages
 window.updateCustomerChatMessages = function() {
     console.log('🔄 Updating customer chat messages...');
@@ -1765,6 +1755,8 @@ window.preOrderItem = async function(productId, qty = 1) {
     await saveToFirebase(`carts/${window.APP_STATE.currentUser.uid}`, window.APP_STATE.cart);
     renderCartDrawer();
     toggleCartDrawer(true);
+
+        await updateCartActivity();
 };
 
 window.changeCartItem = async function(pid, newQty) {
@@ -2091,17 +2083,31 @@ window.cleanupAbandonedCart = async function(userId) {
 
 // ✅ Track cart activity with timestamp in Firebase
 window.updateCartActivity = async function() {
-    if (!window.APP_STATE.currentUser) return;
+    if (!window.APP_STATE.currentUser) {
+        console.log('⚠️ No user logged in, skipping cart activity update');
+        return;
+    }
     
     const timestamp = Date.now();
     
     try {
+        // Only update if cart has items
+        if (window.APP_STATE.cart.length === 0) {
+            console.log('🛒 Cart is empty, clearing activity timer');
+            if (cartActivityTimer) {
+                clearTimeout(cartActivityTimer);
+                cartActivityTimer = null;
+            }
+            return;
+        }
+        
         // Save activity timestamp to Firebase
         await updateFirebase(`carts/${window.APP_STATE.currentUser.uid}`, {
             lastActivity: timestamp
         });
         
-        console.log('🕐 Cart activity updated:', new Date(timestamp).toLocaleTimeString());
+        console.log('🕒 Cart activity updated:', new Date(timestamp).toLocaleTimeString());
+        console.log('📦 Cart items:', window.APP_STATE.cart.length);
         
         // Reset the cleanup timer
         resetAbandonedCartTimer();
@@ -2182,26 +2188,33 @@ window.cleanupCurrentUserCart = async function() {
         console.error('❌ Error cleaning up cart:', error);
     }
 };
-
-// ✅ Check for abandoned carts on app initialization
+//abandonment cart
 window.checkAbandonedCartOnStartup = async function() {
-    if (!window.APP_STATE.currentUser) return;
+    if (!window.APP_STATE.currentUser) {
+        console.log('⚠️ No user logged in, skipping abandoned cart check');
+        return;
+    }
     
     const userId = window.APP_STATE.currentUser.uid;
     
     try {
+        console.log('🔍 Checking for abandoned cart on startup...');
         const cartData = await getFromFirebase(`carts/${userId}`);
         
         if (!cartData || !cartData.lastActivity) {
             // No cart data or no activity timestamp, start fresh
-            await updateCartActivity();
+            console.log('📝 No previous cart activity found, starting fresh');
+            if (window.APP_STATE.cart.length > 0) {
+                await updateCartActivity();
+            }
             return;
         }
         
         const lastActivity = cartData.lastActivity;
         const timeSinceActivity = Date.now() - lastActivity;
+        const minutesOld = Math.round(timeSinceActivity / 1000 / 60);
         
-        console.log('🔍 Checking cart age:', Math.round(timeSinceActivity / 1000 / 60), 'minutes old');
+        console.log(`📊 Cart age: ${minutesOld} minutes (limit: 30 minutes)`);
         
         if (timeSinceActivity > CART_TIMEOUT) {
             console.log('⚠️ Found abandoned cart, cleaning up...');
@@ -2211,16 +2224,24 @@ window.checkAbandonedCartOnStartup = async function() {
                 item && typeof item === 'object' && item.productId
             );
             
+            console.log(`🧹 Restoring stock for ${cartItems.length} items...`);
+            
             for (const item of cartItems) {
-                if (item.preordered) continue;
+                if (item.preordered) {
+                    console.log(`⏭️ Skipping pre-order item: ${item.name}`);
+                    continue;
+                }
                 
                 const currentProduct = await getFromFirebase(`products/${item.productId}`);
-                if (!currentProduct) continue;
+                if (!currentProduct) {
+                    console.log(`⚠️ Product ${item.name} no longer exists`);
+                    continue;
+                }
                 
                 const restoredStock = currentProduct.quantity + item.quantity;
                 await updateFirebase(`products/${item.productId}`, { quantity: restoredStock });
                 
-                console.log(`✅ Stock restored on startup: ${item.name} (+${item.quantity}) = ${restoredStock} total`);
+                console.log(`✅ Stock restored: ${item.name} (+${item.quantity}) = ${restoredStock} total`);
             }
             
             // Clear cart
@@ -2228,11 +2249,26 @@ window.checkAbandonedCartOnStartup = async function() {
             await saveToFirebase(`carts/${userId}`, { lastActivity: Date.now() });
             
             console.log('✅ Abandoned cart cleaned up on startup');
+            
+            // Show notification
+            showModal(
+                '🛒 Cart Cleared',
+                `
+                <div class="text-center space-y-3">
+                    <div class="text-5xl">⏰</div>
+                    <p class="text-gray-700">Your cart was automatically cleared due to inactivity (${minutesOld} minutes).</p>
+                    <p class="text-sm text-gray-600">Items have been returned to stock.</p>
+                </div>
+                `,
+                `<button onclick="hideModal(); renderMain();" class="px-4 py-2 bg-lime-600 text-white rounded">OK</button>`
+            );
+            
         } else {
             // Cart is still valid, start timer for remaining time
             const remainingTime = CART_TIMEOUT - timeSinceActivity;
+            const remainingMinutes = Math.round(remainingTime / 1000 / 60);
             
-            console.log('✅ Cart is still active, timer set for', Math.round(remainingTime / 1000 / 60), 'minutes');
+            console.log(`✅ Cart is still active, timer set for ${remainingMinutes} minutes`);
             
             cartActivityTimer = setTimeout(() => {
                 cleanupCurrentUserCart();
@@ -2505,7 +2541,6 @@ window.viewUploadedID = function(idUrl) {
 };
 
 // Save user profile
-// Save user profile
 window.saveUserProfile = async function() {
     const fullName = document.getElementById('profile-fullname')?.value?.trim();
     const birthday = document.getElementById('profile-birthday')?.value;
@@ -2593,10 +2628,10 @@ window.saveUserProfile = async function() {
             idType,
             idUrl,
             verified: false,
-            denied: false,  // ✅ Clear denial status
-            denialReason: null,  // ✅ Clear denial reason
-            deniedAt: null,  // ✅ Clear denial timestamp
-            deniedBy: null,  // ✅ Clear who denied it
+            denied: false,  
+            denialReason: null,  
+            deniedAt: null, 
+            deniedBy: null,  
             submittedAt: new Date().toISOString()
         };
 
@@ -2664,7 +2699,6 @@ window.updateAddressPreview = function() {
     }
 };
 
-// Address validation function for Cainta, Rizal only
 
 // Validate address before placing order
 
@@ -2721,7 +2755,6 @@ window.validateAndPlaceOrder = async function() {
     const userData = await getFromFirebase(`users/${window.APP_STATE.currentUser.uid}`);
     const profile = userData.profile || {};
     
-    // Proceed with placing order
     // ✅ FIXED: Generate proper random order ID
 const newId = 'O-' + generateOrderId(); // Now generates O-XXXXXXXX with random alphanumeric
     const itemsCopy = window.APP_STATE.cart.map(i=> ({ ...i }));
@@ -2801,7 +2834,6 @@ const newId = 'O-' + generateOrderId(); // Now generates O-XXXXXXXX with random 
         toggleCartDrawer(false);
         hideModal();
     
-    // ... rest of success modal code
         
         showModal('Order Placed! 🎉', `
             <div class="text-center space-y-3">
@@ -3693,7 +3725,6 @@ window.generateOrderId = function() {
     const random = Math.floor(Math.random() * 100).toString().padStart(2, '0');
     
     // Format: YYMMDDHHRR (Year-Month-Day-Hour-Random)
-    // Example: 25110614 = Nov 6, 2025, 14:XX with random suffix
     return year + month + day + hours.slice(0, 1) + random;
 };
 
@@ -3701,9 +3732,6 @@ window.generateOrderId = function() {
 window.uid = function() { 
     return Date.now().toString(36) + Math.random().toString(36).substring(2);
 };
-
-
-// ADD THESE NEW FUNCTIONS:
 
 // Generate 6-digit verification code
 window.generateVerificationCode = function() {
@@ -4936,7 +4964,6 @@ const preorderRows = filteredPreorder.length > 0 ? filteredPreorder.map(p => {
     `;
 }).join('') : '<tr><td class="px-3 py-8 text-center text-gray-500 text-sm" colspan="8">No pre-order products</td></tr>';
 
-    // ✅ FILTER ORDERS
     // ✅ FILTER ORDERS - Reset search state when rendering dashboard
 const regularOrders = window.APP_STATE.orders.filter(o => !o.type || o.type !== 'pre-order');
 const preorderOrders = window.APP_STATE.orders.filter(o => o.type === 'pre-order');
@@ -5653,8 +5680,6 @@ if (checkoutBtn) {
     console.log('✅ Event listeners setup complete');
 }
 
-// Add BEFORE the closing brace of setupEventListeners()
-
 // Close cart when clicking outside
 document.addEventListener('click', function(e) {
     const cartDrawer = document.getElementById('cart-drawer');
@@ -5671,7 +5696,6 @@ document.addEventListener('click', function(e) {
     }
 });
 
-// Auth state listener
 // Auth state listener
 onAuthStateChanged(auth, async (user) => {
     if (user) {
@@ -5795,3 +5819,32 @@ window.formatOrderId = function(orderId) {
 
 console.log('validateAndPlaceOrder exists:', typeof window.validateAndPlaceOrder);
 console.log('CAINTA_BARANGAYS:', CAINTA_BARANGAYS);
+
+// 🧪 TEST FUNCTION - Monitor cart abandonment system
+window.testCartAbandonment = function() {
+    console.log('🧪 Cart Abandonment System Status:');
+    console.log('================================');
+    console.log('User logged in:', !!window.APP_STATE.currentUser);
+    console.log('Cart items:', window.APP_STATE.cart.length);
+    console.log('Timer active:', !!cartActivityTimer);
+    console.log('Timeout duration:', CART_TIMEOUT / 1000 / 60, 'minutes');
+    
+    if (window.APP_STATE.currentUser) {
+        getFromFirebase(`carts/${window.APP_STATE.currentUser.uid}`).then(cartData => {
+            if (cartData && cartData.lastActivity) {
+                const timeSince = Date.now() - cartData.lastActivity;
+                const minutesSince = Math.round(timeSince / 1000 / 60);
+                console.log('Last activity:', minutesSince, 'minutes ago');
+                console.log('Time until cleanup:', Math.max(0, 30 - minutesSince), 'minutes');
+            }
+        });
+    }
+};
+
+// Run test every 5 minutes in development
+if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    setInterval(() => {
+        console.log('🔄 Auto-check at', new Date().toLocaleTimeString());
+        window.testCartAbandonment();
+    }, 5 * 60 * 1000);
+}
